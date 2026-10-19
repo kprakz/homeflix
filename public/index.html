@@ -166,6 +166,10 @@
   .osd-row .btn { font-size: 18px; padding: 10px 20px; }
   .osd-row .time { margin-left: auto; font-size: 22px; color: #ddd; font-variant-numeric: tabular-nums; }
   #watch.osd-hidden .osd, #watch.osd-hidden .back { opacity: 0; pointer-events: none; }
+  .osd-bar { cursor: pointer; }
+  .osd-bar::before { content: ""; position: absolute; left: 0; right: 0; top: -14px; bottom: -14px; } /* easier to hit with a pointer remote */
+  .osd-hint { position: absolute; z-index: 6; top: calc(24px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); padding: 10px 18px; border-radius: 99px; background: rgba(0,0,0,.7); color: #eee; font-size: 18px; white-space: nowrap; opacity: 0; transition: opacity .4s; pointer-events: none; }
+  .osd-hint.on { opacity: 1; }
 
   /* ---------- keyboard / remote focus ---------- */
   .card:focus, .ep:focus, nav a:focus { outline: none; }
@@ -531,7 +535,7 @@ function osdHtml(i, m, kind) {
   const title = esc(m.show ? `${m.show} · ${m.epLabel}` : i.title);
   return `<div class="osd">
     <h3>${title}</h3>
-    <div class="osd-bar"><div class="buf" id="osdBuf"></div><div class="fill" id="osdFill"></div></div>
+    <div class="osd-bar" id="osdBar"><div class="buf" id="osdBuf"></div><div class="fill" id="osdFill"></div></div>
     <div class="osd-row">
       <button class="btn" data-osd="back">⟲ 10s</button>
       <button class="btn btn-play" data-osd="toggle" id="osdToggle">Pause</button>
@@ -558,9 +562,12 @@ function play(i, m, kind, startAt) {
   teardownVideo();
   const tracks = i.subs.map((s) => `<track kind="subtitles" src="/subs/${i.id}/${s.key}.vtt" srclang="${esc(s.lang.slice(0, 2))}" label="${esc(s.label)}">`).join('');
   const hevcFile = kind === 'file' && i.videoCodec === 'hevc';
-  $('stage').innerHTML = `<video id="v" ${IS_TV ? '' : 'controls'} playsinline autoplay preload="auto" poster="/thumb/${i.id}?size=hero">${tracks}</video>
+  // TVs, and anyone who got here with arrow keys, get HOMEFLIX's own controls: the browser's are
+  // usually out of reach for a remote.
+  const remote = IS_TV || usingKeys;
+  $('stage').innerHTML = `<video id="v" ${remote ? '' : 'controls'} playsinline autoplay preload="auto" poster="/thumb/${i.id}?size=hero">${tracks}</video>
     <div class="buffering"><div class="spinner"></div><div>${kind === 'hls' ? 'Converting for this device…' : 'Loading…'}</div></div>
-    ${IS_TV ? osdHtml(i, m, kind) : hevcFile ? '<button class="compat" data-compat>Picture missing? Try the compatible version</button>' : ''}`;
+    ${!remote && hevcFile ? '<button class="compat" data-compat>Picture missing? Try the compatible version</button>' : ''}`;
   const v = $('v');
   const p = (player = { v, i, m, kind, hls: null, timers: [] });
   const watch = $('watch');
@@ -604,31 +611,31 @@ function play(i, m, kind, startAt) {
   // HEVC the device can't really decode: switch to the H.264 stream, and remember for next time.
   if (hevcFile) {
     v.addEventListener('error', () => { if (player === p && v.error && v.error.code >= 3) toCompatible(); });
-    v.addEventListener('playing', () => {
-      p.timers.push(setTimeout(() => {
-        if (player !== p || v.paused) return;
-        const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : null;
-        const frames = q ? q.totalVideoFrames : v.webkitDecodedFrameCount;
-        if (v.videoWidth === 0 || frames === 0) toCompatible();
-      }, 3500));
-    }, { once: true });
+    // No picture, or a picture frozen on the first frame while the sound carries on (common on
+    // Android TVs whose chip can't keep up with HEVC): every 2 seconds, check new frames are shown.
+    const frames = () => {
+      const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : null;
+      return q ? { total: q.totalVideoFrames, dropped: q.droppedVideoFrames } : { total: v.webkitDecodedFrameCount, dropped: v.webkitDroppedFrameCount || 0 };
+    };
+    let prev = null, strikes = 0;
+    p.timers.push(setInterval(() => {
+      if (player !== p) return;
+      if (v.paused || v.seeking || v.readyState < 3 || document.hidden) { prev = null; strikes = 0; return; }
+      const now = { t: v.currentTime, ...frames() };
+      if (!Number.isFinite(now.total)) return; // this browser can't tell us
+      if (prev) {
+        const played = now.t - prev.t;
+        const shown = now.total - prev.total - (now.dropped - prev.dropped);
+        const stuck = played > 1.5 && (v.videoWidth === 0 || shown < played * 3); // fewer than 3 frames a second
+        strikes = stuck ? strikes + 1 : 0;
+        if (strikes >= 2) return toCompatible();
+      }
+      prev = now;
+    }, 2000));
   }
   v.addEventListener('error', () => { if (player === p && !(hevcFile && v.error && v.error.code >= 3)) showPlayError(); });
 
-  if (IS_TV) {
-    const update = () => {
-      const d = v.duration || i.duration || 0;
-      const fill = $('osdFill'), buf = $('osdBuf');
-      if (!fill) return;
-      fill.style.width = d ? `${(v.currentTime / d) * 100}%` : '0';
-      const b = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
-      buf.style.width = d ? `${Math.min(100, (b / d) * 100)}%` : '0';
-      $('osdTime').textContent = `${fmtClock(v.currentTime)} / ${fmtClock(d)}`;
-      $('osdToggle').textContent = v.paused ? '▶ Play' : '❚❚ Pause';
-    };
-    for (const ev of ['timeupdate', 'progress', 'play', 'pause', 'loadedmetadata']) v.addEventListener(ev, update);
-    if (usingKeys) $('osdToggle').focus({ preventScroll: true });
-  }
+  if (remote) attachOsd(p);
 
   // Series: offer the next episode near the end, and roll into it when this one finishes.
   const eps = m.show ? shows.get(m.show) : null;
@@ -659,20 +666,60 @@ function showPlayError(msg) {
   }
 }
 
-// TV controls fade out while playing and come back on any key.
+// HOMEFLIX's own player controls, for TV remotes (arrow buttons or a pointer like LG's Magic Remote).
+function attachOsd(p) {
+  const { v, i, m, kind } = p;
+  if (p.osd) return;
+  p.osd = true;
+  v.controls = false;
+  const compat = $('stage').querySelector('.compat');
+  if (compat) compat.remove(); // the controls have their own "Picture missing?" button
+  $('stage').insertAdjacentHTML('beforeend', osdHtml(i, m, kind) + '<div class="osd-hint" id="osdHint">OK: pause · ◀ ▶: skip 10s · ▲ ▼: controls</div>');
+  const update = () => {
+    if (player !== p) return;
+    const d = v.duration || i.duration || 0;
+    $('osdFill').style.width = d ? `${(v.currentTime / d) * 100}%` : '0';
+    const b = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+    $('osdBuf').style.width = d ? `${Math.min(100, (b / d) * 100)}%` : '0';
+    $('osdTime').textContent = `${fmtClock(v.currentTime)} / ${fmtClock(d)}`;
+    $('osdToggle').textContent = v.paused ? '▶ Play' : '❚❚ Pause';
+  };
+  for (const ev of ['timeupdate', 'progress', 'play', 'pause', 'loadedmetadata']) v.addEventListener(ev, update);
+  update();
+  // Pointer remotes and mice: clicking the picture pauses, clicking the bar jumps to that point.
+  v.addEventListener('click', togglePlay);
+  $('osdBar').addEventListener('click', (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    if (!v.duration || !r.width) return;
+    v.currentTime = Math.max(0, Math.min(v.duration - 1, ((e.clientX - r.left) / r.width) * v.duration));
+    showOsd();
+  });
+  showOsd();
+  if (usingKeys) $('osdToggle').focus({ preventScroll: true });
+}
+
+// The controls fade out while playing; any key, pointer movement or click brings them back.
 let osdTimer = null;
 function showOsd() {
-  if (!IS_TV) return;
+  const p = player;
+  if (!p || !p.osd) return;
   const watch = $('watch');
   watch.classList.remove('osd-hidden');
   clearTimeout(osdTimer);
   osdTimer = setTimeout(() => {
-    const v = $('v');
-    if (!v || v.paused) return;
+    if (player !== p || p.v.paused) return;
     watch.classList.add('osd-hidden');
     if (document.activeElement && document.activeElement.closest('#watch')) document.activeElement.blur();
+    // The first time they fade, say how to get them back.
+    if (!p.hinted && usingKeys && $('osdHint')) {
+      p.hinted = true;
+      $('osdHint').classList.add('on');
+      p.timers.push(setTimeout(() => $('osdHint') && $('osdHint').classList.remove('on'), 4000));
+    }
   }, 4500);
 }
+$('watch').addEventListener('pointermove', showOsd);
+$('watch').addEventListener('pointerdown', showOsd);
 
 function seek(by) {
   const v = $('v');
@@ -732,7 +779,7 @@ function keyName(e) {
   if (k === 'ArrowRight' || k === 'Right' || c === 39) return 'Right';
   if (k === 'ArrowUp' || k === 'Up' || c === 38) return 'Up';
   if (k === 'ArrowDown' || k === 'Down' || c === 40) return 'Down';
-  if (k === 'Enter' || c === 13) return 'Enter';
+  if (k === 'Enter' || k === 'Select' || k === 'Accept' || c === 13 || c === 23) return 'Enter'; // 23: D-pad centre on some Android TVs
   if (k === ' ' || k === 'Spacebar') return 'Space';
   // Escape/Backspace on keyboards; GoBack (Android TV), 10009 (Samsung Tizen), 461 (LG webOS)
   if (k === 'Escape' || k === 'Backspace' || k === 'GoBack' || k === 'BrowserBack' || c === 10009 || c === 461) return 'Back';
@@ -793,18 +840,27 @@ function goBack() {
 }
 
 function playerKey(k, e) {
+  // A remote on a TV we didn't recognise: switch from the browser's controls to ours.
+  // That first press only brings up the controls (focused on Pause), or pauses/skips as asked.
+  if (player && !player.osd && ['Left', 'Right', 'Up', 'Down', 'Enter'].includes(k)) {
+    attachOsd(player);
+    if (k === 'Left' || k === 'Right') seek(k === 'Left' ? -10 : 10);
+    else if (k === 'Enter') togglePlay();
+    $('osdToggle').focus({ preventScroll: true });
+    return true;
+  }
   const inControls = document.activeElement && document.activeElement !== document.body && document.activeElement.closest('#watch') && document.activeElement.tagName === 'BUTTON';
-  const controlsShown = IS_TV && !$('watch').classList.contains('osd-hidden');
+  const controlsShown = player && player.osd && !$('watch').classList.contains('osd-hidden');
   switch (k) {
     case 'Left':
     case 'Right':
       if (controlsShown && inControls) { moveFocus(k.toLowerCase()); showOsd(); return true; }
-      if (e.target.tagName === 'VIDEO') return false; // the browser's own controls seek
+      if (e.target.tagName === 'VIDEO' && !(player && player.osd)) return false; // the browser's own controls seek
       seek(k === 'Left' ? -10 : 10);
       return true;
     case 'Up':
     case 'Down':
-      if (!IS_TV) return false;
+      if (!player || !player.osd) return false;
       showOsd();
       if (inControls) moveFocus(k.toLowerCase());
       else ($('osdToggle') || document.querySelector('#watch .back')).focus({ preventScroll: true });

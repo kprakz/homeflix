@@ -47,7 +47,7 @@ function loadConfig() {
 
 // ---------- library ----------
 
-const library = new Map(); // id -> { id, path, name, title, year, size, mtime, folder }
+let library = new Map(); // id ->{ id, path, name, title, year, size, mtime, folder }
 
 function idFor(file) {
   return crypto.createHash('sha1').update(file.toLowerCase()).digest('hex').slice(0, 16);
@@ -56,6 +56,8 @@ function idFor(file) {
 // "Insidious.Chapter.2.2013.1080p.10bit.BluRay.x265.mkv" -> { title: "Insidious Chapter 2", year: "2013" }
 function prettyName(file) {
   let base = path.basename(file, path.extname(file)).replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Leading channel and site tags from Telegram/torrent names: "@WMR ", "[TamilMV] ", "www site com - "
+  base = base.replace(/^(?:(?:@\S+|\[[^\]]*\]|www \S+ (?:com|net|org|in|me|to)\b)\s*-?\s*)+/i, '').trim() || base;
   const yearMatch = base.match(/^(.+?)[\s(\[]+((?:19|20)\d{2})(?:[\s)\]]|$)/);
   if (yearMatch && yearMatch[1].length > 1) return { title: yearMatch[1].trim(), year: yearMatch[2] };
   const junk = base.search(/\b(480p|720p|1080p|2160p|4k|bluray|brrip|webrip|web dl|hdrip|dvdrip|x264|x265|hevc|10bit)\b/i);
@@ -80,10 +82,18 @@ async function walk(dir, depth, out) {
   }
 }
 
-async function scanLibrary() {
+// Requests arriving together share one scan, and the new list replaces the old one only when it's
+// complete, so a lookup never sees a half-built library.
+let scanning = null;
+function scanLibrary() {
+  if (!scanning) scanning = buildLibrary().finally(() => (scanning = null));
+  return scanning;
+}
+
+async function buildLibrary() {
   const files = [];
   for (const folder of CONFIG.folders) await walk(path.resolve(folder), 0, files);
-  library.clear();
+  const next = new Map();
   for (const file of files) {
     let stat;
     try {
@@ -96,8 +106,9 @@ async function scanLibrary() {
     const folder = CONFIG.folders.find((f) => file.toLowerCase().startsWith(path.resolve(f).toLowerCase())) || '';
     // A file written to in the last 2 minutes is most likely still downloading (e.g. from Telegram).
     const downloading = Date.now() - stat.mtimeMs < 2 * 60 * 1000;
-    library.set(id, { id, path: file, ...prettyName(file), size: stat.size, mtime: stat.mtimeMs, folder: path.basename(folder), downloading });
+    next.set(id, { id, path: file, ...prettyName(file), size: stat.size, mtime: stat.mtimeMs, folder: path.basename(folder), downloading });
   }
+  library = next;
   return [...library.values()].sort((a, b) => b.mtime - a.mtime);
 }
 
@@ -573,7 +584,9 @@ async function handle(req, res) {
   const parts = url.pathname.split('/').filter(Boolean);
   // /api/<action>/<id>  or  /video|thumb|subs|hls/<id>/...
   const id = parts[0] === 'api' ? parts[2] : parts[1];
-  if (id && !library.has(id) && library.size === 0) await scanLibrary(); // e.g. a device resuming right after a restart
+  // Unknown movie (just added, or a device resuming right after a restart): look again before giving up.
+  const movieRoute = ['api', 'video', 'thumb', 'subs', 'hls'].includes(parts[0]) && parts[1] !== 'library';
+  if (movieRoute && id && !library.has(id)) await scanLibrary();
   const item = library.get(id) || null;
 
   if (url.pathname === '/vendor/hls.min.js') {
