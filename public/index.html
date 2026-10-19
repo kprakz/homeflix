@@ -49,13 +49,21 @@
   @media (max-width: 600px) { nav { display: none; } }
 
   /* ---------- hero ---------- */
-  .hero { position: relative; height: min(56.25vw, 82vh); min-height: 540px; background: #000 center 30% / cover no-repeat; }
+  /* The banner grows with its text (long titles, short laptop screens) instead of letting the text slide
+     under the top bar: it's at least 16:9-ish tall, with room for the top bar above and the rows below. */
+  .hero {
+    position: relative; display: flex; flex-direction: column; justify-content: flex-end;
+    min-height: 540px; min-height: max(540px, min(56.25vw, 82vh));
+    padding: calc(96px + env(safe-area-inset-top)) var(--pad) calc(var(--overlap) + 64px);
+    background: #000 center 30% / cover no-repeat;
+  }
   .hero::before { content: ""; position: absolute; inset: 0; background: linear-gradient(77deg, rgba(0,0,0,.82) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,0) 75%); }
   .hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 38%; background: linear-gradient(180deg, rgba(20,20,20,0) 0%, rgba(20,20,20,.6) 55%, var(--bg) 100%); }
-  .hero-body { position: absolute; z-index: 2; left: var(--pad); right: var(--pad); bottom: calc(var(--overlap) + 64px); max-width: 640px; }
+  .hero-body { position: relative; z-index: 2; max-width: 640px; }
   .hero-tag { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: .25em; color: #ddd; margin-bottom: 6px; }
   .hero-tag b { font-family: var(--display); color: var(--red); font-size: 24px; letter-spacing: 0; font-weight: 400; }
-  .hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(48px, 7.5vw, 112px); line-height: .92; margin: 0 0 14px; letter-spacing: .01em; text-shadow: 0 3px 16px rgba(0,0,0,.5); }
+  .hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(44px, min(7.5vw, 12vh), 112px); line-height: .92; margin: 0 0 14px; letter-spacing: .01em; text-shadow: 0 3px 16px rgba(0,0,0,.5); }
+  .hero h1.long { font-size: clamp(40px, min(5.6vw, 9vh), 88px); }
   .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 15px; color: #ddd; margin-bottom: 20px; }
   .pill { border: 1px solid rgba(255,255,255,.4); padding: 0 6px; border-radius: 3px; font-size: 12px; }
   .hero-actions { display: flex; gap: 12px; }
@@ -314,7 +322,7 @@ async function renderHero(pick) {
   const eps = isShow ? shows.get(pick.show) : null;
   hero.innerHTML = `<div class="hero-body">
     <div class="hero-tag"><b>H</b>${isShow ? 'SERIES' : 'FILM'}</div>
-    <h1>${esc(isShow ? pick.show : pick.title)}</h1>
+    <h1 class="${(isShow ? pick.show : pick.title).length > 14 ? 'long' : ''}">${esc(isShow ? pick.show : pick.title)}</h1>
     <div class="hero-meta" id="heroMeta">
       ${pick.year ? `<span>${pick.year}</span>` : ''}
       ${isShow ? `<span>${eps.length} Episode${eps.length > 1 ? 's' : ''}</span><span class="pill">${target.epLabel}</span>` : ''}
