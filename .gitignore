@@ -1,0 +1,6 @@
+node_modules/
+dist/
+cache/
+vendor/
+config.json
+.claude/

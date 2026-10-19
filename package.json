@@ -1,0 +1,56 @@
+{
+  "name": "homeflix",
+  "productName": "HOMEFLIX",
+  "version": "1.0.0",
+  "description": "Stream the movies on your laptop to your iPad, phone or TV over your home Wi-Fi.",
+  "author": "HOMEFLIX",
+  "private": true,
+  "repository": "github:kprakz/homeflix",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "serve": "node server.js",
+    "ffmpeg": "node scripts/get-ffmpeg.mjs",
+    "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-icons.ps1",
+    "dist": "node scripts/get-ffmpeg.mjs && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.homeflix.app",
+    "productName": "HOMEFLIX",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "public/**/*",
+      "server.js",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "vendor/ffmpeg", "to": "ffmpeg" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HOMEFLIX",
+      "runAfterFinish": true,
+      "include": "build/installer.nsh",
+      "artifactName": "HOMEFLIX-Setup-${version}.${ext}"
+    }
+  }
+}

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'">
+<title>HOMEFLIX</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #141414; --panel: #1c1c1c; --panel-2: #262626; --line: #303030; --text: #fff; --muted: #a3a3a3; --dim: #737373;
+    --red: #e50914; --red-hover: #f6121d; --green: #46d369; --amber: #f5b301;
+    --display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  button { font: inherit; cursor: pointer; }
+  header { display: flex; align-items: center; gap: 16px; padding: 18px 32px; border-bottom: 1px solid var(--line); background: #0d0d0d; }
+  .logo { font-family: var(--display); font-size: 38px; line-height: 1; color: var(--red); letter-spacing: .04em; }
+  .status { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 99px; background: var(--panel-2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(70,211,105,.18); }
+  .status.bad .dot { background: var(--red); box-shadow: 0 0 0 4px rgba(229,9,20,.2); }
+  main { padding: 28px 32px 32px; max-width: 1100px; margin: 0 auto; }
+
+  .banner { display: flex; gap: 14px; align-items: flex-start; padding: 14px 18px; border-radius: 8px; margin-bottom: 22px; background: rgba(245,179,1,.1); border: 1px solid rgba(245,179,1,.35); }
+  .banner.err { background: rgba(229,9,20,.1); border-color: rgba(229,9,20,.4); }
+  .banner b { display: block; margin-bottom: 2px; }
+  .banner p { margin: 0; color: #ddd; font-size: 14px; }
+  .banner .btn { margin-left: auto; flex: none; }
+
+  .welcome { text-align: center; padding: 48px 20px 56px; }
+  .welcome h1 { font-family: var(--display); font-weight: 400; font-size: 64px; line-height: 1; margin: 0 0 10px; letter-spacing: .02em; }
+  .welcome p { color: var(--muted); font-size: 17px; max-width: 520px; margin: 0 auto 28px; }
+  .welcome .btn-red { font-size: 18px; padding: 14px 30px; }
+  .welcome small { display: block; color: var(--dim); margin-top: 16px; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; }
+  .card h2 { margin: 0 0 4px; font-size: 18px; }
+  .card .lead { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
+  .span { grid-column: 1 / -1; }
+
+  .connect { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; align-items: start; }
+  .qr { width: 180px; height: 180px; border-radius: 8px; background: #fff; padding: 8px; }
+  .qr img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .url { font-family: Consolas, "Cascadia Mono", monospace; font-size: 22px; font-weight: 700; word-break: break-all; margin: 2px 0 10px; color: #fff; }
+  ol.steps { margin: 16px 0 0; padding: 0; list-style: none; counter-reset: s; }
+  ol.steps li { counter-increment: s; position: relative; padding-left: 34px; margin-bottom: 10px; color: #ddd; font-size: 14px; }
+  ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+  @media (max-width: 560px) { .connect { grid-template-columns: 1fr; } }
+
+  .btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 5px; padding: 9px 16px; font-weight: 600; color: #fff; background: var(--panel-2); border: 1px solid #3a3a3a; }
+  .btn:hover { background: #303030; }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+  .btn-red { background: var(--red); border-color: var(--red); font-weight: 700; }
+  .btn-red:hover { background: var(--red-hover); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); padding: 6px 10px; }
+  .btn-ghost:hover { background: var(--panel-2); color: #fff; }
+  .row-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .folders { list-style: none; margin: 0 0 16px; padding: 0; }
+  .folders li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .folders li:first-child { border-top: 1px solid var(--line); }
+  .folder-icon { flex: none; width: 36px; height: 36px; border-radius: 6px; background: var(--panel-2); display: grid; place-items: center; }
+  .folder-icon svg { width: 20px; height: 20px; }
+  .folder-text { min-width: 0; flex: 1; }
+  .folder-path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  .folder-count { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .setting { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .setting:last-child { border-bottom: 0; padding-bottom: 0; }
+  .setting:first-of-type { padding-top: 0; }
+  .setting div { flex: 1; }
+  .setting b { display: block; font-weight: 600; }
+  .setting span { color: var(--muted); font-size: 13px; }
+  .switch { position: relative; width: 44px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch i { position: absolute; inset: 0; border-radius: 99px; background: #4a4a4a; transition: .2s; cursor: pointer; }
+  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: .2s; }
+  .switch input:checked + i { background: var(--red); }
+  .switch input:checked + i::after { transform: translateX(20px); }
+
+  details { margin-top: 4px; }
+  summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: #ddd; }
+  details p, details li { color: var(--muted); font-size: 14px; }
+  details ul { padding-left: 18px; margin: 0 0 10px; }
+  footer { color: var(--dim); font-size: 13px; text-align: center; padding: 8px 32px 28px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; background: #fff; color: #000; font-weight: 600; padding: 10px 18px; border-radius: 6px; transition: .25s; pointer-events: none; }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">HOMEFLIX</div>
+  <div class="status" id="status"><span class="dot"></span><span id="statusText">Starting…</span></div>
+</header>
+<main id="app"></main>
+<footer>Closing this window keeps HOMEFLIX running in the system tray (near the clock). Right-click the tray icon to quit. · <span id="version"></span></footer>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const FOLDER_SVG = '<svg viewBox="0 0 24 24" fill="#e50914"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4l2 2.5h7A2.5 2.5 0 0 1 21 9v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>';
+let s = null;
+
+function esc(v) { return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+function fmtBytes(b) { return b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b >= 1e6 ? Math.round(b / 1e6) + ' MB' : b > 0 ? '< 1 MB' : 'nothing'; }
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1800); }
+
+function render() {
+  $('version').textContent = 'Version ' + s.version;
+  $('status').classList.toggle('bad', !s.running);
+  $('statusText').textContent = s.running ? (s.movieCount ? `Streaming ${s.movieCount} video${s.movieCount === 1 ? '' : 's'}` : 'Running') : 'Not running';
+
+  let html = '';
+  if (s.serverError) html += `<div class="banner err"><div><b>HOMEFLIX couldn’t start its server</b><p>${esc(s.serverError)} Try quitting HOMEFLIX from the tray and opening it again.</p></div></div>`;
+  if (!s.ffmpegFound) html += `<div class="banner err"><div><b>Video tools are missing</b><p>Part of HOMEFLIX (ffmpeg) wasn’t found. MKV files won’t play and there will be no thumbnails. Reinstalling HOMEFLIX fixes this.</p></div></div>`;
+
+  if (!s.folders.length) {
+    $('app').innerHTML = html + `<section class="welcome">
+      <h1>Welcome to HOMEFLIX</h1>
+      <p>Watch the movies on this laptop from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. Start by telling HOMEFLIX where your movies are.</p>
+      <button class="btn btn-red" data-act="add">${FOLDER_SVG.replace('#e50914', '#fff')}Choose your movies folder</button>
+      <small>You can add more folders later. Sub-folders are included.</small>
+    </section>`;
+    return;
+  }
+
+  if (s.networkPublic) html += `<div class="banner"><div><b>Your phone or iPad can’t connect yet</b>
+    <p>Windows has this Wi-Fi set to <b style="display:inline">Public</b>, which blocks other devices. In Network settings, open your Wi-Fi’s <i>Properties</i> and choose <b style="display:inline">Private network</b>. Only do this for your home Wi-Fi.</p></div>
+    <button class="btn" data-act="wifi">Open network settings</button></div>`;
+
+  html += `<div class="grid">
+    <section class="card span">
+      <h2>Watch on your iPad, phone or TV</h2>
+      <p class="lead">Any device on the same Wi-Fi as this laptop.</p>
+      <div class="connect">
+        <div class="qr">${s.qr ? `<img src="${s.qr}" alt="QR code for ${esc(s.url)}">` : ''}</div>
+        <div>
+          <div class="url">${esc(s.url || '—')}</div>
+          <div class="row-btns"><button class="btn" data-act="copy">Copy address</button><button class="btn" data-act="browser">Watch on this laptop</button></div>
+          <ol class="steps">
+            <li>Connect your device to the <b>same Wi-Fi</b> as this laptop.</li>
+            <li>Point the camera at this code, or type the address into Safari or Chrome.</li>
+            <li>Tip: on iPhone/iPad tap Share → <b>Add to Home Screen</b> for an app icon.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Your movie folders</h2>
+      <p class="lead">HOMEFLIX shows every video in these folders and their sub-folders.</p>
+      <ul class="folders">${s.folders.map((f) => `<li>
+        <div class="folder-icon">${FOLDER_SVG}</div>
+        <div class="folder-text"><div class="folder-path" title="${esc(f.path)}">${esc(f.path.split('\\').filter(Boolean).pop())}</div><div class="folder-count" title="${esc(f.path)}">${f.count} video${f.count === 1 ? '' : 's'} · ${esc(f.path.split('\\').slice(0, -1).join('\\') || f.path)}</div></div>
+        <button class="btn-ghost btn" data-act="open" data-folder="${esc(f.path)}">Open</button>
+        <button class="btn-ghost btn" data-act="remove" data-folder="${esc(f.path)}">Remove</button>
+      </li>`).join('')}</ul>
+      <button class="btn btn-red" data-act="add">+ Add folder</button>
+    </section>
+
+    <section class="card">
+      <h2>Settings</h2>
+      <div class="setting" style="margin-top:14px"><div><b>Start with Windows</b><span>HOMEFLIX starts quietly in the tray when you sign in.</span></div>
+        <label class="switch"><input type="checkbox" id="login" ${s.openAtLogin ? 'checked' : ''}><i></i></label></div>
+      <div class="setting"><div><b>Storage used</b><span>${s.cacheBytes ? `Converted copies of MKV and other files use ${fmtBytes(s.cacheBytes)}. They’re made again when needed.` : 'No converted copies yet. MKV and other files get one the first time you play them.'}</span></div>
+        <button class="btn" data-act="clear" ${s.cacheBytes ? '' : 'disabled'}>Free up space</button></div>
+    </section>
+
+    <section class="card span">
+      <h2>Help</h2>
+      <details><summary>The page won’t open on my iPad or phone</summary><ul>
+        <li>Check both are on the same Wi-Fi (not mobile data, not a guest network).</li>
+        <li>If Windows asked whether to let HOMEFLIX use networks, it must be <b>allowed</b>. To fix it later: Windows Security → Firewall &amp; network protection → Allow an app through firewall → tick HOMEFLIX for Private.</li>
+        <li>Your Wi-Fi must be set to <b>Private</b> in Windows network settings.</li>
+        <li>Keep this laptop awake and plugged in while you watch.</li>
+      </ul></details>
+      <details><summary>A movie won’t play</summary><ul>
+        <li>The first time you open an MKV, HOMEFLIX converts it to a format Apple devices play. This usually takes seconds.</li>
+        <li>Files still downloading show a “Downloading” badge and play once finished.</li>
+        <li>Some TV browsers can’t play HEVC (x265) movies. AirPlay from an iPhone or iPad works instead.</li>
+      </ul></details>
+      <details><summary>Is it private?</summary><p>HOMEFLIX only works inside your own network. Nothing is uploaded to the internet. Anyone on your Wi-Fi can open the page, so don’t run it on public Wi-Fi.</p></details>
+    </section>
+  </div>`;
+  const open = [...document.querySelectorAll('details')].map((d) => d.open);
+  $('app').innerHTML = html;
+  document.querySelectorAll('details').forEach((d, i) => (d.open = !!open[i]));
+  const login = $('login');
+  if (login) login.onchange = async () => { s = await homeflix.setOpenAtLogin(login.checked); render(); };
+}
+
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'add') { s = await homeflix.addFolder(); render(); }
+  if (act === 'remove') { s = await homeflix.removeFolder(b.dataset.folder); render(); }
+  if (act === 'open') homeflix.openFolder(b.dataset.folder);
+  if (act === 'browser') homeflix.openBrowser();
+  if (act === 'wifi') homeflix.openWifiSettings();
+  if (act === 'copy') { await homeflix.copy(s.url); toast('Address copied'); }
+  if (act === 'clear') { const before = s.cacheBytes; s = await homeflix.clearCache(); render(); toast(`Freed ${fmtBytes(before - s.cacheBytes)}`); }
+});
+
+async function refresh() {
+  try { s = await homeflix.state(); render(); } catch (err) { $('app').innerHTML = `<div class="banner err"><div><b>Something went wrong</b><p>${esc(err.message)}</p></div></div>`; }
+}
+refresh();
+// Pick up new downloads, Wi-Fi changes and a moved IP address.
+setInterval(() => { if (!document.hidden) refresh(); }, 8000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+</script>
+</body>
+</html>

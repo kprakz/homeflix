@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HOMEFLIX">
+<meta name="theme-color" content="#141414">
+<title>HOMEFLIX</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #141414; --panel: #181818; --panel-2: #232323; --line: #333; --text: #fff; --muted: #b3b3b3; --dim: #808080;
+    --red: #e50914; --red-dark: #b20710; --pad: 4%;
+    --display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+    --per-row: 5;
+    --overlap: 9vw;
+  }
+  @media (max-width: 1300px) { :root { --per-row: 4; } }
+  @media (max-width: 900px)  { :root { --per-row: 3; } }
+  @media (max-width: 600px)  { :root { --per-row: 2; } }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, sans-serif; }
+  body.lock { overflow: hidden; }
+  button { font: inherit; cursor: pointer; }
+
+  /* ---------- top bar ---------- */
+  header {
+    position: fixed; inset: 0 0 auto 0; z-index: 20; display: flex; align-items: center; gap: 24px;
+    padding: calc(14px + env(safe-area-inset-top)) var(--pad) 14px;
+    background: linear-gradient(180deg, rgba(0,0,0,.75) 0%, rgba(0,0,0,0) 100%); transition: background .35s;
+  }
+  header.solid { background: var(--bg); }
+  .logo { font-family: var(--display); font-size: clamp(28px, 3.4vw, 40px); color: var(--red); letter-spacing: .04em; line-height: 1; cursor: pointer; user-select: none; text-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  nav { display: flex; gap: 18px; font-size: 14px; }
+  nav a { color: #e5e5e5; text-decoration: none; cursor: pointer; }
+  nav a:hover { color: var(--muted); }
+  .search { margin-left: auto; display: flex; align-items: center; gap: 8px; border: 1px solid transparent; padding: 6px 8px; transition: border-color .2s, background .2s; }
+  .search.open { border-color: #fff; background: rgba(0,0,0,.75); }
+  .search svg { width: 22px; height: 22px; flex: none; cursor: pointer; }
+  .search input { width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #fff; font-size: 15px; transition: width .3s; }
+  .search.open input { width: min(240px, 42vw); }
+  @media (max-width: 600px) { nav { display: none; } }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; height: min(56.25vw, 82vh); min-height: 540px; background: #000 center 30% / cover no-repeat; }
+  .hero::before { content: ""; position: absolute; inset: 0; background: linear-gradient(77deg, rgba(0,0,0,.82) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,0) 75%); }
+  .hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 38%; background: linear-gradient(180deg, rgba(20,20,20,0) 0%, rgba(20,20,20,.6) 55%, var(--bg) 100%); }
+  .hero-body { position: absolute; z-index: 2; left: var(--pad); right: var(--pad); bottom: calc(var(--overlap) + 64px); max-width: 640px; }
+  .hero-tag { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: .25em; color: #ddd; margin-bottom: 6px; }
+  .hero-tag b { font-family: var(--display); color: var(--red); font-size: 24px; letter-spacing: 0; font-weight: 400; }
+  .hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(48px, 7.5vw, 112px); line-height: .92; margin: 0 0 14px; letter-spacing: .01em; text-shadow: 0 3px 16px rgba(0,0,0,.5); }
+  .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 15px; color: #ddd; margin-bottom: 20px; }
+  .pill { border: 1px solid rgba(255,255,255,.4); padding: 0 6px; border-radius: 3px; font-size: 12px; }
+  .hero-actions { display: flex; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; border: 0; border-radius: 5px; padding: 11px 26px 11px 20px; font-size: 18px; font-weight: 700; }
+  .btn svg { width: 24px; height: 24px; }
+  .btn-play { background: #fff; color: #000; }
+  .btn-play:hover { background: rgba(255,255,255,.75); }
+  .btn-info { background: rgba(109,109,110,.7); color: #fff; }
+  .btn-info:hover { background: rgba(109,109,110,.45); }
+  .hero-progress { width: min(320px, 70%); height: 4px; background: rgba(255,255,255,.3); margin: -6px 0 20px; border-radius: 2px; }
+  .hero-progress div { height: 100%; background: var(--red); border-radius: 2px; }
+
+  /* ---------- rows ---------- */
+  /* Rows slide up over the hero; the hero text sits clear above that overlap. */
+  .rows { position: relative; z-index: 3; margin-top: calc(-1 * var(--overlap)); padding-bottom: 60px; }
+  .row { margin-bottom: 3.2vw; }
+  .row h2 { margin: 0 var(--pad) 10px; font-size: clamp(17px, 1.5vw, 22px); font-weight: 700; color: #e5e5e5; }
+  .track {
+    display: flex; gap: 8px; overflow-x: auto; overflow-y: visible; scroll-snap-type: x mandatory; scroll-padding: 0 var(--pad);
+    padding: 12px var(--pad) 18px; margin: -12px 0 -18px; scrollbar-width: none;
+  }
+  .track::-webkit-scrollbar { display: none; }
+  .card {
+    flex: 0 0 calc((100% - var(--pad) * 2 - 8px * (var(--per-row) - 1)) / var(--per-row) - 10px);
+    scroll-snap-align: start; position: relative; aspect-ratio: 16 / 9; border-radius: 5px; overflow: hidden; cursor: pointer;
+    background: var(--panel-2) center / cover no-repeat; transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .card::after { content: ""; position: absolute; inset: 45% 0 0 0; background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.85)); }
+  .card .label { position: absolute; z-index: 2; left: 10px; right: 10px; bottom: 9px; }
+  .card .t { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+  .card .s { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .card .bar { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.25); }
+  .card .bar div { height: 100%; background: var(--red); }
+  .card .badge { position: absolute; z-index: 3; top: 0; left: 0; font-size: 11px; font-weight: 700; padding: 3px 7px; background: var(--red); border-bottom-right-radius: 5px; }
+  .card .badge.dl { background: #555; }
+  .card .count { position: absolute; z-index: 3; top: 8px; right: 8px; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; background: rgba(0,0,0,.7); }
+  @media (hover: hover) {
+    .card:hover { transform: scale(1.07); z-index: 5; box-shadow: 0 8px 28px rgba(0,0,0,.7); }
+    .card:hover::before { content: ""; position: absolute; z-index: 4; top: 50%; left: 50%; width: 46px; height: 46px; margin: -30px 0 0 -23px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.45) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M8 5v14l11-7z'/%3E%3C/svg%3E") center / 24px no-repeat; }
+  }
+
+  /* ---------- search results ---------- */
+  #results { display: none; padding: calc(90px + env(safe-area-inset-top)) var(--pad) 60px; }
+  #results.on { display: block; }
+  #results h2 { font-size: 15px; color: var(--dim); font-weight: 500; margin: 0 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(var(--per-row), 1fr); gap: 34px 8px; }
+  .grid .card { flex: none; width: 100%; }
+  .empty { color: var(--dim); padding: 80px 0; text-align: center; font-size: 17px; }
+
+  /* ---------- info modal ---------- */
+  .modal-bg { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.7); display: none; overflow-y: auto; padding: 30px 12px; }
+  .modal-bg.on { display: block; }
+  .modal { max-width: 850px; margin: 0 auto; background: var(--panel); border-radius: 8px; overflow: hidden; box-shadow: 0 12px 60px rgba(0,0,0,.8); animation: pop .25s ease; }
+  @keyframes pop { from { transform: scale(.94); opacity: 0; } }
+  .modal-hero { position: relative; aspect-ratio: 16 / 9; max-height: 480px; width: 100%; background: #000 center / cover no-repeat; }
+  .modal-hero::after { content: ""; position: absolute; inset: 40% 0 0 0; background: linear-gradient(180deg, rgba(24,24,24,0), var(--panel)); }
+  .modal-hero .body { position: absolute; z-index: 2; left: 5%; right: 5%; bottom: 6%; }
+  .modal-hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(36px, 6vw, 64px); line-height: .95; margin: 0 0 14px; }
+  .close { position: absolute; z-index: 3; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--panel); color: #fff; font-size: 20px; line-height: 36px; }
+  .modal-body { padding: 4px 5% 30px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 10px 14px; color: var(--muted); font-size: 15px; align-items: center; }
+  .facts .hi { color: #46d369; font-weight: 700; }
+  .eps-head { display: flex; justify-content: space-between; align-items: baseline; margin: 26px 0 8px; }
+  .eps-head h3 { margin: 0; font-size: 22px; }
+  .ep { display: grid; grid-template-columns: 34px 150px 1fr; gap: 16px; align-items: center; padding: 16px 12px; border-bottom: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+  .ep:hover, .ep.next { background: #2a2a2a; }
+  .ep .n { font-size: 22px; color: var(--muted); text-align: center; }
+  .ep .img { position: relative; aspect-ratio: 16 / 9; border-radius: 4px; background: var(--panel-2) center / cover no-repeat; overflow: hidden; }
+  .ep .img .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.25); }
+  .ep .img .bar div { height: 100%; background: var(--red); }
+  .ep .et { font-weight: 700; }
+  .ep .es { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  @media (max-width: 600px) { .ep { grid-template-columns: 110px 1fr; } .ep .n { display: none; } }
+
+  /* ---------- player ---------- */
+  #watch { display: none; position: fixed; inset: 0; z-index: 30; background: #000; }
+  #watch.on { display: block; }
+  #watch video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  .back { position: absolute; z-index: 5; top: calc(16px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); display: flex; align-items: center; gap: 10px; border: 0; background: rgba(0,0,0,.45); color: #fff; padding: 8px 14px 8px 10px; border-radius: 99px; font-size: 15px; font-weight: 600; transition: opacity .4s; }
+  .back svg { width: 22px; height: 22px; }
+  #watch.playing .back { opacity: 0; }
+  #watch.playing:hover .back, #watch.playing .back:focus { opacity: 1; }
+  .stage { position: absolute; inset: 0; background: #000 center / cover no-repeat; }
+  .shade { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; text-align: center; background: rgba(0,0,0,.72); font-size: 18px; }
+  .shade h2 { font-family: var(--display); font-weight: 400; font-size: clamp(36px, 5vw, 60px); margin: 0; line-height: 1; }
+  .spinner { width: 56px; height: 56px; border-radius: 50%; border: 4px solid rgba(255,255,255,.15); border-top-color: var(--red); animation: spin .9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .progress { width: min(420px, 80%); height: 5px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
+  .progress div { height: 100%; width: 0; background: var(--red); transition: width .4s; }
+  .muted { color: var(--muted); font-size: 15px; }
+  .error { color: #ff6b6b; }
+  .next-up { position: absolute; z-index: 6; right: calc(24px + env(safe-area-inset-right)); bottom: 90px; display: flex; gap: 10px; }
+  .next-up .btn { font-size: 16px; padding: 10px 18px; }
+</style>
+</head>
+<body>
+<header id="bar">
+  <div class="logo" data-home>HOMEFLIX</div>
+  <nav>
+    <a data-home>Home</a>
+    <a data-jump="row-shows">TV Shows</a>
+    <a data-jump="row-movies">Movies</a>
+    <a data-jump="row-continue">My List</a>
+  </nav>
+  <label class="search" id="searchBox">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5" stroke-linecap="round"/></svg>
+    <input id="search" type="search" placeholder="Titles, shows" autocomplete="off">
+  </label>
+</header>
+
+<main id="home">
+  <section class="hero" id="hero"></section>
+  <section class="rows" id="rows"></section>
+</main>
+<section id="results"></section>
+
+<div class="modal-bg" id="modal"><div class="modal" id="modalCard"></div></div>
+
+<section id="watch">
+  <button class="back" data-back><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Back</button>
+  <div id="stage"></div>
+</section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>';
+const ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.1" stroke-linecap="round"/></svg>';
+const SERIES_RE = /^(.*?)[\s-]*S(\d{1,2})\s*E(\d{1,3})\b/i;
+
+let movies = [];      // every video from the server
+let shows = new Map(); // show name -> episodes, in order
+let pollTimer = null;
+let infoCache = {};
+
+// ---------- watch progress, kept on this device ----------
+const store = {
+  get(id) { try { return JSON.parse(localStorage.getItem('pos:' + id)) || null; } catch { return null; } },
+  set(id, v) { try { localStorage.setItem('pos:' + id, JSON.stringify(v)); } catch {} },
+};
+const pct = (id) => { const p = store.get(id); return p && p.duration ? Math.min(100, (p.time / p.duration) * 100) : 0; };
+const inProgress = (id) => { const p = store.get(id); return p && p.time > 30 && p.time < p.duration - 120; };
+const finished = (id) => { const p = store.get(id); return p && p.duration && p.time >= p.duration - 120; };
+
+// ---------- helpers ----------
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+function fmtSize(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round(b / 1e6) + ' MB'; }
+function fmtTime(s) { s = Math.floor(s); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? `${h}h ${m}m` : `${m}m`; }
+function isNew(m) { return Date.now() - m.mtime < 7 * 864e5; }
+async function info(id) {
+  if (!infoCache[id]) infoCache[id] = fetch('/api/info/' + id).then((r) => r.json());
+  return infoCache[id];
+}
+
+function parse(m) {
+  const x = m.title.match(SERIES_RE);
+  if (x) Object.assign(m, { show: x[1].trim(), season: +x[2], ep: +x[3], epLabel: `S${+x[2]}:E${+x[3]}` });
+  return m;
+}
+
+// The episode to play when someone presses Play on a show: resume, else the one after the last finished, else the first.
+function nextUp(show) {
+  const eps = shows.get(show);
+  const watching = eps.filter((e) => inProgress(e.id)).sort((a, b) => store.get(b.id).at - store.get(a.id).at)[0];
+  if (watching) return watching;
+  let lastDone = -1;
+  eps.forEach((e, i) => { if (finished(e.id)) lastDone = i; });
+  return eps[lastDone + 1] || eps[0];
+}
+
+// ---------- cards ----------
+function movieCard(m) {
+  const p = pct(m.id);
+  const sub = m.show ? `${m.epLabel}` : [m.year, fmtSize(m.size)].filter(Boolean).join(' · ');
+  return `<div class="card" data-play="${m.id}" style="background-image:url('/thumb/${m.id}')">
+    ${m.downloading ? '<span class="badge dl">DOWNLOADING</span>' : m.state === 'working' ? '<span class="badge">PREPARING</span>' : isNew(m) && !p ? '<span class="badge">NEW</span>' : ''}
+    <div class="label"><div class="t">${esc(m.show ? m.show : m.title)}</div><div class="s">${esc(sub)}</div></div>
+    ${p ? `<div class="bar"><div style="width:${p}%"></div></div>` : ''}
+  </div>`;
+}
+function showCard(name) {
+  const eps = shows.get(name);
+  const cover = eps[0];
+  return `<div class="card" data-show="${esc(name)}" style="background-image:url('/thumb/${cover.id}')">
+    ${eps.some(isNew) ? '<span class="badge">NEW EPISODES</span>' : ''}
+    <span class="count">${eps.length} EP</span>
+    <div class="label"><div class="t">${esc(name)}</div><div class="s">${eps.length} episode${eps.length > 1 ? 's' : ''}</div></div>
+  </div>`;
+}
+function row(id, title, cards) {
+  return cards.length ? `<div class="row" id="${id}"><h2>${esc(title)}</h2><div class="track">${cards.join('')}</div></div>` : '';
+}
+
+// ---------- home ----------
+function renderHome() {
+  const films = movies.filter((m) => !m.show);
+  const showNames = [...shows.keys()];
+  const continuing = movies.filter((m) => inProgress(m.id)).sort((a, b) => store.get(b.id).at - store.get(a.id).at);
+
+  // Newest first, but a show appears once (as the show, not each episode).
+  const seen = new Set();
+  const recent = [];
+  for (const m of movies) {
+    if (m.show) { if (!seen.has(m.show)) { seen.add(m.show); recent.push(showCard(m.show)); } }
+    else recent.push(movieCard(m));
+  }
+
+  let html = row('row-continue', 'Continue Watching', continuing.map(movieCard));
+  html += row('row-recent', 'Recently Added', recent);
+  html += showNames.length ? row('row-shows', 'TV Shows', showNames.map(showCard)) : '';
+  for (const name of showNames) html += row('row-show-' + name.replace(/\W+/g, '-'), name, shows.get(name).map(movieCard));
+  html += row('row-movies', 'Movies', films.map(movieCard));
+  $('rows').innerHTML = movies.length ? html : '<div class="empty">No movies yet. On your laptop, open the HOMEFLIX app and choose the folder where your movies are.</div>';
+  renderHero(continuing[0] || movies.find((m) => !m.downloading));
+}
+
+async function renderHero(pick) {
+  const hero = $('hero');
+  if (!pick) { hero.innerHTML = ''; hero.style.backgroundImage = ''; return; }
+  const isShow = !!pick.show;
+  const target = isShow ? nextUp(pick.show) : pick;
+  const p = pct(target.id);
+  hero.style.backgroundImage = `url('/thumb/${target.id}?size=hero')`;
+  const eps = isShow ? shows.get(pick.show) : null;
+  hero.innerHTML = `<div class="hero-body">
+    <div class="hero-tag"><b>H</b>${isShow ? 'SERIES' : 'FILM'}</div>
+    <h1>${esc(isShow ? pick.show : pick.title)}</h1>
+    <div class="hero-meta" id="heroMeta">
+      ${pick.year ? `<span>${pick.year}</span>` : ''}
+      ${isShow ? `<span>${eps.length} Episode${eps.length > 1 ? 's' : ''}</span><span class="pill">${target.epLabel}</span>` : ''}
+      <span class="pill">HD</span>
+    </div>
+    ${p ? `<div class="hero-progress"><div style="width:${p}%"></div></div>` : ''}
+    <div class="hero-actions">
+      <button class="btn btn-play" data-play="${target.id}">${ICON_PLAY}${p ? 'Resume' : 'Play'}</button>
+      <button class="btn btn-info" ${isShow ? `data-show="${esc(pick.show)}"` : `data-info="${pick.id}"`}>${ICON_INFO}More Info</button>
+    </div>
+  </div>`;
+  if (!isShow) {
+    const i = await info(pick.id).catch(() => null);
+    if (i && i.duration && $('heroMeta')) $('heroMeta').insertAdjacentHTML('beforeend', `<span>${fmtTime(i.duration)}</span>`);
+  }
+}
+
+function renderResults(q) {
+  const res = $('results');
+  const hits = movies.filter((m) => (m.title + ' ' + (m.show || '')).toLowerCase().includes(q));
+  res.innerHTML = `<h2>Results for “${esc(q)}”</h2>` + (hits.length ? `<div class="grid">${hits.map(movieCard).join('')}</div>` : '<div class="empty">Nothing matches that. Try another title.</div>');
+}
+
+async function loadLibrary() {
+  try {
+    movies = (await (await fetch('/api/library')).json()).map(parse);
+  } catch {
+    $('rows').innerHTML = '<div class="empty error" style="padding-top:140px">Can’t reach the laptop. Is HOMEFLIX running?</div>';
+    return;
+  }
+  shows = new Map();
+  for (const m of movies.filter((m) => m.show)) {
+    if (!shows.has(m.show)) shows.set(m.show, []);
+    shows.get(m.show).push(m);
+  }
+  for (const eps of shows.values()) eps.sort((a, b) => a.season - b.season || a.ep - b.ep);
+  const q = $('search').value.trim().toLowerCase();
+  q ? renderResults(q) : renderHome();
+}
+
+// ---------- More Info modal ----------
+async function openModal({ id, show }) {
+  const card = $('modalCard');
+  const item = id ? movies.find((m) => m.id === id) : null;
+  const eps = show ? shows.get(show) : null;
+  const target = show ? nextUp(show) : item;
+  if (!target) return;
+  const p = pct(target.id);
+  card.innerHTML = `<div class="modal-hero" style="background-image:url('/thumb/${target.id}?size=hero')">
+      <button class="close" data-close aria-label="Close">✕</button>
+      <div class="body"><h1>${esc(show || item.title)}</h1>
+        <button class="btn btn-play" data-play="${target.id}">${ICON_PLAY}${p ? 'Resume' : 'Play'}${show ? ' ' + target.epLabel : ''}</button></div>
+    </div>
+    <div class="modal-body">
+      <div class="facts" id="facts">${isNew(target) ? '<span class="hi">New</span>' : ''}${item && item.year ? `<span>${item.year}</span>` : ''}${show ? `<span>${eps.length} Episodes</span>` : ''}<span class="pill">HD</span></div>
+      ${show ? `<div class="eps-head"><h3>Episodes</h3><span class="muted">${esc(show)}</span></div>` + eps.map((e) => {
+        const ep = pct(e.id);
+        return `<div class="ep ${e.id === target.id ? 'next' : ''}" data-play="${e.id}">
+          <div class="n">${e.ep}</div>
+          <div class="img" style="background-image:url('/thumb/${e.id}')">${ep ? `<div class="bar"><div style="width:${ep}%"></div></div>` : ''}</div>
+          <div><div class="et">Episode ${e.ep}</div><div class="es" data-dur="${e.id}">Season ${e.season} · ${fmtSize(e.size)}</div></div>
+        </div>`;
+      }).join('') : ''}
+    </div>`;
+  $('modal').classList.add('on');
+  document.body.classList.add('lock');
+
+  // Fill in runtimes and subtitle languages as they arrive.
+  const ids = show ? eps.map((e) => e.id) : [item.id];
+  for (const eid of ids) {
+    info(eid).then((i) => {
+      if (!i || !i.duration) return;
+      const el = card.querySelector(`[data-dur="${eid}"]`);
+      if (el) el.textContent = `Season ${movies.find((m) => m.id === eid).season} · ${fmtTime(i.duration)}`;
+      if (!show && $('facts')) {
+        $('facts').insertAdjacentHTML('beforeend', `<span>${fmtTime(i.duration)}</span><span>${fmtSize(item.size)}</span>` +
+          (i.subs.length ? `<span>Subtitles: ${esc([...new Set(i.subs.map((s) => s.label))].join(', '))}</span>` : ''));
+      }
+    }).catch(() => {});
+  }
+}
+function closeModal() { $('modal').classList.remove('on'); document.body.classList.remove('lock'); }
+
+// ---------- player ----------
+async function openMovie(id) {
+  clearInterval(pollTimer);
+  closeModal();
+  $('watch').classList.add('on');
+  $('watch').classList.remove('playing');
+  document.body.classList.add('lock');
+  const stage = $('stage');
+  stage.innerHTML = `<div class="stage" style="background-image:url('/thumb/${id}?size=hero')"><div class="shade"><div class="spinner"></div></div></div>`;
+  let i;
+  try {
+    i = await info(id);
+    if (i.error) throw new Error(i.error);
+  } catch (e) {
+    delete infoCache[id];
+    stage.querySelector('.shade').innerHTML = `<div class="error">${esc(e.message || 'Could not load this title.')}</div>`;
+    return;
+  }
+  const m = movies.find((x) => x.id === id) || parse({ ...i });
+  if (i.downloading) {
+    stage.querySelector('.shade').innerHTML = `<h2>${esc(i.title)}</h2><div class="muted">Still downloading on the laptop. It’ll be ready to play once the download finishes.</div>`;
+    return;
+  }
+  document.title = (m.show ? `${m.show} ${m.epLabel}` : i.title) + ' — HOMEFLIX';
+  const status = await (await fetch('/api/status/' + id)).json().catch(() => ({}));
+  if (i.mode === 'direct' || status.state === 'ready') return play(i, m);
+  prepare(i, m);
+}
+
+function prepare(i, m) {
+  const shade = $('stage').querySelector('.shade');
+  const title = esc(m.show ? `${m.show} · ${m.epLabel}` : i.title);
+  const draw = (s) => {
+    if (s.state === 'error') {
+      shade.innerHTML = `<h2>${title}</h2><div class="error">Couldn’t get this ready: ${esc(s.error)}</div><button class="btn btn-play" id="retry">Try again</button>`;
+      $('retry').onclick = start;
+      return;
+    }
+    shade.innerHTML = `<div class="spinner"></div><h2>${title}</h2>
+      <div class="progress"><div style="width:${(s.progress || 0) * 100}%"></div></div>
+      <div class="muted">${i.mode === 'transcode' ? 'This file needs re-encoding, so it can take a while.' : 'Getting it ready for this device. Only happens once.'}</div>`;
+  };
+  async function start() {
+    const s = await (await fetch('/api/prepare/' + i.id, { method: 'POST' })).json();
+    if (s.state === 'ready') return play(i, m);
+    draw(s);
+    clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      const st = await (await fetch('/api/status/' + i.id)).json().catch(() => ({}));
+      if (st.state === 'ready') { clearInterval(pollTimer); play(i, m); }
+      else if (st.state) draw(st);
+      if (st.state === 'error' || st.state === 'idle') clearInterval(pollTimer);
+    }, 1200);
+  }
+  draw({ progress: 0 });
+  start();
+}
+
+function play(i, m) {
+  const tracks = i.subs.map((s) => `<track kind="subtitles" src="/subs/${i.id}/${s.key}.vtt" srclang="${esc(s.lang.slice(0, 2))}" label="${esc(s.label)}">`).join('');
+  $('stage').innerHTML = `<video id="v" controls playsinline autoplay preload="auto" poster="/thumb/${i.id}?size=hero" src="/video/${i.id}">${tracks}</video>`;
+  const v = $('v');
+  const saved = store.get(i.id);
+  v.addEventListener('loadedmetadata', () => {
+    if (saved && saved.time > 30 && saved.time < v.duration - 120) v.currentTime = saved.time;
+  }, { once: true });
+  v.addEventListener('play', () => $('watch').classList.add('playing'));
+  v.addEventListener('pause', () => $('watch').classList.remove('playing'));
+  let last = 0;
+  // Skip once the player is torn down (no duration), or leaving would reset the position to 0.
+  const save = () => { if (v.duration && v.currentTime) store.set(i.id, { time: v.currentTime, duration: v.duration, at: Date.now() }); };
+  v.addEventListener('timeupdate', () => { if (Math.abs(v.currentTime - last) >= 5) { last = v.currentTime; save(); } });
+  v.addEventListener('pause', save);
+  v.addEventListener('error', () => {
+    $('stage').insertAdjacentHTML('beforeend', '<div class="shade"><div class="error">The video stopped loading. Check that the laptop is awake and HOMEFLIX is running.</div></div>');
+  });
+  // Series: offer the next episode near the end, and roll into it when this one finishes.
+  const eps = m.show ? shows.get(m.show) : null;
+  const next = eps ? eps[eps.findIndex((e) => e.id === i.id) + 1] : null;
+  if (next) {
+    let shown = false;
+    v.addEventListener('timeupdate', () => {
+      if (shown || !v.duration || v.duration - v.currentTime > 60) return;
+      shown = true;
+      $('stage').insertAdjacentHTML('beforeend', `<div class="next-up"><button class="btn btn-play" data-play="${next.id}">${ICON_PLAY}Next Episode</button></div>`);
+    });
+    v.addEventListener('ended', () => { location.hash = '#/watch/' + next.id; });
+  }
+  v.play().catch(() => {});
+}
+
+function closePlayer() {
+  clearInterval(pollTimer);
+  const v = $('v');
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+  $('stage').innerHTML = '';
+  $('watch').classList.remove('on', 'playing');
+  document.body.classList.remove('lock');
+  document.title = 'HOMEFLIX';
+}
+
+// ---------- routing & events ----------
+function route() {
+  const m = location.hash.match(/^#\/watch\/(\w+)/);
+  if (m) return openMovie(m[1]);
+  closePlayer();
+  loadLibrary();
+}
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-play],[data-show],[data-info],[data-close],[data-home],[data-jump],[data-back]');
+  if (!t) { if (e.target === $('modal')) closeModal(); return; }
+  if (t.dataset.play) location.hash = '#/watch/' + t.dataset.play;
+  else if (t.dataset.show) openModal({ show: t.dataset.show });
+  else if (t.dataset.info) openModal({ id: t.dataset.info });
+  else if ('close' in t.dataset) closeModal();
+  else if ('back' in t.dataset) history.length > 1 && location.hash ? history.back() : (location.hash = '');
+  else if ('home' in t.dataset) { $('search').value = ''; setSearch(''); location.hash = ''; window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  else if (t.dataset.jump) {
+    const el = $(t.dataset.jump);
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - 80, behavior: 'smooth' });
+  }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('modal').classList.contains('on') ? closeModal() : $('watch').classList.contains('on') && (location.hash = ''); });
+
+function setSearch(q) {
+  $('home').style.display = q ? 'none' : '';
+  $('results').classList.toggle('on', !!q);
+  q ? renderResults(q) : renderHome();
+}
+$('search').addEventListener('input', () => setSearch($('search').value.trim().toLowerCase()));
+$('searchBox').addEventListener('click', () => { $('searchBox').classList.add('open'); $('search').focus(); });
+$('search').addEventListener('blur', () => { if (!$('search').value) $('searchBox').classList.remove('open'); });
+window.addEventListener('scroll', () => $('bar').classList.toggle('solid', scrollY > 40), { passive: true });
+window.addEventListener('hashchange', route);
+route();
+</script>
+</body>
+</html>
