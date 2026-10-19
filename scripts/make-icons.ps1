@@ -59,5 +59,9 @@ New-Item -ItemType Directory -Force (Join-Path $root 'build') | Out-Null
 New-Icon 512 (Join-Path $root 'build\icon.png') $true
 New-Ico (Join-Path $root 'build\icon.ico')
 New-Icon 256 (Join-Path $root 'electron\icon.png') $true
+# For phones: Android home-screen app (manifest) and iPhone/iPad "Add to Home Screen".
+New-Icon 192 (Join-Path $root 'public\icon-192.png') $true
+New-Icon 512 (Join-Path $root 'public\icon-512.png') $true
+New-Icon 180 (Join-Path $root 'public\apple-touch-icon.png') $true
 New-Icon 32 (Join-Path $root 'electron\tray.png') $false
 "Icons written."

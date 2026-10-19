@@ -7,7 +7,7 @@ Watch the movies on your Windows laptop from your iPad, iPhone, Android phone or
 ## Install (5 minutes, one time)
 
 ### 1. Download and run the installer
-**[⬇ Download HOMEFLIX for Windows](https://github.com/kprakz/homeflix/releases/latest)**. On that page, under *Assets*, click **`HOMEFLIX-Setup-1.0.0.exe`**, then double-click the downloaded file.
+**[⬇ Download HOMEFLIX for Windows](https://github.com/kprakz/homeflix/releases/latest)**. On that page, under *Assets*, click **`HOMEFLIX-Setup-<version>.exe`**, then double-click the downloaded file.
 
 Requires Windows 10 or 11 (64-bit).
 
@@ -33,23 +33,44 @@ Only do this for your **home** Wi-Fi, never for café, hotel or airport Wi-Fi.
 
 ## Watch
 
-1. Connect your iPad, phone or TV to the **same Wi-Fi** as the laptop.
-2. **Scan the QR code** in the HOMEFLIX window with the camera, or type the address shown (for example `http://192.168.1.57:8080`) into Safari or Chrome.
+1. Connect your iPhone, iPad, Android phone or TV to the **same Wi-Fi** as the laptop.
+2. **Scan the QR code** in the HOMEFLIX window with the camera, or type the address shown (for example `http://192.168.1.57:8080`) into the browser.
 3. Pick a movie and press Play.
 
+### iPhone and iPad
+Open the address in **Safari**. Tap **Share → Add to Home Screen** to get a HOMEFLIX app icon.
+
+### Android phones and tablets
+Open the address in **Chrome**. Tap **⋮ → Add to Home screen** (or **Install app**) to get a HOMEFLIX app icon. Videos go full-screen in landscape, and the phone's back button works as you'd expect.
+
+### Smart TVs
+Open your TV's web browser, such as Samsung Internet, LG Web Browser, or a browser app on Android TV / Google TV / Fire TV, and type the address.
+
+| Remote button | What it does |
+|---|---|
+| Arrows / OK | Move around and choose |
+| Back | Go back, or leave the movie |
+| OK (while watching) | Pause / play |
+| Left / Right (while watching) | Skip back / forward 10 seconds |
+| Up / Down (while watching) | Show the controls: subtitles, skip, play/pause |
+
+If HOMEFLIX doesn't switch to TV controls on its own, add `?tv=1` to the end of the address once, for example `http://192.168.1.57:8080/?tv=1`. Your TV remembers it.
+
+From an iPhone or iPad you can also **AirPlay** to an Apple TV or an AirPlay-compatible TV.
+
 **Tips**
-- On iPhone/iPad, tap **Share → Add to Home Screen** to get a HOMEFLIX icon.
 - Each device remembers where you stopped and shows those movies under **Continue Watching**.
 - TV shows named like `Show S01E05` are grouped into series, and the next episode plays automatically.
 - Subtitles inside the movie, or a `.srt` file next to it with the same name, appear in the player's subtitle menu.
-- To watch on a TV, **AirPlay** from an iPhone or iPad works with every movie. Some TV browsers can't play HEVC (x265) files.
 
 ## Good to know
 
 - **Keep the laptop awake and plugged in** while you watch. Nothing plays on the laptop itself: the movie plays on your device.
 - **Closing the window doesn't stop HOMEFLIX.** It keeps running in the system tray, near the clock. Right-click the red **H** icon → **Quit HOMEFLIX** to stop it.
 - **Start with Windows** in Settings makes HOMEFLIX start quietly when you sign in.
-- **MKV files** are converted once into a format Apple devices play, which usually takes seconds. These copies use disk space. **Settings → Free up space** removes them at any time, and HOMEFLIX makes them again when needed.
+- **MKV files** are repackaged once into a format phones and TVs play. This usually takes seconds, or a few minutes for movies with Dolby audio.
+- **Devices that can't play HEVC (x265)**, which includes many Android phones and TVs, get a version converted while you watch. It starts in a few seconds, and HOMEFLIX uses the laptop's Intel, NVIDIA or AMD graphics chip for this when it can. If you see sound but no picture, tap **Picture missing?** in the player.
+- **Disk space:** converted copies are stored on the laptop. When space runs low, HOMEFLIX deletes the ones watched longest ago, keeping 2 GB free. **Settings → Free up space** removes them all, and they're made again when needed.
 - **Files still downloading** show a *Downloading* badge and become playable when finished.
 
 ## Privacy
@@ -67,7 +88,9 @@ Settings → Apps → Installed apps → **HOMEFLIX** → Uninstall. This also r
 | The page won't open on my phone | Same Wi-Fi? Wi-Fi set to **Private**? HOMEFLIX allowed in the firewall? (Windows Security → Firewall & network protection → Allow an app through firewall → tick **HOMEFLIX** for Private.) |
 | The address changed | Your router gave the laptop a new address. Scan the new QR code in the HOMEFLIX window. |
 | A movie shows "Downloading" | It's still being written to disk. Wait for the download to finish and reload the page. |
-| A movie won't play on my TV | The TV browser probably can't play HEVC. Use AirPlay from an iPhone/iPad instead. |
+| Sound but no picture | Tap **Picture missing?** in the player. On a TV, press Up and choose it. |
+| My TV shows the phone layout / no remote controls | Add `?tv=1` to the end of the address once. |
+| "Not enough free space" | The laptop's drive is nearly full. Free some space. HOMEFLIX streams a converted version in the meantime. |
 | No thumbnails / MKV won't play | Reinstall HOMEFLIX (its video tools are missing). |
 
 ---
@@ -87,8 +110,8 @@ npm run dist        # build dist/HOMEFLIX-Setup-<version>.exe
 
 | Path | What it is |
 |---|---|
-| `server.js` | Streaming server: library scan, byte-range streaming, MKV→MP4 remux, thumbnails, subtitles |
-| `public/index.html` | The Netflix-style web player that phones and TVs open |
+| `server.js` | Streaming server: library scan, byte-range streaming, MKV→MP4 remux, on-the-fly H.264 HLS (hardware encoders when available), thumbnails, subtitles, disk-space management |
+| `public/index.html` | The Netflix-style web player that phones and TVs open (per-device format choice, TV remote navigation) |
 | `electron/` | Desktop app: tray, setup window (`control.html`), settings |
 | `build/` | Installer icons and NSIS uninstall script |
 | `vendor/ffmpeg/` | Bundled ffmpeg (not committed; created by `npm run ffmpeg`) |

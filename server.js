@@ -14,8 +14,9 @@ let CONFIG = { port: 8080, folders: [], minSizeMB: 5, cacheDir: 'cache', ffmpeg:
 let CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.avi', '.webm', '.wmv', '.flv', '.ts', '.m2ts', '.mpg', '.mpeg', '.3gp']);
 const DIRECT_CONTAINERS = new Set(['.mp4', '.m4v', '.mov']);
-const SAFARI_AUDIO = new Set(['aac', 'mp3', 'ac3', 'eac3', 'alac', 'flac']);
-const MP4_AUDIO_COPY = new Set(['aac', 'mp3', 'ac3', 'eac3', 'alac']);
+// Audio every browser plays (iPhone, Android, TVs). Dolby AC3/E-AC3, DTS etc. are silent on many
+// Android and TV browsers, so those are converted to stereo AAC.
+const UNIVERSAL_AUDIO = new Set(['aac', 'mp3']);
 const TEXT_SUBS = new Set(['subrip', 'ass', 'ssa', 'mov_text', 'webvtt', 'text']);
 
 // The desktop app calls this with its own settings; `node server.js` uses config.json.
@@ -128,7 +129,16 @@ function probe(item) {
         .filter((s) => s.codec_type === 'subtitle' && TEXT_SUBS.has(s.codec_name))
         .map((s, i) => ({ key: `e${s.index}`, stream: s.index, n: i, lang: (s.tags && s.tags.language) || 'und', label: (s.tags && s.tags.title) || (s.tags && s.tags.language) || `Subtitle ${i + 1}` }));
       for (const side of sidecarSubs(item.path)) subs.push(side);
-      return { duration: Number(data.format && data.format.duration) || 0, video, audio, subs, mode: playMode(item.path, video, audio) };
+      return {
+        duration: Number(data.format && data.format.duration) || 0,
+        video,
+        audio,
+        subs,
+        mode: playMode(item.path, video, audio),
+        videoCodec: video ? video.codec_name : null,
+        tenBit: !!video && /1[02]/.test(video.pix_fmt || ''),
+        height: video ? video.height : 0,
+      };
     });
     p.catch(() => probes.delete(key));
     probes.set(key, p);
@@ -152,11 +162,13 @@ function sidecarSubs(file) {
     });
 }
 
-// direct: Safari plays the file as-is. remux: copy video into MP4. transcode: re-encode video (slow).
+// direct: the file plays as-is. remux: copy the video into an MP4 (seconds).
+// transcode: the video itself must be re-encoded, which happens as an HLS stream (see below).
+// HEVC plays only on some devices; the player asks for the HLS stream when it can't.
 function playMode(file, video, audio) {
   if (!video) return 'transcode';
   const videoOk = videoCopyable(video);
-  const audioOk = !audio || SAFARI_AUDIO.has(audio.codec_name);
+  const audioOk = !audio || UNIVERSAL_AUDIO.has(audio.codec_name);
   const tagOk = video.codec_name !== 'hevc' || video.codec_tag_string === 'hvc1';
   if (DIRECT_CONTAINERS.has(path.extname(file).toLowerCase()) && videoOk && audioOk && tagOk) return 'direct';
   return videoOk ? 'remux' : 'transcode';
@@ -173,36 +185,83 @@ function videoCopyable(video) {
 const jobs = new Map(); // id -> { state, progress, error }
 
 function cachedMp4(item) {
-  // Include size+mtime so a replaced file gets prepared again.
-  return path.join(CACHE_DIR, `${item.id}-${item.size}-${Math.floor(item.mtime)}.mp4`);
+  // Include size+mtime so a replaced file gets prepared again; "u" marks the universal-audio format.
+  return path.join(CACHE_DIR, `${item.id}-${item.size}-${Math.floor(item.mtime)}-u.mp4`);
 }
 
 function jobStatus(item) {
   if (fs.existsSync(cachedMp4(item))) return { state: 'ready', progress: 1 };
+  const job = jobs.get(item.id);
+  if (job && job.state === 'ready') jobs.delete(item.id); // its copy was removed to free space
   return jobs.get(item.id) || { state: 'idle', progress: 0 };
+}
+
+// ---------- disk space ----------
+// Converted copies are as big as the movie. Keep 2 GB free on the laptop by deleting the copies
+// watched longest ago (their mtime is bumped whenever they're streamed).
+const RESERVE = 2 * 1024 ** 3;
+
+async function freeBytes() {
+  try {
+    const s = await fsp.statfs(CACHE_DIR);
+    return s.bavail * s.bsize;
+  } catch {
+    return Infinity;
+  }
+}
+
+async function makeRoom(need, keep) {
+  let free = await freeBytes();
+  if (free >= need + RESERVE) return true;
+  const busy = new Set([...hls.values()].filter((st) => st.job).map((st) => st.dir));
+  const candidates = [];
+  for (const e of await fsp.readdir(CACHE_DIR, { withFileTypes: true }).catch(() => [])) {
+    const p = path.join(CACHE_DIR, e.name);
+    const isCopy = e.isDirectory() ? e.name.startsWith('hls-') : e.name.endsWith('.mp4');
+    if (!isCopy || p === keep || busy.has(p)) continue;
+    const st = await fsp.stat(p).catch(() => null);
+    if (st) candidates.push({ p, used: st.mtimeMs, dir: e.isDirectory() });
+  }
+  candidates.sort((a, b) => a.used - b.used);
+  const removed = new Set();
+  for (const c of candidates) {
+    if (free >= need + RESERVE) break;
+    const size = c.dir ? await dirSize(c.p) : (await fsp.stat(c.p).catch(() => ({ size: 0 }))).size;
+    await fsp.rm(c.p, { recursive: true, force: true }).catch(() => {});
+    removed.add(c.p);
+    free += size;
+    console.log(`Freed ${(size / 1e9).toFixed(1)} GB by removing an old converted copy`);
+  }
+  for (const [id, st] of hls) if (removed.has(st.dir)) hls.delete(id);
+  return free >= need + RESERVE;
+}
+
+function touch(file) {
+  const now = new Date();
+  fs.utimes(file, now, now, () => {});
 }
 
 async function prepare(item) {
   const existing = jobStatus(item);
   if (existing.state === 'ready' || existing.state === 'working') return existing;
   if (item.downloading) return { state: 'error', progress: 0, error: 'This file is still downloading. Try again once it finishes.' };
+  if (!(await makeRoom(item.size * 1.02))) {
+    return { state: 'error', progress: 0, code: 'nospace', error: `Not enough free space on the laptop to prepare this (needs about ${Math.ceil((item.size * 1.02 + RESERVE) / 1e9)} GB free).` };
+  }
   const job = { state: 'working', progress: 0, error: null };
   jobs.set(item.id, job);
 
   try {
     const info = await probe(item);
+    if (info.mode === 'transcode') throw new Error('This video needs converting while it plays; the player uses the compatible stream for it.');
     const out = cachedMp4(item);
     const tmp = `${out}.part`;
     // Map the real video stream: some files carry cover art as an extra "video" stream.
     const args = ['-hide_banner', '-v', 'error', '-y', '-i', item.path, '-map', `0:${info.video.index}`, '-map', info.audio ? `0:${info.audio.index}` : '0:a:0?'];
-    if (info.mode === 'transcode') {
-      args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p');
-    } else {
-      args.push('-c:v', 'copy');
-      if (info.video.codec_name === 'hevc') args.push('-tag:v', 'hvc1');
-    }
-    // Copying audio Safari already plays is ~70x faster than re-encoding it; otherwise make stereo AAC.
-    if (info.audio && MP4_AUDIO_COPY.has(info.audio.codec_name)) args.push('-c:a', 'copy');
+    args.push('-c:v', 'copy');
+    if (info.video.codec_name === 'hevc') args.push('-tag:v', 'hvc1');
+    // Copying audio every device plays is far faster than re-encoding it; otherwise make stereo AAC.
+    if (info.audio && UNIVERSAL_AUDIO.has(info.audio.codec_name)) args.push('-c:a', 'copy');
     else args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
     args.push('-movflags', '+faststart', '-f', 'mp4', '-progress', 'pipe:1', '-nostats', tmp);
 
@@ -287,6 +346,187 @@ async function thumbnail(item, hero = false) {
   );
 }
 
+// ---------- HLS: H.264 for devices that can't play the original video ----------
+// Many Android phones, TV browsers and PCs can't decode HEVC (x265), especially 10-bit. For those,
+// the movie is converted to H.264 while it plays, as 4-second HLS segments. The playlist lists every
+// segment up front, so the seek bar covers the whole movie; a segment that isn't made yet is waited
+// for, and seeking far ahead restarts the converter at that point. Finished segments stay cached.
+
+const SEG = 4; // seconds per segment
+const AHEAD = 45; // segments the converter may be behind a request before it's restarted there
+const hls = new Map(); // id -> { item, dir, total, done: Set<number>, job, profile, error }
+
+let encoderList = null;
+// Hardware encoders are ~3x faster than the CPU and keep the laptop cool; use the first that works.
+function workingEncoders() {
+  if (!encoderList) {
+    encoderList = (async () => {
+      const found = [];
+      for (const enc of ['h264_qsv', 'h264_nvenc', 'h264_amf']) {
+        const pix = enc === 'h264_qsv' ? 'nv12' : 'yuv420p';
+        try {
+          await run(CONFIG.ffmpeg, ['-hide_banner', '-v', 'error', '-f', 'lavfi', '-i', 'color=size=640x360:duration=0.5', '-pix_fmt', pix, '-c:v', enc, '-f', 'null', '-']);
+          found.push(enc);
+        } catch {}
+      }
+      console.log(`H.264 encoders: ${[...found, 'libx264'].join(', ')}`);
+      return found;
+    })();
+  }
+  return encoderList;
+}
+
+// Ways to convert, fastest first. If one fails on a file, the next is tried.
+async function hlsProfiles(info) {
+  const encoders = await workingEncoders();
+  const fit = "'min(iw,1920)'"; // phones and TVs handle 1080p H.264 best
+  const profiles = [];
+  if (encoders.includes('h264_qsv')) {
+    const enc = ['-c:v', 'h264_qsv', '-preset', 'veryfast', '-global_quality', '23', '-forced_idr', '1'];
+    if (['hevc', 'h264'].includes(info.videoCodec)) profiles.push({ name: 'Intel Quick Sync', pre: ['-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv'], vf: `scale_qsv=w=${fit}:h=-1:format=nv12`, enc });
+    profiles.push({ name: 'Intel Quick Sync', pre: [], vf: `scale=${fit}:-2,format=nv12`, enc });
+  }
+  if (encoders.includes('h264_nvenc')) profiles.push({ name: 'NVIDIA NVENC', pre: [], vf: `scale=${fit}:-2,format=yuv420p`, enc: ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '23', '-b:v', '0', '-forced-idr', '1'] });
+  if (encoders.includes('h264_amf')) profiles.push({ name: 'AMD AMF', pre: [], vf: `scale=${fit}:-2,format=yuv420p`, enc: ['-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'cqp', '-qp_i', '22', '-qp_p', '24', '-header_insertion_mode', 'idr'] });
+  profiles.push({ name: 'CPU', pre: [], vf: `scale=${fit}:-2,format=yuv420p`, enc: ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-forced-idr', '1'] });
+  return profiles;
+}
+
+function hlsState(item, info) {
+  const dir = path.join(CACHE_DIR, `hls-${item.id}-${item.size}-${Math.floor(item.mtime)}`);
+  let st = hls.get(item.id);
+  if (!st || st.dir !== dir) {
+    if (st) stopHls(st);
+    let done = [];
+    try {
+      done = JSON.parse(fs.readFileSync(path.join(dir, 'segments.json'), 'utf8'));
+    } catch {}
+    st = { item, dir, total: Math.max(1, Math.ceil(info.duration / SEG)), duration: info.duration, done: new Set(done), job: null, profile: 0, error: null, starting: null };
+    hls.set(item.id, st);
+  }
+  return st;
+}
+
+function hlsPlaylist(st) {
+  const lines = ['#EXTM3U', '#EXT-X-VERSION:3', `#EXT-X-TARGETDURATION:${SEG + 1}`, '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD'];
+  for (let i = 0; i < st.total; i++) {
+    const len = i === st.total - 1 ? st.duration - SEG * i : SEG;
+    lines.push(`#EXTINF:${Math.max(0.1, len).toFixed(3)},`, `${i}.ts`);
+  }
+  lines.push('#EXT-X-ENDLIST', '');
+  return lines.join('\n');
+}
+
+const segFile = (st, n) => path.join(st.dir, `seg${String(n).padStart(5, '0')}.ts`);
+
+function stopHls(st) {
+  const job = st.job;
+  if (!job) return;
+  job.killed = true;
+  clearInterval(job.timer);
+  job.child.kill();
+  st.job = null;
+}
+
+// ffmpeg lists a segment in its own playlist once the segment is complete.
+function readProgress(st, job) {
+  let text = '';
+  try {
+    text = fs.readFileSync(job.list, 'utf8');
+  } catch {
+    return;
+  }
+  let changed = false;
+  for (const m of text.matchAll(/seg(\d+)\.ts/g)) {
+    const n = Number(m[1]);
+    if (!st.done.has(n)) {
+      st.done.add(n);
+      changed = true;
+    }
+    job.produced = Math.max(job.produced, n - job.from + 1);
+    job.next = Math.max(job.next, n + 1);
+  }
+  if (changed) fs.writeFile(path.join(st.dir, 'segments.json'), JSON.stringify([...st.done]), () => {});
+  // Ran into segments an earlier run already made: stop, and pick up again where needed.
+  if (st.job === job && job.next > job.from && st.done.has(job.next)) stopHls(st);
+}
+
+async function startHls(st, info, from) {
+  stopHls(st);
+  // Room for the rest of the movie at roughly 0.35 MB per second of 1080p H.264, else at least 1 GB.
+  const need = (st.total - st.done.size) * SEG * 0.35e6;
+  if (!(await makeRoom(need, st.dir)) && (await freeBytes()) < 1024 ** 3) {
+    st.error = 'The laptop is out of disk space. Free some space and try again.';
+    return;
+  }
+  fs.mkdirSync(st.dir, { recursive: true });
+  const profiles = await hlsProfiles(info);
+  const profile = profiles[Math.min(st.profile, profiles.length - 1)];
+  const list = path.join(st.dir, 'run.m3u8');
+  try {
+    fs.unlinkSync(list);
+  } catch {}
+  const at = String(from * SEG);
+  const args = ['-hide_banner', '-v', 'error', '-y', ...profile.pre, '-ss', at, '-i', st.item.path, '-map', `0:${info.video.index}`];
+  if (info.audio) args.push('-map', `0:${info.audio.index}`);
+  args.push('-vf', profile.vf, ...profile.enc, '-force_key_frames', `expr:gte(t,n_forced*${SEG})`);
+  args.push('-c:a', 'aac', '-ac', '2', '-b:a', '160k', '-output_ts_offset', at);
+  args.push('-f', 'hls', '-hls_time', String(SEG), '-hls_list_size', '0', '-start_number', String(from), '-hls_segment_filename', path.join(st.dir, 'seg%05d.ts'), list);
+
+  console.log(`Converting "${st.item.title}" for this device from ${Math.round(from * SEG / 60)} min (${profile.name})…`);
+  const job = { child: spawn(CONFIG.ffmpeg, args, { windowsHide: true }), from, next: from, produced: 0, list, profile: profile.name, killed: false };
+  let stderr = '';
+  job.child.stderr.on('data', (d) => (stderr += d));
+  job.timer = setInterval(() => readProgress(st, job), 400);
+  job.child.on('error', (err) => (stderr += err.message));
+  job.child.on('close', (code) => {
+    clearInterval(job.timer);
+    readProgress(st, job);
+    if (st.job === job) st.job = null;
+    if (job.killed || code === 0) return;
+    // Failed before making anything: this way of converting doesn't suit the file, try the next one.
+    if (job.produced === 0 && st.profile < profiles.length - 1) {
+      console.error(`${profile.name} couldn't convert "${st.item.title}", trying another way: ${stderr.trim().split('\n').pop()}`);
+      st.profile++;
+      startHls(st, info, from);
+    } else if (job.produced === 0) {
+      st.error = stderr.trim().split('\n').pop() || `ffmpeg exited ${code}`;
+      console.error(`Couldn't convert "${st.item.title}": ${st.error}`);
+    }
+  });
+  st.job = job;
+  st.error = null;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function hlsSegment(req, res, item, n) {
+  const info = await probe(item);
+  const st = hlsState(item, info);
+  if (!(n >= 0 && n < st.total)) return send(res, 404, { error: 'No such segment' });
+  const deadline = Date.now() + 45000;
+  while (!st.done.has(n)) {
+    if (st.error && !st.job) return send(res, 500, { error: st.error });
+    const job = st.job;
+    const inReach = job && n >= job.from && n <= job.next + AHEAD;
+    if (!inReach && !st.starting) st.starting = startHls(st, info, n).finally(() => (st.starting = null));
+    if (st.starting) await st.starting;
+    if (Date.now() > deadline || req.destroyed) return send(res, 503, { error: 'Still converting, try again' });
+    await sleep(250);
+  }
+  if (n % 15 === 0) touch(st.dir); // recently watched: keep it when making room
+  return streamFile(req, res, segFile(st, n), 'video/mp2t');
+}
+
+async function dirSize(dir) {
+  let total = 0;
+  for (const e of await fsp.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const p = path.join(dir, e.name);
+    total += e.isDirectory() ? await dirSize(p) : (await fsp.stat(p).catch(() => ({ size: 0 }))).size;
+  }
+  return total;
+}
+
 // ---------- http ----------
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
@@ -331,18 +571,29 @@ async function streamFile(req, res, file, type) {
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x');
   const parts = url.pathname.split('/').filter(Boolean);
-  // /api/<action>/<id>  or  /video|thumb|subs/<id>/...
-  const item = library.get(parts[0] === 'api' ? parts[2] : parts[1]) || null;
+  // /api/<action>/<id>  or  /video|thumb|subs|hls/<id>/...
+  const id = parts[0] === 'api' ? parts[2] : parts[1];
+  if (id && !library.has(id) && library.size === 0) await scanLibrary(); // e.g. a device resuming right after a restart
+  const item = library.get(id) || null;
+
+  if (url.pathname === '/vendor/hls.min.js') {
+    res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'max-age=86400' });
+    return fs.createReadStream(require.resolve('hls.js/dist/hls.min.js')).pipe(res);
+  }
 
   if (parts[0] === 'api') {
     if (parts[1] === 'library') return send(res, 200, (await scanLibrary()).map(({ path: _p, ...rest }) => ({ ...rest, ...jobStatus(rest) })));
     if (!item) return send(res, 404, { error: 'Unknown movie — refresh the library.' });
     if (parts[1] === 'info') {
       const info = await probe(item);
-      return send(res, 200, { ...publicItem(item), duration: info.duration, mode: info.mode, subs: info.subs.map(({ key, lang, label }) => ({ key, lang, label })), ...jobStatus(item) });
+      return send(res, 200, { ...publicItem(item), duration: info.duration, mode: info.mode, videoCodec: info.videoCodec, tenBit: info.tenBit, height: info.height, subs: info.subs.map(({ key, lang, label }) => ({ key, lang, label })), ...jobStatus(item) });
     }
     if (parts[1] === 'prepare' && req.method === 'POST') return send(res, 200, await prepare(item));
     if (parts[1] === 'status') return send(res, 200, jobStatus(item));
+    if (parts[1] === 'hls') {
+      const st = hls.get(item.id);
+      return send(res, 200, st ? { total: st.total, done: st.done.size, converting: !!st.job, encoder: st.job && st.job.profile, error: st.error } : { total: 0, done: 0, converting: false });
+    }
     return send(res, 404, { error: 'Not found' });
   }
 
@@ -350,7 +601,16 @@ async function handle(req, res) {
     const info = await probe(item);
     if (info.mode === 'direct') return streamFile(req, res, item.path, VIDEO_MIME[path.extname(item.path).toLowerCase()] || 'video/mp4');
     if (jobStatus(item).state !== 'ready') return send(res, 409, { error: 'This movie is still being prepared.' });
+    if (!req.headers.range || /^bytes=0-/.test(req.headers.range)) touch(cachedMp4(item));
     return streamFile(req, res, cachedMp4(item), 'video/mp4');
+  }
+  if (parts[0] === 'hls' && item && parts[2]) {
+    if (parts[2] === 'index.m3u8') {
+      const st = hlsState(item, await probe(item));
+      return send(res, 200, hlsPlaylist(st), 'application/vnd.apple.mpegurl');
+    }
+    const n = /^(\d+)\.ts$/.exec(parts[2]);
+    if (n) return hlsSegment(req, res, item, Number(n[1]));
   }
   if (parts[0] === 'subs' && item && parts[2]) {
     const file = await subtitleFile(item, parts[2].replace(/\.vtt$/, ''));
@@ -390,25 +650,25 @@ function lanAddresses() {
     .map((a) => a.address);
 }
 
-// Delete prepared copies, thumbnails and subtitles. Files still being written are left alone.
+// Delete prepared copies, converted streams, thumbnails and subtitles. Anything being written is left alone.
 async function clearCache() {
+  const busy = new Set([...hls.values()].filter((st) => st.job).map((st) => st.dir));
   let freed = 0;
-  for (const name of await fsp.readdir(CACHE_DIR).catch(() => [])) {
-    if (name.endsWith('.part')) continue;
-    const file = path.join(CACHE_DIR, name);
+  for (const entry of await fsp.readdir(CACHE_DIR, { withFileTypes: true }).catch(() => [])) {
+    const file = path.join(CACHE_DIR, entry.name);
+    if (entry.name.endsWith('.part') || busy.has(file)) continue;
     try {
-      freed += (await fsp.stat(file)).size;
-      await fsp.unlink(file);
+      freed += entry.isDirectory() ? await dirSize(file) : (await fsp.stat(file)).size;
+      await fsp.rm(file, { recursive: true, force: true });
     } catch {}
   }
   for (const [id, job] of jobs) if (job.state !== 'working') jobs.delete(id);
+  for (const [id, st] of hls) if (!st.job) hls.delete(id);
   return freed;
 }
 
-async function cacheSize() {
-  let total = 0;
-  for (const name of await fsp.readdir(CACHE_DIR).catch(() => [])) total += (await fsp.stat(path.join(CACHE_DIR, name)).catch(() => ({ size: 0 }))).size;
-  return total;
+function cacheSize() {
+  return dirSize(CACHE_DIR);
 }
 
 let server = null;
@@ -432,6 +692,7 @@ function start() {
 
 function stop() {
   return new Promise((resolve) => {
+    for (const st of hls.values()) stopHls(st);
     if (!server) return resolve();
     server.closeAllConnections();
     server.close(() => resolve());

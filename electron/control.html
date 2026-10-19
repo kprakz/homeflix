@@ -141,8 +141,8 @@ function render() {
           <div class="row-btns"><button class="btn" data-act="copy">Copy address</button><button class="btn" data-act="browser">Watch on this laptop</button></div>
           <ol class="steps">
             <li>Connect your device to the <b>same Wi-Fi</b> as this laptop.</li>
-            <li>Point the camera at this code, or type the address into Safari or Chrome.</li>
-            <li>Tip: on iPhone/iPad tap Share → <b>Add to Home Screen</b> for an app icon.</li>
+            <li>Point the camera at this code, or type the address into the browser (Safari, Chrome, or your TV’s browser).</li>
+            <li>Tip: for an app icon, on iPhone/iPad tap Share → <b>Add to Home Screen</b>; on Android tap Chrome’s ⋮ menu → <b>Add to Home screen</b>.</li>
           </ol>
         </div>
       </div>
@@ -164,7 +164,7 @@ function render() {
       <h2>Settings</h2>
       <div class="setting" style="margin-top:14px"><div><b>Start with Windows</b><span>HOMEFLIX starts quietly in the tray when you sign in.</span></div>
         <label class="switch"><input type="checkbox" id="login" ${s.openAtLogin ? 'checked' : ''}><i></i></label></div>
-      <div class="setting"><div><b>Storage used</b><span>${s.cacheBytes ? `Converted copies of MKV and other files use ${fmtBytes(s.cacheBytes)}. They’re made again when needed.` : 'No converted copies yet. MKV and other files get one the first time you play them.'}</span></div>
+      <div class="setting"><div><b>Storage used</b><span>${s.cacheBytes ? `Converted copies use ${fmtBytes(s.cacheBytes)}. The oldest are removed automatically when the laptop runs low on space, and they’re made again when needed.` : 'No converted copies yet. MKV and other files get one the first time you play them.'}</span></div>
         <button class="btn" data-act="clear" ${s.cacheBytes ? '' : 'disabled'}>Free up space</button></div>
     </section>
 
@@ -177,9 +177,16 @@ function render() {
         <li>Keep this laptop awake and plugged in while you watch.</li>
       </ul></details>
       <details><summary>A movie won’t play</summary><ul>
-        <li>The first time you open an MKV, HOMEFLIX converts it to a format Apple devices play. This usually takes seconds.</li>
+        <li>The first time you open an MKV, HOMEFLIX repackages it for your device. Usually seconds, a few minutes for movies with Dolby audio.</li>
+        <li>Phones and TVs that can’t play HEVC (x265) get a converted version that starts in a few seconds. Converting uses this laptop’s graphics chip when it can.</li>
+        <li>Picture missing but sound playing? Tap <b>Picture missing?</b> in the player. The device remembers the choice.</li>
         <li>Files still downloading show a “Downloading” badge and play once finished.</li>
-        <li>Some TV browsers can’t play HEVC (x265) movies. AirPlay from an iPhone or iPad works instead.</li>
+      </ul></details>
+      <details><summary>Watching on a TV</summary><ul>
+        <li>Open your TV’s web browser (Samsung Internet, LG Web Browser, or a browser app on Android TV / Fire TV) and type the address above.</li>
+        <li>Use the arrow buttons and OK to move around, and Back to go back. While a movie plays, OK pauses, left/right skip 10 seconds, and up/down shows the controls.</li>
+        <li>If HOMEFLIX doesn’t recognise your TV, add <b>?tv=1</b> to the end of the address once.</li>
+        <li>From an iPhone or iPad you can also AirPlay to an Apple TV or AirPlay-compatible TV.</li>
       </ul></details>
       <details><summary>Is it private?</summary><p>HOMEFLIX only works inside your own network. Nothing is uploaded to the internet. Anyone on your Wi-Fi can open the page, so don’t run it on public Wi-Fi.</p></details>
     </section>
