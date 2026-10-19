@@ -1,7 +1,7 @@
 {
   "name": "homeflix",
   "productName": "HOMEFLIX",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Stream the movies on your laptop to your iPad, phone or TV over your home Wi-Fi.",
   "author": "HOMEFLIX",
   "private": true,

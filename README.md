@@ -18,16 +18,12 @@ Follow the installer. It puts HOMEFLIX on your Desktop and in the Start menu, an
 ### 2. Choose your movies folder
 Click **Choose your movies folder** and pick the folder where your movies are, for example `Downloads` or `Videos`. Sub-folders are included, and you can add more folders any time.
 
-### 3. Allow HOMEFLIX on your network
-The first time HOMEFLIX starts, Windows may ask *"Allow HOMEFLIX to communicate on these networks?"* Make sure **Private networks** is ticked, then click **Allow**.
+### 3. Let your phone through Windows Firewall (if HOMEFLIX asks)
+HOMEFLIX checks Windows Firewall and shows a box at the top of its window if something needs doing:
+- **Your Wi-Fi is set to Public:** click **Open network settings** → your Wi-Fi → **Properties** → **Private network**. Only do this for your **home** Wi-Fi, never for café, hotel or airport Wi-Fi.
+- **HOMEFLIX isn't allowed on home networks yet:** click **Allow on home networks** and say **Yes** when Windows asks.
 
-### 4. Set your home Wi-Fi to Private (if HOMEFLIX asks)
-If HOMEFLIX shows a yellow box saying your Wi-Fi is set to **Public**, your phone can't connect yet. To fix it:
-1. Click **Open network settings** in HOMEFLIX.
-2. Click your Wi-Fi's **Properties**.
-3. Choose **Private network**.
-
-Only do this for your **home** Wi-Fi, never for café, hotel or airport Wi-Fi.
+> The first time HOMEFLIX starts, Windows may ask *"Allow HOMEFLIX to communicate on these networks?"* It ticks whichever network type you're on at that moment. If your Wi-Fi was Public then, HOMEFLIX ends up allowed only on Public networks, and stops working once you switch the Wi-Fi to Private. The **Allow on home networks** button fixes that.
 
 ---
 
@@ -85,7 +81,8 @@ Settings → Apps → Installed apps → **HOMEFLIX** → Uninstall. This also r
 
 | Problem | Fix |
 |---|---|
-| The page won't open on my phone | Same Wi-Fi? Wi-Fi set to **Private**? HOMEFLIX allowed in the firewall? (Windows Security → Firewall & network protection → Allow an app through firewall → tick **HOMEFLIX** for Private.) |
+| The page won't open on my phone | Same Wi-Fi? Then follow the box at the top of the HOMEFLIX window. To check by hand: Windows Security → Firewall & network protection → Allow an app through firewall → Change settings → **homeflix.exe** should have **Private** ticked, and your home Wi-Fi should be set to Private. |
+| It only works when my Wi-Fi is Public | HOMEFLIX was allowed on Public networks only. Click **Allow on home networks** in HOMEFLIX (or tick **Private** for homeflix.exe as above), then set your Wi-Fi to Private. |
 | The address changed | Your router gave the laptop a new address. Scan the new QR code in the HOMEFLIX window. |
 | A movie shows "Downloading" | It's still being written to disk. Wait for the download to finish and reload the page. |
 | Sound but no picture | Tap **Picture missing?** in the player. On a TV, press Up and choose it. |

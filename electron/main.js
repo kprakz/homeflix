@@ -144,15 +144,53 @@ app.on('before-quit', () => {
 });
 app.on('window-all-closed', () => {}); // stay in the tray
 
-// A phone can't connect when Windows treats the Wi-Fi as Public (the firewall blocks it).
+// Whether phones can reach HOMEFLIX depends on Windows Firewall rules for this exe, per network type
+// (Public / Private). When Windows first asks, it only ticks the network type in use at that moment,
+// so read the actual rules rather than guessing from the network type.
+const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
 let networkCheck = { at: 0, value: null };
-function networkIsPublic() {
-  if (Date.now() - networkCheck.at < 15000) return Promise.resolve(networkCheck.value);
+function networkStatus() {
+  if (Date.now() - networkCheck.at < 30000) return Promise.resolve(networkCheck.value);
+  const script = [
+    `$exe = ${psQuote(process.execPath)}`,
+    '$cats = @(Get-NetConnectionProfile | ForEach-Object { "$($_.NetworkCategory)" })',
+    '$rules = @(Get-NetFirewallApplicationFilter -Program $exe -ErrorAction SilentlyContinue | Get-NetFirewallRule -ErrorAction SilentlyContinue |',
+    '  Where-Object { "$($_.Enabled)" -eq "True" -and "$($_.Direction)" -eq "Inbound" } | ForEach-Object { @{ action = "$($_.Action)"; profile = "$($_.Profile)" } })',
+    '@{ categories = $cats; rules = $rules } | ConvertTo-Json -Compress -Depth 3',
+  ].join('\n');
   return new Promise((resolve) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '(Get-NetConnectionProfile | ForEach-Object { "$($_.NetworkCategory)" }) -join ","'], { windowsHide: true, timeout: 8000 }, (err, stdout) => {
-      const value = err ? null : stdout.split(',').map((s) => s.trim()).includes('Public');
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 15000 }, (err, stdout) => {
+      let value = null;
+      try {
+        const data = JSON.parse(stdout);
+        const cats = [].concat(data.categories || []).map((c) => (c === 'DomainAuthenticated' ? 'Domain' : c));
+        const rules = [].concat(data.rules || []);
+        const covers = (r, cat) => r.profile === 'Any' || r.profile.split(/,\s*/).includes(cat);
+        const allowed = (cat) => rules.some((r) => r.action === 'Allow' && covers(r, cat)) && !rules.some((r) => r.action === 'Block' && covers(r, cat));
+        const category = cats.includes('Public') ? 'Public' : cats[0] || null;
+        value = { category, allowedHere: category ? allowed(category) : true, allowedPrivate: allowed('Private'), allowedPublic: allowed('Public') };
+      } catch {}
+      if (err) value = null;
       networkCheck = { at: Date.now(), value };
       resolve(value);
+    });
+  });
+}
+
+// Adds a firewall rule letting HOMEFLIX accept connections on Private (home) networks, and removes any
+// rule blocking it. Windows shows its admin prompt; nothing changes if the user says no.
+function allowOnHomeNetworks() {
+  const exe = psQuote(process.execPath);
+  const script = [
+    `Get-NetFirewallApplicationFilter -Program ${exe} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { "$($_.Action)" -eq "Block" -and "$($_.Direction)" -eq "Inbound" } | Remove-NetFirewallRule`,
+    `New-NetFirewallRule -DisplayName 'HOMEFLIX (home networks)' -Description 'Lets phones and TVs on your home Wi-Fi watch movies from HOMEFLIX.' -Direction Inbound -Action Allow -Program ${exe} -Protocol TCP -Profile Private | Out-Null`,
+  ].join('\n');
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const launcher = `try { $p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','${encoded}'; exit $p.ExitCode } catch { exit 1223 }`;
+  return new Promise((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', launcher], { windowsHide: true, timeout: 180000 }, (err) => {
+      networkCheck.at = 0;
+      resolve(err ? (err.code === 1223 ? 'cancelled' : 'failed') : 'ok');
     });
   });
 }
@@ -171,7 +209,7 @@ async function state() {
     movieCount: movies.length,
     openAtLogin: settings.openAtLogin,
     cacheBytes: await homeflix.cacheSize(),
-    networkPublic: await networkIsPublic(),
+    network: await networkStatus(),
     ffmpegFound: fs.existsSync(path.join(FFMPEG_DIR, 'ffmpeg.exe')),
   };
 }
@@ -204,7 +242,11 @@ ipcMain.handle('remove-folder', async (_e, folder) => {
 
 ipcMain.handle('open-folder', (_e, folder) => shell.openPath(folder));
 ipcMain.handle('open-browser', () => port && shell.openExternal(`http://localhost:${port}`));
-ipcMain.handle('open-wifi-settings', () => shell.openExternal('ms-settings:network-status'));
+ipcMain.handle('open-wifi-settings', () => {
+  networkCheck.at = 0; // look again when the user comes back
+  return shell.openExternal('ms-settings:network-status');
+});
+ipcMain.handle('allow-firewall', async () => ({ result: await allowOnHomeNetworks(), state: await state() }));
 ipcMain.handle('copy', (_e, text) => clipboard.writeText(String(text)));
 
 ipcMain.handle('set-open-at-login', (_e, on) => {

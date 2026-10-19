@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('homeflix', {
   openFolder: (folder) => ipcRenderer.invoke('open-folder', folder),
   openBrowser: () => ipcRenderer.invoke('open-browser'),
   openWifiSettings: () => ipcRenderer.invoke('open-wifi-settings'),
+  allowFirewall: () => ipcRenderer.invoke('allow-firewall'),
   copy: (text) => ipcRenderer.invoke('copy', text),
   setOpenAtLogin: (on) => ipcRenderer.invoke('set-open-at-login', on),
   clearCache: () => ipcRenderer.invoke('clear-cache'),

@@ -25,7 +25,8 @@
   .banner.err { background: rgba(229,9,20,.1); border-color: rgba(229,9,20,.4); }
   .banner b { display: block; margin-bottom: 2px; }
   .banner p { margin: 0; color: #ddd; font-size: 14px; }
-  .banner .btn { margin-left: auto; flex: none; }
+  .banner .btn { margin-left: auto; flex: none; white-space: nowrap; justify-content: center; }
+  .banner .row-btns { flex: none; }
 
   .welcome { text-align: center; padding: 48px 20px 56px; }
   .welcome h1 { font-family: var(--display); font-weight: 400; font-size: 64px; line-height: 1; margin: 0 0 10px; letter-spacing: .02em; }
@@ -107,6 +108,36 @@ function esc(v) { return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 function fmtBytes(b) { return b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b >= 1e6 ? Math.round(b / 1e6) + ' MB' : b > 0 ? '< 1 MB' : 'nothing'; }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1800); }
 
+// What Windows Firewall lets through decides whether phones can connect. HOMEFLIX should be allowed on
+// Private (home) networks, with the home Wi-Fi set to Private, and not exposed on Public ones.
+function networkBanner(n) {
+  if (!n || !n.category) return '';
+  const allowBtn = '<button class="btn btn-red" data-act="firewall">Allow on home networks</button>';
+  const wifiBtn = '<button class="btn" data-act="wifi">Open network settings</button>';
+  const b = (x) => `<b style="display:inline">${x}</b>`;
+  if (!n.allowedHere && n.category !== 'Public') {
+    return `<div class="banner err"><div><b>Windows Firewall is blocking HOMEFLIX on this network</b>
+      <p>Your phone, iPad or TV can’t connect until HOMEFLIX is allowed. Click ${b('Allow on home networks')} and say ${b('Yes')} when Windows asks.</p></div>
+      <div class="row-btns">${allowBtn}</div></div>`;
+  }
+  if (n.category === 'Public') {
+    const steps = `<ol style="margin:6px 0 0;padding-left:20px;color:#ddd;font-size:14px">
+        <li>Set this Wi-Fi to ${b('Private network')}: Network settings → your Wi-Fi → ${b('Properties')}. Only for your home Wi-Fi.</li>
+        ${n.allowedPrivate ? '' : `<li>Click ${b('Allow on home networks')} and say ${b('Yes')} when Windows asks.</li>`}
+      </ol>`;
+    if (!n.allowedHere) {
+      return `<div class="banner"><div><b>Your phone or iPad can’t connect yet</b>
+        <p>Windows treats this Wi-Fi as ${b('Public')}, so it blocks other devices from reaching HOMEFLIX. To fix it:</p>${steps}</div>
+        <div class="row-btns" style="flex-direction:column">${wifiBtn}${n.allowedPrivate ? '' : allowBtn}</div></div>`;
+    }
+    // Reachable, but only because it's allowed on Public networks, which includes café and hotel Wi-Fi.
+    return `<div class="banner"><div><b>HOMEFLIX is open on public networks</b>
+      <p>It works, but Windows treats this Wi-Fi as ${b('Public')}, and HOMEFLIX is allowed on all public networks. On café or hotel Wi-Fi, strangers could open it too. To keep it to your home:</p>${steps}</div>
+      <div class="row-btns" style="flex-direction:column">${wifiBtn}${n.allowedPrivate ? '' : allowBtn}</div></div>`;
+  }
+  return '';
+}
+
 function render() {
   $('version').textContent = 'Version ' + s.version;
   $('status').classList.toggle('bad', !s.running);
@@ -126,9 +157,7 @@ function render() {
     return;
   }
 
-  if (s.networkPublic) html += `<div class="banner"><div><b>Your phone or iPad can’t connect yet</b>
-    <p>Windows has this Wi-Fi set to <b style="display:inline">Public</b>, which blocks other devices. In Network settings, open your Wi-Fi’s <i>Properties</i> and choose <b style="display:inline">Private network</b>. Only do this for your home Wi-Fi.</p></div>
-    <button class="btn" data-act="wifi">Open network settings</button></div>`;
+  html += networkBanner(s.network);
 
   html += `<div class="grid">
     <section class="card span">
@@ -172,8 +201,8 @@ function render() {
       <h2>Help</h2>
       <details><summary>The page won’t open on my iPad or phone</summary><ul>
         <li>Check both are on the same Wi-Fi (not mobile data, not a guest network).</li>
-        <li>If Windows asked whether to let HOMEFLIX use networks, it must be <b>allowed</b>. To fix it later: Windows Security → Firewall &amp; network protection → Allow an app through firewall → tick HOMEFLIX for Private.</li>
-        <li>Your Wi-Fi must be set to <b>Private</b> in Windows network settings.</li>
+        <li>Your home Wi-Fi should be set to <b>Private</b> in Windows network settings, and HOMEFLIX allowed on home networks. The banner at the top of this window tells you if either needs doing.</li>
+        <li>To check by hand: Windows Security → Firewall &amp; network protection → Allow an app through firewall → Change settings → HOMEFLIX should have <b>Private</b> ticked.</li>
         <li>Keep this laptop awake and plugged in while you watch.</li>
       </ul></details>
       <details><summary>A movie won’t play</summary><ul>
@@ -207,6 +236,14 @@ document.addEventListener('click', async (e) => {
   if (act === 'open') homeflix.openFolder(b.dataset.folder);
   if (act === 'browser') homeflix.openBrowser();
   if (act === 'wifi') homeflix.openWifiSettings();
+  if (act === 'firewall') {
+    b.disabled = true;
+    b.textContent = 'Waiting for Windows…';
+    const r = await homeflix.allowFirewall();
+    s = r.state;
+    render();
+    toast(r.result === 'ok' ? 'HOMEFLIX is allowed on home networks' : r.result === 'cancelled' ? 'Nothing changed: Windows permission was declined' : 'Couldn’t change the firewall setting');
+  }
   if (act === 'copy') { await homeflix.copy(s.url); toast('Address copied'); }
   if (act === 'clear') { const before = s.cacheBytes; s = await homeflix.clearCache(); render(); toast(`Freed ${fmtBytes(before - s.cacheBytes)}`); }
 });
