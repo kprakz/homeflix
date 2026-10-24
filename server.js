@@ -13,10 +13,10 @@ const ROOT = __dirname;
 let CONFIG = { port: 8080, folders: [], minSizeMB: 5, cacheDir: 'cache', ffmpeg: 'ffmpeg', ffprobe: 'ffprobe' };
 let CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.avi', '.webm', '.wmv', '.flv', '.ts', '.m2ts', '.mpg', '.mpeg', '.3gp']);
-const DIRECT_CONTAINERS = new Set(['.mp4', '.m4v', '.mov']);
-// Audio every browser plays (iPhone, Android, TVs). Dolby AC3/E-AC3, DTS etc. are silent on many
-// Android and TV browsers, so those are converted to stereo AAC.
-const UNIVERSAL_AUDIO = new Set(['aac', 'mp3']);
+// Every soundtrack becomes stereo AAC, which all browsers play (Dolby AC3/E-AC3, DTS etc. are silent
+// on many Android and TV browsers). Even out loudness to what streaming services use on phones (-16 LUFS), never clipping. loudnorm
+// works at 192 kHz internally, so resample back to 48 kHz.
+const AUDIO_FILTER = 'loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000';
 const TEXT_SUBS = new Set(['subrip', 'ass', 'ssa', 'mov_text', 'webvtt', 'text']);
 
 // The desktop app calls this with its own settings; `node server.js` uses config.json.
@@ -168,7 +168,7 @@ function probe(item) {
       // Every audio track, in file order. Track 0 is what plays unless a device asks for another.
       const audios = streams
         .filter((s) => s.codec_type === 'audio')
-        .map((s, n) => ({ n, index: s.index, codec: s.codec_name, lang: String((s.tags && s.tags.language) || 'und').toLowerCase(), label: trackLabel(s, `Audio ${n + 1}`) }));
+        .map((s, n) => ({ n, index: s.index, codec: s.codec_name, rate: Number(s.sample_rate) || 48000, lang: String((s.tags && s.tags.language) || 'und').toLowerCase(), label: trackLabel(s, `Audio ${n + 1}`) }));
       // Same name twice ("English", "English"): number them so they can be told apart.
       for (const a of audios) if (audios.filter((b) => b.label === a.label).length > 1) a.label += ` (${a.n + 1})`;
       const audio = streams.find((s) => s.codec_type === 'audio');
@@ -178,11 +178,12 @@ function probe(item) {
       for (const side of sidecarSubs(item.path)) subs.push(side);
       return {
         duration: Number(data.format && data.format.duration) || 0,
+        start: Number(data.format && data.format.start_time) || 0, // ffmpeg shifts every stream back by this
         video,
         audio,
         audios,
         subs,
-        mode: playMode(item.path, video, audio),
+        mode: playMode(item.path, video),
         videoCodec: video ? video.codec_name : null,
         tenBit: !!video && /1[02]/.test(video.pix_fmt || ''),
         height: video ? video.height : 0,
@@ -210,16 +211,14 @@ function sidecarSubs(file) {
     });
 }
 
-// direct: the file plays as-is. remux: copy the video into an MP4 (seconds).
+// remux: a copy with the video as-is and the audio re-done (see makeCopy).
 // transcode: the video itself must be re-encoded, which happens as an HLS stream (see below).
 // HEVC plays only on some devices; the player asks for the HLS stream when it can't.
-function playMode(file, video, audio) {
+// Original files are never played as they are: their soundtrack may be quiet, or rely on an edit
+// list for sync that some phone and TV players ignore.
+function playMode(file, video) {
   if (!video) return 'transcode';
-  const videoOk = videoCopyable(video);
-  const audioOk = !audio || UNIVERSAL_AUDIO.has(audio.codec_name);
-  const tagOk = video.codec_name !== 'hevc' || video.codec_tag_string === 'hvc1';
-  if (DIRECT_CONTAINERS.has(path.extname(file).toLowerCase()) && videoOk && audioOk && tagOk) return 'direct';
-  return videoOk ? 'remux' : 'transcode';
+  return videoCopyable(video) ? 'remux' : 'transcode';
 }
 
 function videoCopyable(video) {
@@ -237,7 +236,7 @@ const jobs = new Map(); // "id:audio" -> { state, progress, error }
 function cachedMp4(item, audio = 0) {
   // Include size+mtime so a replaced file gets prepared again; "u" marks the universal-audio format
   // (and is the first audio track, as copies were before languages could be chosen).
-  return path.join(CACHE_DIR, `${item.id}-${item.size}-${Math.floor(item.mtime)}-${audio ? `a${audio}` : 'u'}.mp4`);
+  return path.join(CACHE_DIR, `${item.id}-${item.size}-${Math.floor(item.mtime)}-n${audio}.mp4`);
 }
 
 function jobStatus(item, audio = 0) {
@@ -299,58 +298,82 @@ function touch(file) {
   fs.utimes(file, now, now, () => {});
 }
 
+// Copies are made one at a time: each re-encodes a whole soundtrack, and players stream the
+// converted version meanwhile, so there's no hurry and no reason to load the laptop up.
+let preparing = Promise.resolve();
+let copyChild = null; // the ffmpeg making a copy right now, stopped when HOMEFLIX quits
+
 async function prepare(item, audio = 0) {
   const existing = jobStatus(item, audio);
-  if (existing.state === 'ready' || existing.state === 'working') return existing;
+  if (['ready', 'working', 'queued'].includes(existing.state)) return existing;
   if (item.downloading) return { state: 'error', progress: 0, error: 'This file is still downloading. Try again once it finishes.' };
   if (!(await makeRoom(item.size * 1.02))) {
     return { state: 'error', progress: 0, code: 'nospace', error: `Not enough free space on the laptop to prepare this (needs about ${Math.ceil((item.size * 1.02 + RESERVE) / 1e9)} GB free).` };
   }
-  const job = { state: 'working', progress: 0, error: null };
+  const job = { state: 'queued', progress: 0, error: null };
   jobs.set(`${item.id}:${audio}`, job);
-
-  try {
-    const info = await probe(item);
-    if (info.mode === 'transcode') throw new Error('This video needs converting while it plays; the player uses the compatible stream for it.');
-    const track = info.audios[audio] || info.audios[0];
-    const out = cachedMp4(item, audio);
-    const tmp = `${out}.part`;
-    // Map the real video stream: some files carry cover art as an extra "video" stream.
-    const args = ['-hide_banner', '-v', 'error', '-y', '-i', item.path, '-map', `0:${info.video.index}`, '-map', track ? `0:${track.index}` : '0:a:0?'];
-    args.push('-c:v', 'copy');
-    if (info.video.codec_name === 'hevc') args.push('-tag:v', 'hvc1');
-    // Copying audio every device plays is far faster than re-encoding it; otherwise make stereo AAC.
-    if (track && UNIVERSAL_AUDIO.has(track.codec)) args.push('-c:a', 'copy');
-    else args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
-    args.push('-movflags', '+faststart', '-f', 'mp4', '-progress', 'pipe:1', '-nostats', tmp);
-
-    console.log(`Preparing "${item.title}"${track && info.audios.length > 1 ? ` in ${track.label}` : ''} (${info.mode})…`);
-    const child = spawn(CONFIG.ffmpeg, args, { windowsHide: true });
-    let stderr = '';
-    child.stderr.on('data', (d) => (stderr += d));
-    child.stdout.on('data', (d) => {
-      const m = String(d).match(/out_time_us=(\d+)/g);
-      if (m && info.duration) {
-        const us = Number(m[m.length - 1].split('=')[1]);
-        job.progress = Math.min(0.99, us / 1e6 / info.duration);
-      }
-    });
-    child.on('error', (err) => Object.assign(job, { state: 'error', error: `Could not start ffmpeg: ${err.message}` }));
-    child.on('close', async (code) => {
-      if (code === 0) {
-        await fsp.rename(tmp, out);
-        Object.assign(job, { state: 'ready', progress: 1 });
-        console.log(`Ready: "${item.title}"`);
-      } else {
-        fsp.unlink(tmp).catch(() => {});
-        Object.assign(job, { state: 'error', error: stderr.trim().split('\n').pop() || `ffmpeg exited ${code}` });
-        console.error(`Failed to prepare "${item.title}": ${job.error}`);
-      }
-    });
-  } catch (err) {
-    Object.assign(job, { state: 'error', error: err.message });
-  }
+  preparing = preparing.then(() => makeCopy(item, audio, job)).catch(() => {});
   return job;
+}
+
+function makeCopy(item, audio, job) {
+  return new Promise(async (done) => {
+    try {
+      job.state = 'working';
+      const info = await probe(item);
+      if (info.mode === 'transcode') throw new Error('This video needs converting while it plays; the player uses the compatible stream for it.');
+      const track = info.audios[audio] || info.audios[0];
+      const out = cachedMp4(item, audio);
+      const tmp = `${out}.part`;
+      // Map the real video stream: some files carry cover art as an extra "video" stream.
+      const args = ['-hide_banner', '-v', 'error', '-y', '-i', item.path, '-map', `0:${info.video.index}`, '-map', track ? `0:${track.index}` : '0:a:0?'];
+      args.push('-c:v', 'copy');
+      if (info.video.codec_name === 'hevc') args.push('-tag:v', 'hvc1');
+      // The audio is always re-encoded, for two reasons:
+      // - Sync: dubbed tracks often start later than the video (0.9 s in some files). MP4 notes that
+      //   delay in an "edit list", which some phone and TV players ignore, playing the sound early.
+      //   Instead the audio is padded with real silence back to where the video starts (first_pts),
+      //   and the video starts at 0 without an edit list either (negative composition offsets).
+      // - Volume: films are often mixed quietly for cinemas; phones and TVs can't boost them like
+      //   VLC can. loudnorm evens them out to streaming-service loudness.
+      const videoStart = Math.max(0, (Number(info.video.start_time) || 0) - info.start);
+      const firstPts = Math.round(videoStart * (track ? track.rate : 48000));
+      args.push('-af', `aresample=async=1:first_pts=${firstPts},${AUDIO_FILTER}`, '-c:a', 'aac', '-ac', '2', '-b:a', '192k');
+      args.push('-use_editlist', '0', '-movflags', '+faststart+negative_cts_offsets', '-f', 'mp4', '-progress', 'pipe:1', '-nostats', tmp);
+
+      console.log(`Preparing "${item.title}"${track && info.audios.length > 1 ? ` in ${track.label}` : ''}…`);
+      const child = (copyChild = spawn(CONFIG.ffmpeg, args, { windowsHide: true }));
+      let stderr = '';
+      child.stderr.on('data', (d) => (stderr += d));
+      child.stdout.on('data', (d) => {
+        const m = String(d).match(/out_time_us=(\d+)/g);
+        if (m && info.duration) {
+          const us = Number(m[m.length - 1].split('=')[1]);
+          job.progress = Math.min(0.99, us / 1e6 / info.duration);
+        }
+      });
+      child.on('error', (err) => {
+        Object.assign(job, { state: 'error', error: `Could not start ffmpeg: ${err.message}` });
+        done();
+      });
+      child.on('close', async (code) => {
+        if (copyChild === child) copyChild = null;
+        if (code === 0) {
+          await fsp.rename(tmp, out);
+          Object.assign(job, { state: 'ready', progress: 1 });
+          console.log(`Ready: "${item.title}"`);
+        } else {
+          fsp.unlink(tmp).catch(() => {});
+          Object.assign(job, { state: 'error', error: stderr.trim().split('\n').pop() || `ffmpeg exited ${code}` });
+          console.error(`Failed to prepare "${item.title}": ${job.error}`);
+        }
+        done();
+      });
+    } catch (err) {
+      Object.assign(job, { state: 'error', error: err.message });
+      done();
+    }
+  });
 }
 
 // ---------- subtitles & thumbnails (cached) ----------
@@ -412,7 +435,8 @@ async function thumbnail(item, hero = false) {
 // for, and seeking far ahead restarts the converter at that point. Finished segments stay cached.
 
 const SEG = 4; // seconds per segment
-const AHEAD = 45; // segments the converter may be behind a request before it's restarted there
+const MAX_WAIT = 4; // seconds a request may wait for the running converter before it's restarted there
+const IDLE_STOP = 60 * 1000; // stop converting a stream nobody has asked for in this long
 const hls = new Map(); // id -> { item, dir, total, done: Set<number>, job, profile, error }
 
 let encoderList = null;
@@ -453,7 +477,8 @@ async function hlsProfiles(info) {
 
 // One converted stream per movie and audio language.
 function hlsState(item, info, audio = 0) {
-  const dir = path.join(CACHE_DIR, `hls-${item.id}-${item.size}-${Math.floor(item.mtime)}${audio ? `-a${audio}` : ''}`);
+  // "v3": segments timed exactly to the playlist (no mux delay), loudness evened out.
+  const dir = path.join(CACHE_DIR, `hls-v3-${item.id}-${item.size}-${Math.floor(item.mtime)}${audio ? `-a${audio}` : ''}`);
   const key = `${item.id}:${audio}`;
   let st = hls.get(key);
   if (!st || st.dir !== dir) {
@@ -462,7 +487,7 @@ function hlsState(item, info, audio = 0) {
     try {
       done = JSON.parse(fs.readFileSync(path.join(dir, 'segments.json'), 'utf8'));
     } catch {}
-    st = { item, audio, dir, total: Math.max(1, Math.ceil(info.duration / SEG)), duration: info.duration, done: new Set(done), job: null, profile: 0, error: null, starting: null };
+    st = { item, audio, dir, total: Math.max(1, Math.ceil(info.duration / SEG)), duration: info.duration, done: new Set(done), job: null, profile: 0, error: null, starting: null, lastRequest: Date.now() };
     hls.set(key, st);
   }
   return st;
@@ -510,6 +535,12 @@ function readProgress(st, job) {
   if (changed) fs.writeFile(path.join(st.dir, 'segments.json'), JSON.stringify([...st.done]), () => {});
   // Ran into segments an earlier run already made: stop, and pick up again where needed.
   if (st.job === job && job.next > job.from && st.done.has(job.next)) stopHls(st);
+  // Nobody has asked for this stream for a while (they stopped watching, or moved on): stop
+  // converting rather than keep the laptop busy with the rest of the movie.
+  else if (st.job === job && Date.now() - st.lastRequest > IDLE_STOP) {
+    console.log(`Stopped converting "${st.item.title}": nobody is watching it`);
+    stopHls(st);
+  }
 }
 
 async function startHls(st, info, from) {
@@ -532,11 +563,13 @@ async function startHls(st, info, from) {
   const track = info.audios[st.audio] || info.audios[0];
   if (track) args.push('-map', `0:${track.index}`);
   args.push('-vf', profile.vf, ...profile.enc, '-force_key_frames', `expr:gte(t,n_forced*${SEG})`);
-  args.push('-c:a', 'aac', '-ac', '2', '-b:a', '160k', '-output_ts_offset', at);
+  // Segment n must start at exactly n*SEG seconds, whichever run made it, or a player that jumps
+  // ahead lines up sound and picture wrongly. MPEG-TS adds a 1.4 s start delay by default: remove it.
+  args.push('-af', AUDIO_FILTER, '-c:a', 'aac', '-ac', '2', '-b:a', '160k', '-output_ts_offset', at, '-muxdelay', '0', '-muxpreload', '0');
   args.push('-f', 'hls', '-hls_time', String(SEG), '-hls_list_size', '0', '-start_number', String(from), '-hls_segment_filename', path.join(st.dir, 'seg%05d.ts'), list);
 
   console.log(`Converting "${st.item.title}" for this device from ${Math.round(from * SEG / 60)} min (${profile.name})…`);
-  const job = { child: spawn(CONFIG.ffmpeg, args, { windowsHide: true }), from, next: from, produced: 0, list, profile: profile.name, killed: false };
+  const job = { child: spawn(CONFIG.ffmpeg, args, { windowsHide: true }), from, next: from, produced: 0, list, profile: profile.name, killed: false, startedAt: Date.now() };
   let stderr = '';
   job.child.stderr.on('data', (d) => (stderr += d));
   job.timer = setInterval(() => readProgress(st, job), 400);
@@ -562,19 +595,43 @@ async function startHls(st, info, from) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Seconds until the running converter reaches segment n, from how fast it has been going
+// (assume 4x real time until it has made a couple of segments).
+function hlsWait(job, n) {
+  const secs = (Date.now() - job.startedAt) / 1000;
+  const speed = job.produced >= 2 && secs > 0 ? (job.produced * SEG) / secs : 4;
+  return ((n - job.next + 1) * SEG) / speed;
+}
+
 async function hlsSegment(req, res, item, n, audio) {
   const info = await probe(item);
   const st = hlsState(item, info, audio);
   if (!(n >= 0 && n < st.total)) return send(res, 404, { error: 'No such segment' });
-  const deadline = Date.now() + 45000;
-  while (!st.done.has(n)) {
-    if (st.error && !st.job) return send(res, 500, { error: st.error });
-    const job = st.job;
-    const inReach = job && n >= job.from && n <= job.next + AHEAD;
-    if (!inReach && !st.starting) st.starting = startHls(st, info, n).finally(() => (st.starting = null));
-    if (st.starting) await st.starting;
-    if (Date.now() > deadline || req.destroyed) return send(res, 503, { error: 'Still converting, try again' });
-    await sleep(250);
+  // When someone jumps, the player cancels its request for the old position. Without these two
+  // rules that cancelled request would drag the converter back, and the two would fight over it:
+  // a cancelled request stops at once, and only the newest request may move the converter.
+  let gone = false;
+  res.on('close', () => (gone = true));
+  st.lastRequest = Date.now();
+  st.waiting = st.waiting || new Set();
+  const ticket = (st.ticket = (st.ticket || 0) + 1);
+  st.waiting.add(ticket);
+  try {
+    const deadline = Date.now() + 45000;
+    while (!st.done.has(n)) {
+      if (gone) return;
+      if (st.error && !st.job) return send(res, 500, { error: st.error });
+      const job = st.job;
+      const inReach = job && n >= job.from && (n <= job.next || hlsWait(job, n) <= MAX_WAIT);
+      const newest = ticket === Math.max(...st.waiting);
+      if (!inReach && !st.starting && newest) st.starting = startHls(st, info, n).finally(() => (st.starting = null));
+      if (st.starting) await st.starting;
+      if (gone) return;
+      if (Date.now() > deadline) return send(res, 503, { error: 'Still converting, try again' });
+      await sleep(250);
+    }
+  } finally {
+    st.waiting.delete(ticket);
   }
   if (n % 15 === 0) touch(st.dir); // recently watched: keep it when making room
   return streamFile(req, res, segFile(st, n), 'video/mp2t');
@@ -592,7 +649,6 @@ async function dirSize(dir) {
 // ---------- http ----------
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
-const VIDEO_MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime' };
 
 function send(res, status, body, type = 'application/json') {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
@@ -670,8 +726,6 @@ async function handle(req, res) {
   if (parts[0] === 'video' && item) {
     const info = await probe(item);
     const audio = Math.min(audioParam(url), Math.max(0, info.audios.length - 1));
-    // The original file carries the first language; others come from their own copy.
-    if (info.mode === 'direct' && audio === 0) return streamFile(req, res, item.path, VIDEO_MIME[path.extname(item.path).toLowerCase()] || 'video/mp4');
     if (jobStatus(item, audio).state !== 'ready') return send(res, 409, { error: 'This movie is still being prepared.' });
     if (!req.headers.range || /^bytes=0-/.test(req.headers.range)) touch(cachedMp4(item, audio));
     return streamFile(req, res, cachedMp4(item, audio), 'video/mp4');
@@ -767,6 +821,7 @@ function start() {
 function stop() {
   return new Promise((resolve) => {
     for (const st of hls.values()) stopHls(st);
+    if (copyChild) copyChild.kill();
     if (!server) return resolve();
     server.closeAllConnections();
     server.close(() => resolve());
