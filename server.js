@@ -128,6 +128,36 @@ function run(cmd, args) {
   });
 }
 
+// ---------- track names ----------
+// Files tag tracks with ISO 639 codes ("tam", "en") and often stuff site names into the title
+// ("www.1TamilMV.ing", "t.me/…"). Show "Tamil", "English 5.1", "English SDH" instead.
+const LANGUAGES = {
+  tam: 'Tamil', ta: 'Tamil', tel: 'Telugu', te: 'Telugu', hin: 'Hindi', hi: 'Hindi', mal: 'Malayalam', ml: 'Malayalam',
+  kan: 'Kannada', kn: 'Kannada', ben: 'Bengali', bn: 'Bengali', mar: 'Marathi', mr: 'Marathi', guj: 'Gujarati', gu: 'Gujarati',
+  pan: 'Punjabi', pa: 'Punjabi', urd: 'Urdu', ur: 'Urdu', ori: 'Odia', ory: 'Odia', or: 'Odia', asm: 'Assamese', sin: 'Sinhala',
+  nep: 'Nepali', eng: 'English', en: 'English', spa: 'Spanish', es: 'Spanish', fre: 'French', fra: 'French', fr: 'French',
+  ger: 'German', deu: 'German', de: 'German', ita: 'Italian', it: 'Italian', por: 'Portuguese', pt: 'Portuguese',
+  rus: 'Russian', ru: 'Russian', jpn: 'Japanese', ja: 'Japanese', kor: 'Korean', ko: 'Korean', chi: 'Chinese', zho: 'Chinese',
+  zh: 'Chinese', ara: 'Arabic', ar: 'Arabic', tur: 'Turkish', tr: 'Turkish', tha: 'Thai', th: 'Thai', ind: 'Indonesian',
+  may: 'Malay', msa: 'Malay', vie: 'Vietnamese', vi: 'Vietnamese', fil: 'Filipino', tgl: 'Tagalog', per: 'Persian', fas: 'Persian',
+  heb: 'Hebrew', pol: 'Polish', dut: 'Dutch', nld: 'Dutch', swe: 'Swedish', nor: 'Norwegian', dan: 'Danish', fin: 'Finnish',
+  gre: 'Greek', ell: 'Greek', cze: 'Czech', ces: 'Czech', hun: 'Hungarian', rum: 'Romanian', ron: 'Romanian', ukr: 'Ukrainian',
+};
+
+function trackLabel(s, fallback) {
+  const tags = s.tags || {};
+  const code = String(tags.language || '').toLowerCase();
+  const lang = LANGUAGES[code] || '';
+  let title = String(tags.title || '').trim();
+  // Site names, Telegram handles and links say nothing about the track.
+  if (/www\.|https?:|t\.me|@|\.(com|net|org|in|ing|me|to|cc|tv)\b/i.test(title)) title = '';
+  // "ENG SDH" -> "SDH": drop the language itself, which the name already says.
+  if (lang) title = title.replace(new RegExp(`\\b(${code}|${lang})\\b`, 'ig'), '').replace(/^[\s\-–|:,]+|[\s\-–|:,]+$/g, '').trim();
+  const channels = s.channels === 6 ? ' 5.1' : s.channels === 8 ? ' 7.1' : '';
+  const name = [lang, title].filter(Boolean).join(' ') || fallback;
+  return s.codec_type === 'audio' ? name + channels : name;
+}
+
 function probe(item) {
   const key = `${item.id}-${item.size}-${item.mtime}`; // re-probe once a download grows
   if (!probes.has(key)) {
@@ -135,15 +165,22 @@ function probe(item) {
       const data = JSON.parse(out);
       const streams = data.streams || [];
       const video = streams.find((s) => s.codec_type === 'video' && !(s.disposition && s.disposition.attached_pic));
+      // Every audio track, in file order. Track 0 is what plays unless a device asks for another.
+      const audios = streams
+        .filter((s) => s.codec_type === 'audio')
+        .map((s, n) => ({ n, index: s.index, codec: s.codec_name, lang: String((s.tags && s.tags.language) || 'und').toLowerCase(), label: trackLabel(s, `Audio ${n + 1}`) }));
+      // Same name twice ("English", "English"): number them so they can be told apart.
+      for (const a of audios) if (audios.filter((b) => b.label === a.label).length > 1) a.label += ` (${a.n + 1})`;
       const audio = streams.find((s) => s.codec_type === 'audio');
       const subs = streams
         .filter((s) => s.codec_type === 'subtitle' && TEXT_SUBS.has(s.codec_name))
-        .map((s, i) => ({ key: `e${s.index}`, stream: s.index, n: i, lang: (s.tags && s.tags.language) || 'und', label: (s.tags && s.tags.title) || (s.tags && s.tags.language) || `Subtitle ${i + 1}` }));
+        .map((s, i) => ({ key: `e${s.index}`, stream: s.index, n: i, lang: (s.tags && s.tags.language) || 'und', label: trackLabel(s, `Subtitles ${i + 1}`) }));
       for (const side of sidecarSubs(item.path)) subs.push(side);
       return {
         duration: Number(data.format && data.format.duration) || 0,
         video,
         audio,
+        audios,
         subs,
         mode: playMode(item.path, video, audio),
         videoCodec: video ? video.codec_name : null,
@@ -193,18 +230,28 @@ function videoCopyable(video) {
 
 // ---------- preparing (remux / transcode into the cache) ----------
 
-const jobs = new Map(); // id -> { state, progress, error }
+const jobs = new Map(); // "id:audio" -> { state, progress, error }
 
-function cachedMp4(item) {
-  // Include size+mtime so a replaced file gets prepared again; "u" marks the universal-audio format.
-  return path.join(CACHE_DIR, `${item.id}-${item.size}-${Math.floor(item.mtime)}-u.mp4`);
+// One copy per audio language, made when a device asks for that language. Browsers on Android and
+// TVs can't switch between audio tracks in a file, so each copy carries just one.
+function cachedMp4(item, audio = 0) {
+  // Include size+mtime so a replaced file gets prepared again; "u" marks the universal-audio format
+  // (and is the first audio track, as copies were before languages could be chosen).
+  return path.join(CACHE_DIR, `${item.id}-${item.size}-${Math.floor(item.mtime)}-${audio ? `a${audio}` : 'u'}.mp4`);
 }
 
-function jobStatus(item) {
-  if (fs.existsSync(cachedMp4(item))) return { state: 'ready', progress: 1 };
-  const job = jobs.get(item.id);
-  if (job && job.state === 'ready') jobs.delete(item.id); // its copy was removed to free space
-  return jobs.get(item.id) || { state: 'idle', progress: 0 };
+function jobStatus(item, audio = 0) {
+  if (fs.existsSync(cachedMp4(item, audio))) return { state: 'ready', progress: 1 };
+  const key = `${item.id}:${audio}`;
+  const job = jobs.get(key);
+  if (job && job.state === 'ready') jobs.delete(key); // its copy was removed to free space
+  return jobs.get(key) || { state: 'idle', progress: 0 };
+}
+
+// ?audio=N from a request: which audio track (0 = the file's first).
+function audioParam(url) {
+  const n = Number(url.searchParams.get('audio'));
+  return Number.isInteger(n) && n > 0 && n < 64 ? n : 0;
 }
 
 // ---------- disk space ----------
@@ -252,31 +299,32 @@ function touch(file) {
   fs.utimes(file, now, now, () => {});
 }
 
-async function prepare(item) {
-  const existing = jobStatus(item);
+async function prepare(item, audio = 0) {
+  const existing = jobStatus(item, audio);
   if (existing.state === 'ready' || existing.state === 'working') return existing;
   if (item.downloading) return { state: 'error', progress: 0, error: 'This file is still downloading. Try again once it finishes.' };
   if (!(await makeRoom(item.size * 1.02))) {
     return { state: 'error', progress: 0, code: 'nospace', error: `Not enough free space on the laptop to prepare this (needs about ${Math.ceil((item.size * 1.02 + RESERVE) / 1e9)} GB free).` };
   }
   const job = { state: 'working', progress: 0, error: null };
-  jobs.set(item.id, job);
+  jobs.set(`${item.id}:${audio}`, job);
 
   try {
     const info = await probe(item);
     if (info.mode === 'transcode') throw new Error('This video needs converting while it plays; the player uses the compatible stream for it.');
-    const out = cachedMp4(item);
+    const track = info.audios[audio] || info.audios[0];
+    const out = cachedMp4(item, audio);
     const tmp = `${out}.part`;
     // Map the real video stream: some files carry cover art as an extra "video" stream.
-    const args = ['-hide_banner', '-v', 'error', '-y', '-i', item.path, '-map', `0:${info.video.index}`, '-map', info.audio ? `0:${info.audio.index}` : '0:a:0?'];
+    const args = ['-hide_banner', '-v', 'error', '-y', '-i', item.path, '-map', `0:${info.video.index}`, '-map', track ? `0:${track.index}` : '0:a:0?'];
     args.push('-c:v', 'copy');
     if (info.video.codec_name === 'hevc') args.push('-tag:v', 'hvc1');
     // Copying audio every device plays is far faster than re-encoding it; otherwise make stereo AAC.
-    if (info.audio && UNIVERSAL_AUDIO.has(info.audio.codec_name)) args.push('-c:a', 'copy');
+    if (track && UNIVERSAL_AUDIO.has(track.codec)) args.push('-c:a', 'copy');
     else args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
     args.push('-movflags', '+faststart', '-f', 'mp4', '-progress', 'pipe:1', '-nostats', tmp);
 
-    console.log(`Preparing "${item.title}" (${info.mode})…`);
+    console.log(`Preparing "${item.title}"${track && info.audios.length > 1 ? ` in ${track.label}` : ''} (${info.mode})…`);
     const child = spawn(CONFIG.ffmpeg, args, { windowsHide: true });
     let stderr = '';
     child.stderr.on('data', (d) => (stderr += d));
@@ -403,17 +451,19 @@ async function hlsProfiles(info) {
   return profiles;
 }
 
-function hlsState(item, info) {
-  const dir = path.join(CACHE_DIR, `hls-${item.id}-${item.size}-${Math.floor(item.mtime)}`);
-  let st = hls.get(item.id);
+// One converted stream per movie and audio language.
+function hlsState(item, info, audio = 0) {
+  const dir = path.join(CACHE_DIR, `hls-${item.id}-${item.size}-${Math.floor(item.mtime)}${audio ? `-a${audio}` : ''}`);
+  const key = `${item.id}:${audio}`;
+  let st = hls.get(key);
   if (!st || st.dir !== dir) {
     if (st) stopHls(st);
     let done = [];
     try {
       done = JSON.parse(fs.readFileSync(path.join(dir, 'segments.json'), 'utf8'));
     } catch {}
-    st = { item, dir, total: Math.max(1, Math.ceil(info.duration / SEG)), duration: info.duration, done: new Set(done), job: null, profile: 0, error: null, starting: null };
-    hls.set(item.id, st);
+    st = { item, audio, dir, total: Math.max(1, Math.ceil(info.duration / SEG)), duration: info.duration, done: new Set(done), job: null, profile: 0, error: null, starting: null };
+    hls.set(key, st);
   }
   return st;
 }
@@ -479,7 +529,8 @@ async function startHls(st, info, from) {
   } catch {}
   const at = String(from * SEG);
   const args = ['-hide_banner', '-v', 'error', '-y', ...profile.pre, '-ss', at, '-i', st.item.path, '-map', `0:${info.video.index}`];
-  if (info.audio) args.push('-map', `0:${info.audio.index}`);
+  const track = info.audios[st.audio] || info.audios[0];
+  if (track) args.push('-map', `0:${track.index}`);
   args.push('-vf', profile.vf, ...profile.enc, '-force_key_frames', `expr:gte(t,n_forced*${SEG})`);
   args.push('-c:a', 'aac', '-ac', '2', '-b:a', '160k', '-output_ts_offset', at);
   args.push('-f', 'hls', '-hls_time', String(SEG), '-hls_list_size', '0', '-start_number', String(from), '-hls_segment_filename', path.join(st.dir, 'seg%05d.ts'), list);
@@ -511,9 +562,9 @@ async function startHls(st, info, from) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function hlsSegment(req, res, item, n) {
+async function hlsSegment(req, res, item, n, audio) {
   const info = await probe(item);
-  const st = hlsState(item, info);
+  const st = hlsState(item, info, audio);
   if (!(n >= 0 && n < st.total)) return send(res, 404, { error: 'No such segment' });
   const deadline = Date.now() + 45000;
   while (!st.done.has(n)) {
@@ -597,14 +648,20 @@ async function handle(req, res) {
   if (parts[0] === 'api') {
     if (parts[1] === 'library') return send(res, 200, (await scanLibrary()).map(({ path: _p, ...rest }) => ({ ...rest, ...jobStatus(rest) })));
     if (!item) return send(res, 404, { error: 'Unknown movie — refresh the library.' });
+    const info = await probe(item);
+    const audio = Math.min(audioParam(url), Math.max(0, info.audios.length - 1));
     if (parts[1] === 'info') {
-      const info = await probe(item);
-      return send(res, 200, { ...publicItem(item), duration: info.duration, mode: info.mode, videoCodec: info.videoCodec, tenBit: info.tenBit, height: info.height, subs: info.subs.map(({ key, lang, label }) => ({ key, lang, label })), ...jobStatus(item) });
+      return send(res, 200, {
+        ...publicItem(item), duration: info.duration, mode: info.mode, videoCodec: info.videoCodec, tenBit: info.tenBit, height: info.height,
+        audios: info.audios.map(({ n, lang, label }) => ({ n, lang, label })),
+        subs: info.subs.map(({ key, lang, label }) => ({ key, lang, label })),
+        ...jobStatus(item),
+      });
     }
-    if (parts[1] === 'prepare' && req.method === 'POST') return send(res, 200, await prepare(item));
-    if (parts[1] === 'status') return send(res, 200, jobStatus(item));
+    if (parts[1] === 'prepare' && req.method === 'POST') return send(res, 200, await prepare(item, audio));
+    if (parts[1] === 'status') return send(res, 200, jobStatus(item, audio));
     if (parts[1] === 'hls') {
-      const st = hls.get(item.id);
+      const st = hls.get(`${item.id}:${audio}`);
       return send(res, 200, st ? { total: st.total, done: st.done.size, converting: !!st.job, encoder: st.job && st.job.profile, error: st.error } : { total: 0, done: 0, converting: false });
     }
     return send(res, 404, { error: 'Not found' });
@@ -612,18 +669,22 @@ async function handle(req, res) {
 
   if (parts[0] === 'video' && item) {
     const info = await probe(item);
-    if (info.mode === 'direct') return streamFile(req, res, item.path, VIDEO_MIME[path.extname(item.path).toLowerCase()] || 'video/mp4');
-    if (jobStatus(item).state !== 'ready') return send(res, 409, { error: 'This movie is still being prepared.' });
-    if (!req.headers.range || /^bytes=0-/.test(req.headers.range)) touch(cachedMp4(item));
-    return streamFile(req, res, cachedMp4(item), 'video/mp4');
+    const audio = Math.min(audioParam(url), Math.max(0, info.audios.length - 1));
+    // The original file carries the first language; others come from their own copy.
+    if (info.mode === 'direct' && audio === 0) return streamFile(req, res, item.path, VIDEO_MIME[path.extname(item.path).toLowerCase()] || 'video/mp4');
+    if (jobStatus(item, audio).state !== 'ready') return send(res, 409, { error: 'This movie is still being prepared.' });
+    if (!req.headers.range || /^bytes=0-/.test(req.headers.range)) touch(cachedMp4(item, audio));
+    return streamFile(req, res, cachedMp4(item, audio), 'video/mp4');
   }
+  // /hls/<id>/index.m3u8 (first language) or /hls/<id>/<audio>/index.m3u8; segments are relative to it.
   if (parts[0] === 'hls' && item && parts[2]) {
-    if (parts[2] === 'index.m3u8') {
-      const st = hlsState(item, await probe(item));
-      return send(res, 200, hlsPlaylist(st), 'application/vnd.apple.mpegurl');
-    }
-    const n = /^(\d+)\.ts$/.exec(parts[2]);
-    if (n) return hlsSegment(req, res, item, Number(n[1]));
+    const info = await probe(item);
+    const withAudio = /^\d+$/.test(parts[2]) && parts[3];
+    const audio = withAudio ? Math.min(Number(parts[2]), Math.max(0, info.audios.length - 1)) : 0;
+    const file = withAudio ? parts[3] : parts[2];
+    if (file === 'index.m3u8') return send(res, 200, hlsPlaylist(hlsState(item, info, audio)), 'application/vnd.apple.mpegurl');
+    const n = /^(\d+)\.ts$/.exec(file);
+    if (n) return hlsSegment(req, res, item, Number(n[1]), audio);
   }
   if (parts[0] === 'subs' && item && parts[2]) {
     const file = await subtitleFile(item, parts[2].replace(/\.vtt$/, ''));

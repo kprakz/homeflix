@@ -157,9 +157,22 @@
   .error { color: #ff6b6b; }
   .next-up { position: absolute; z-index: 7; right: calc(24px + env(safe-area-inset-right)); bottom: 90px; display: flex; gap: 10px; }
   .next-up .btn { font-size: 16px; padding: 10px 18px; }
-  .compat { position: absolute; z-index: 5; top: calc(16px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); border: 0; background: rgba(0,0,0,.45); color: #ddd; padding: 8px 14px; border-radius: 99px; font-size: 14px; transition: opacity .4s; }
-  #watch.playing .compat { opacity: 0; }
-  #watch.playing:hover .compat { opacity: 1; }
+  .top-actions { position: absolute; z-index: 5; top: calc(16px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); display: flex; gap: 8px; transition: opacity .4s; }
+  .pill { border: 0; background: rgba(0,0,0,.55); color: #eee; padding: 8px 14px; border-radius: 99px; font-size: 14px; font-weight: 600; }
+  #watch.playing .top-actions { opacity: 0; }
+  #watch.playing:hover .top-actions, .top-actions:focus-within { opacity: 1; }
+  /* Touch screens have no hover: keep Back and the language button visible while playing. */
+  @media (hover: none) { #watch.playing .back, #watch.playing .top-actions { opacity: .75; } }
+
+  /* Audio language menu */
+  .sheet { position: absolute; z-index: 8; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); }
+  .sheet-box { background: #1c1c1c; border-radius: 10px; padding: 20px; min-width: 260px; max-height: 80vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 12px 40px rgba(0,0,0,.7); }
+  .sheet-box h3 { margin: 0 0 6px; font-size: 18px; }
+  .sheet-box .btn { justify-content: flex-start; width: 100%; background: #2e2e2e; color: #fff; }
+  .sheet-box .btn:hover { background: #3a3a3a; }
+  .sheet-box .btn.btn-play { background: #fff; color: #000; } /* the language playing now */
+  body.tv .sheet-box { min-width: 360px; }
+  body.tv .sheet-box .btn { font-size: 20px; padding: 12px 20px; }
   .buffering { position: absolute; z-index: 4; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #ddd; pointer-events: none; text-shadow: 0 1px 6px #000; }
   #watch.waiting .buffering { display: flex; }
 
@@ -494,16 +507,40 @@ async function openMovie(id) {
     return;
   }
   document.title = (m.show ? `${m.show} ${m.epLabel}` : i.title) + ' — HOMEFLIX';
-  const source = pickSource(i);
-  if (source === 'hls') return play(i, m, 'hls');
-  const status = await (await fetch('/api/status/' + id)).json().catch(() => ({}));
-  if (source === 'direct' || status.state === 'ready') return play(i, m, 'file');
-  prepare(i, m);
+  startSource(i, m, pickAudio(i), null);
 }
 
-function prepare(i, m) {
+// ---------- audio language ----------
+// Each device remembers the language picked per movie, and the last language picked overall
+// (so choosing English once starts other multi-language movies in English too).
+function pickAudio(i) {
+  const list = i.audios || [];
+  if (list.length < 2) return 0;
+  try {
+    const saved = localStorage.getItem('aud:' + i.id);
+    if (saved !== null && list[Number(saved)]) return Number(saved);
+    const pref = localStorage.getItem('audioLang');
+    const match = pref && list.find((a) => a.lang === pref);
+    if (match) return match.n;
+  } catch {}
+  return 0;
+}
+const audioQuery = (audio) => (audio ? `?audio=${audio}` : '');
+
+// Start playing in the given language: the file itself, its prepared copy, or the converted stream.
+async function startSource(i, m, audio, startAt) {
+  const source = pickSource(i);
+  if (source === 'hls') return play(i, m, 'hls', startAt, audio);
+  if (source === 'direct' && audio === 0) return play(i, m, 'file', startAt, audio);
+  const status = await (await fetch('/api/status/' + i.id + audioQuery(audio))).json().catch(() => ({}));
+  if (status.state === 'ready') return play(i, m, 'file', startAt, audio);
+  prepare(i, m, audio, startAt);
+}
+
+function prepare(i, m, audio = 0, startAt = null) {
   const shade = $('stage').querySelector('.shade');
   const title = esc(m.show ? `${m.show} · ${m.epLabel}` : i.title);
+  const lang = i.audios && i.audios.length > 1 && i.audios[audio] ? i.audios[audio].label : '';
   const draw = (s) => {
     if (s.state === 'error') {
       shade.innerHTML = `<h2>${title}</h2><div class="error">Couldn’t get this ready: ${esc(s.error)}</div><button class="btn btn-play" id="retry">Try again</button>`;
@@ -513,18 +550,18 @@ function prepare(i, m) {
     }
     shade.innerHTML = `<div class="spinner"></div><h2>${title}</h2>
       <div class="progress"><div style="width:${(s.progress || 0) * 100}%"></div></div>
-      <div class="muted">Getting it ready for this device. Only happens once.</div>`;
+      <div class="muted">${startAt != null && lang ? `Switching to ${esc(lang)}…` : `Getting it ready for this device${lang ? ` in ${esc(lang)}` : ''}. Only happens once.`}</div>`;
   };
   async function start() {
-    const s = await (await fetch('/api/prepare/' + i.id, { method: 'POST' })).json();
-    if (s.state === 'ready') return play(i, m, 'file');
-    if (s.code === 'nospace') return play(i, m, 'hls'); // the laptop is short on disk: stream a converted copy instead
+    const s = await (await fetch('/api/prepare/' + i.id + audioQuery(audio), { method: 'POST' })).json();
+    if (s.state === 'ready') return play(i, m, 'file', startAt, audio);
+    if (s.code === 'nospace') return play(i, m, 'hls', startAt, audio); // the laptop is short on disk: stream a converted copy instead
     draw(s);
     if (s.state === 'error') return;
     clearInterval(pollTimer);
     pollTimer = setInterval(async () => {
-      const st = await (await fetch('/api/status/' + i.id)).json().catch(() => ({}));
-      if (st.state === 'ready') { clearInterval(pollTimer); play(i, m, 'file'); }
+      const st = await (await fetch('/api/status/' + i.id + audioQuery(audio))).json().catch(() => ({}));
+      if (st.state === 'ready') { clearInterval(pollTimer); play(i, m, 'file', startAt, audio); }
       else if (st.state) draw(st);
       if (st.state === 'error' || st.state === 'idle') clearInterval(pollTimer);
     }, 1200);
@@ -533,13 +570,56 @@ function prepare(i, m) {
   start();
 }
 
+function openAudioMenu() {
+  const p = player;
+  if (!p || !(p.i.audios && p.i.audios.length > 1)) return;
+  closeAudioMenu();
+  $('stage').insertAdjacentHTML('beforeend', `<div class="sheet" id="audioSheet"><div class="sheet-box"><h3>Audio</h3>
+    ${p.i.audios.map((a) => `<button class="btn ${a.n === p.audio ? 'btn-play' : ''}" data-audio="${a.n}">${a.n === p.audio ? '✓ ' : ''}${esc(a.label)}</button>`).join('')}
+    <button class="btn" data-audio-close>Close</button></div></div>`);
+  showOsd();
+  if (usingKeys) ($('audioSheet').querySelector('.btn-play') || $('audioSheet').querySelector('.btn')).focus({ preventScroll: true });
+}
+function closeAudioMenu() {
+  const s = $('audioSheet');
+  if (!s) return false;
+  s.remove();
+  if (usingKeys && $('osdAudio')) $('osdAudio').focus({ preventScroll: true });
+  return true;
+}
+
+// Switch language at the same point in the movie. If that language's copy isn't made yet, play the
+// converted stream in that language straight away and have the laptop make the copy meanwhile,
+// so switching never means waiting for a whole movie to be copied.
+async function switchAudio(n) {
+  const p = player;
+  if (!p) return;
+  closeAudioMenu();
+  const a = p.i.audios[n];
+  try {
+    localStorage.setItem('aud:' + p.i.id, String(n));
+    if (a && a.lang && a.lang !== 'und') localStorage.setItem('audioLang', a.lang);
+  } catch {}
+  if (n === p.audio) return;
+  const { i, m } = p;
+  const at = p.v.currentTime || null;
+  teardownVideo();
+  $('stage').innerHTML = `<div class="stage" style="background-image:url('/thumb/${i.id}?size=hero')"><div class="shade"><div class="spinner"></div></div></div>`;
+  const source = pickSource(i);
+  if (source === 'hls' || (source === 'direct' && n === 0)) return startSource(i, m, n, at);
+  const status = await (await fetch('/api/status/' + i.id + audioQuery(n))).json().catch(() => ({}));
+  if (status.state === 'ready') return play(i, m, 'file', at, n);
+  fetch('/api/prepare/' + i.id + audioQuery(n), { method: 'POST' }).catch(() => {});
+  play(i, m, 'hls', at, n);
+}
+
 function fmtClock(s) {
   s = Math.max(0, Math.floor(s || 0));
   const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
-function osdHtml(i, m, kind) {
+function osdHtml(i, m, kind, audio = 0) {
   const title = esc(m.show ? `${m.show} · ${m.epLabel}` : i.title);
   return `<div class="osd">
     <h3>${title}</h3>
@@ -548,6 +628,7 @@ function osdHtml(i, m, kind) {
       <button class="btn" data-osd="back">⟲ 10s</button>
       <button class="btn btn-play" data-osd="toggle" id="osdToggle">Pause</button>
       <button class="btn" data-osd="fwd">10s ⟳</button>
+      ${i.audios && i.audios.length > 1 ? `<button class="btn" data-osd="audio" id="osdAudio">Audio: ${esc((i.audios[audio] || i.audios[0]).label)}</button>` : ''}
       ${i.subs.length ? '<button class="btn" data-osd="cc" id="osdCC">Subtitles: Off</button>' : ''}
       ${kind === 'file' && i.videoCodec === 'hevc' ? '<button class="btn" data-osd="compat">Picture missing?</button>' : ''}
       <span class="time" id="osdTime"></span>
@@ -566,18 +647,25 @@ function teardownVideo() {
   player = null;
 }
 
-function play(i, m, kind, startAt) {
+function play(i, m, kind, startAt, audio = 0) {
   teardownVideo();
   const tracks = i.subs.map((s) => `<track kind="subtitles" src="/subs/${i.id}/${s.key}.vtt" srclang="${esc(s.lang.slice(0, 2))}" label="${esc(s.label)}">`).join('');
   const hevcFile = kind === 'file' && i.videoCodec === 'hevc';
+  const multiAudio = i.audios && i.audios.length > 1;
   // TVs, and anyone who got here with arrow keys, get HOMEFLIX's own controls: the browser's are
   // usually out of reach for a remote.
   const remote = IS_TV || usingKeys;
+  const topActions = !remote && (multiAudio || hevcFile)
+    ? `<div class="top-actions">
+        ${multiAudio ? `<button class="pill" data-audio-menu>🔊 ${esc((i.audios[audio] || i.audios[0]).label)}</button>` : ''}
+        ${hevcFile ? '<button class="pill" data-compat>Picture missing?</button>' : ''}
+      </div>`
+    : '';
   $('stage').innerHTML = `<video id="v" ${remote ? '' : 'controls'} playsinline autoplay preload="auto" poster="/thumb/${i.id}?size=hero">${tracks}</video>
     <div class="buffering"><div class="spinner"></div><div>${kind === 'hls' ? 'Converting for this device…' : 'Loading…'}</div></div>
-    ${!remote && hevcFile ? '<button class="compat" data-compat>Picture missing? Try the compatible version</button>' : ''}`;
+    ${topActions}`;
   const v = $('v');
-  const p = (player = { v, i, m, kind, hls: null, timers: [] });
+  const p = (player = { v, i, m, kind, audio, hls: null, timers: [] });
   const watch = $('watch');
   const saved = store.get(i.id);
   const resumeAt = startAt != null ? startAt : saved && saved.time > 30 && saved.time < saved.duration - 120 ? saved.time : 0;
@@ -595,11 +683,11 @@ function play(i, m, kind, startAt) {
         else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) h.recoverMediaError();
         else showPlayError();
       });
-      h.loadSource(`/hls/${i.id}/index.m3u8`);
+      h.loadSource(`/hls/${i.id}/${audio}/index.m3u8`);
       h.attachMedia(v);
     }).catch(() => showPlayError('Couldn’t load the player. Check that the laptop is awake and HOMEFLIX is running.'));
   } else {
-    v.src = kind === 'hls' ? `/hls/${i.id}/index.m3u8` : `/video/${i.id}`;
+    v.src = kind === 'hls' ? `/hls/${i.id}/${audio}/index.m3u8` : `/video/${i.id}${audioQuery(audio)}`;
     if (resumeAt) v.addEventListener('loadedmetadata', () => { v.currentTime = resumeAt; }, { once: true });
   }
 
@@ -665,7 +753,7 @@ function toCompatible() {
   if (!player) return;
   const { i, m, v } = player;
   try { localStorage.setItem(hevcKey(i.tenBit), 'no'); } catch {}
-  play(i, m, 'hls', v.currentTime || null);
+  play(i, m, 'hls', v.currentTime || null, player.audio);
 }
 
 function showPlayError(msg) {
@@ -680,9 +768,9 @@ function attachOsd(p) {
   if (p.osd) return;
   p.osd = true;
   v.controls = false;
-  const compat = $('stage').querySelector('.compat');
-  if (compat) compat.remove(); // the controls have their own "Picture missing?" button
-  $('stage').insertAdjacentHTML('beforeend', osdHtml(i, m, kind) + '<div class="osd-hint" id="osdHint">OK: pause · ◀ ▶: skip 10s · ▲ ▼: controls</div>');
+  const top = $('stage').querySelector('.top-actions');
+  if (top) top.remove(); // the controls have their own Audio and "Picture missing?" buttons
+  $('stage').insertAdjacentHTML('beforeend', osdHtml(i, m, kind, p.audio) +'<div class="osd-hint" id="osdHint">OK: pause · ◀ ▶: skip 10s · ▲ ▼: controls</div>');
   const update = () => {
     if (player !== p) return;
     const d = v.duration || i.duration || 0;
@@ -716,6 +804,7 @@ function showOsd() {
   clearTimeout(osdTimer);
   osdTimer = setTimeout(() => {
     if (player !== p || p.v.paused) return;
+    if ($('audioSheet')) return showOsd(); // stay up while the language menu is open
     watch.classList.add('osd-hidden');
     if (document.activeElement && document.activeElement.closest('#watch')) document.activeElement.blur();
     // The first time they fade, say how to get them back.
@@ -801,7 +890,7 @@ function keyName(e) {
 
 const isShown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
 function focusables() {
-  const scope = $('watch').classList.contains('on') ? $('watch') : $('modal').classList.contains('on') ? $('modal') : document;
+  const scope = $('audioSheet') || ($('watch').classList.contains('on') ? $('watch') : $('modal').classList.contains('on') ? $('modal') : document);
   return [...scope.querySelectorAll('button:not([disabled]), input, [tabindex="0"]')].filter((el) => !el.closest('#watch.osd-hidden .osd') && isShown(el) && (scope !== document || !el.closest('#watch, #modal')));
 }
 
@@ -841,6 +930,7 @@ function focusEl(el) {
 
 // Back: close the popup, leave the player, or clear the search.
 function goBack() {
+  if (closeAudioMenu()) return true;
   if ($('modal').classList.contains('on')) { closeModal(); return true; }
   if ($('watch').classList.contains('on')) { leavePlayer(); return true; }
   if ($('search').value) { $('search').value = ''; setSearch(''); return true; }
@@ -921,7 +1011,7 @@ function route() {
 }
 
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-show],[data-info],[data-close],[data-home],[data-jump],[data-back],[data-osd],[data-compat]');
+  const t = e.target.closest('[data-play],[data-show],[data-info],[data-close],[data-home],[data-jump],[data-back],[data-osd],[data-compat],[data-audio],[data-audio-menu],[data-audio-close]');
   if (!t) { if (e.target === $('modal')) closeModal(); return; }
   if (t.dataset.play) {
     const target = '#/watch/' + t.dataset.play;
@@ -934,8 +1024,11 @@ document.addEventListener('click', (e) => {
   else if ('close' in t.dataset) closeModal();
   else if ('back' in t.dataset) leavePlayer();
   else if ('compat' in t.dataset) toCompatible();
+  else if (t.dataset.audio) switchAudio(Number(t.dataset.audio));
+  else if ('audioMenu' in t.dataset) openAudioMenu();
+  else if ('audioClose' in t.dataset) closeAudioMenu();
   else if (t.dataset.osd) {
-    ({ back: () => seek(-10), fwd: () => seek(10), toggle: togglePlay, cc: cycleSubtitles, compat: toCompatible })[t.dataset.osd]();
+    ({ back: () => seek(-10), fwd: () => seek(10), toggle: togglePlay, cc: cycleSubtitles, compat: toCompatible, audio: openAudioMenu })[t.dataset.osd]();
   }
   else if ('home' in t.dataset) { $('search').value = ''; setSearch(''); location.hash = ''; window.scrollTo({ top: 0, behavior: 'smooth' }); }
   else if (t.dataset.jump) {

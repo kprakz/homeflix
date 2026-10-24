@@ -54,10 +54,18 @@ If HOMEFLIX doesn't switch to TV controls on its own, add `?tv=1` to the end of 
 
 From an iPhone or iPad you can also **AirPlay** to an Apple TV or an AirPlay-compatible TV.
 
+### Audio language and subtitles
+Movies with several audio languages (for example Tamil, Telugu, Hindi and English in one file) get a language button in the player:
+- **iPhone, iPad, Android, laptop:** tap **🔊 Tamil** (or whichever language is playing) at the top right of the player. On iPhone/iPad, leave full screen first.
+- **TV:** press **Up**, then choose **Audio**.
+
+The movie continues at the same point in the new language. Each device remembers your choice for that movie, and the last language you picked becomes your default. Choose English once, and other multi-language movies start in English on that device.
+
+Subtitles inside the movie, or a `.srt` / `.vtt` file next to it with the same name, appear in the player's subtitle menu (on a TV: **Up → Subtitles**).
+
 **Tips**
 - Each device remembers where you stopped and shows those movies under **Continue Watching**.
 - TV shows named like `Show S01E05` are grouped into series, and the next episode plays automatically.
-- Subtitles inside the movie, or a `.srt` file next to it with the same name, appear in the player's subtitle menu.
 
 ## Good to know
 
