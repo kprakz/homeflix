@@ -64,7 +64,8 @@ The movie continues at the same point in the new language. Each device remembers
 Subtitles inside the movie, or a `.srt` / `.vtt` file next to it with the same name, appear in the player's subtitle menu (on a TV: **Up → Subtitles**).
 
 **Tips**
-- Each device remembers where you stopped and shows those movies under **Continue Watching**.
+- Each device remembers where you stopped and shows those movies under **Continue Watching**. To watch from the beginning instead, choose **Start over**: next to **Resume** on the home screen and in **More Info**, at the top of the player, or in the TV controls.
+- **Too quiet?** Many films are mixed quietly for cinemas, and phones and TVs can't go above 100% the way VLC can. Turn on **Volume boost** in the player (top right; on a TV, press Up). It makes the sound about twice as loud on that device without distorting it, and the device remembers it. Turn it off for the original sound.
 - TV shows named like `Show S01E05` are grouped into series, and the next episode plays automatically.
 
 ## Good to know

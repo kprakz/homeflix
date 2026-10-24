@@ -66,7 +66,7 @@
   .hero h1.long { font-size: clamp(40px, min(5.6vw, 9vh), 88px); }
   .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 15px; color: #ddd; margin-bottom: 20px; }
   .pill { border: 1px solid rgba(255,255,255,.4); padding: 0 6px; border-radius: 3px; font-size: 12px; }
-  .hero-actions { display: flex; gap: 12px; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
   .btn { display: inline-flex; align-items: center; gap: 10px; border: 0; border-radius: 5px; padding: 11px 26px 11px 20px; font-size: 18px; font-weight: 700; }
   .btn svg { width: 24px; height: 24px; }
   .btn-play { background: #fff; color: #000; }
@@ -157,8 +157,12 @@
   .error { color: #ff6b6b; }
   .next-up { position: absolute; z-index: 7; right: calc(24px + env(safe-area-inset-right)); bottom: 90px; display: flex; gap: 10px; }
   .next-up .btn { font-size: 16px; padding: 10px 18px; }
-  .top-actions { position: absolute; z-index: 5; top: calc(16px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); display: flex; gap: 8px; transition: opacity .4s; }
-  .pill { border: 0; background: rgba(0,0,0,.55); color: #eee; padding: 8px 14px; border-radius: 99px; font-size: 14px; font-weight: 600; }
+  /* Right of the Back button; on a phone the buttons flow onto a second line rather than overlap it. */
+  .top-actions { position: absolute; z-index: 5; top: calc(16px + env(safe-area-inset-top)); left: calc(130px + env(safe-area-inset-left)); right: calc(16px + env(safe-area-inset-right)); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; transition: opacity .4s; pointer-events: none; }
+  .top-actions > * { pointer-events: auto; }
+  .pill { border: 0; background: rgba(0,0,0,.55); color: #eee; padding: 8px 14px; border-radius: 99px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .pill .narrow { display: none; }
+  @media (max-width: 600px) { .pill .wide { display: none; } .pill .narrow { display: inline; } }
   #watch.playing .top-actions { opacity: 0; }
   #watch.playing:hover .top-actions, .top-actions:focus-within { opacity: 1; }
   /* Touch screens have no hover: keep Back and the language button visible while playing. */
@@ -236,7 +240,8 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>';
-const ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.1" stroke-linecap="round"/></svg>';
+const ICON_RESTART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 3.5V8H8"/></svg>';
+const ICON_INFO ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.1" stroke-linecap="round"/></svg>';
 const SERIES_RE = /^(.*?)[\s-]*S(\d{1,2})\s*E(\d{1,3})\b/i;
 
 let movies = [];      // every video from the server
@@ -344,6 +349,7 @@ async function renderHero(pick) {
     ${p ? `<div class="hero-progress"><div style="width:${p}%"></div></div>` : ''}
     <div class="hero-actions">
       <button class="btn btn-play" data-play="${target.id}">${ICON_PLAY}${p ? 'Resume' : 'Play'}</button>
+      ${p ? `<button class="btn btn-info" data-play="${target.id}" data-from-start>${ICON_RESTART}Start over</button>` : ''}
       <button class="btn btn-info" ${isShow ? `data-show="${esc(pick.show)}"` : `data-info="${pick.id}"`}>${ICON_INFO}More Info</button>
     </div>
   </div>`;
@@ -387,7 +393,10 @@ async function openModal({ id, show }) {
   card.innerHTML = `<div class="modal-hero" style="background-image:url('/thumb/${target.id}?size=hero')">
       <button class="close" data-close aria-label="Close">✕</button>
       <div class="body"><h1>${esc(show || item.title)}</h1>
-        <button class="btn btn-play" data-play="${target.id}">${ICON_PLAY}${p ? 'Resume' : 'Play'}${show ? ' ' + target.epLabel : ''}</button></div>
+        <div class="hero-actions">
+          <button class="btn btn-play" data-play="${target.id}">${ICON_PLAY}${p ? 'Resume' : 'Play'}${show ? ' ' + target.epLabel : ''}</button>
+          ${p ? `<button class="btn btn-info" data-play="${target.id}" data-from-start>${ICON_RESTART}Start over</button>` : ''}
+        </div></div>
     </div>
     <div class="modal-body">
       <div class="facts" id="facts">${isNew(target) ? '<span class="hi">New</span>' : ''}${item && item.year ? `<span>${item.year}</span>` : ''}${show ? `<span>${eps.length} Episodes</span>` : ''}<span class="pill">HD</span></div>
@@ -482,7 +491,7 @@ function loadHlsLib() {
 let player = null; // { v, i, m, kind, hls, timers }
 let returnFocus = null; // what to focus again after leaving the player, for remote users
 
-async function openMovie(id) {
+async function openMovie(id, fromStart = false) {
   clearInterval(pollTimer);
   if (document.activeElement && document.activeElement.dataset) returnFocus = document.activeElement.dataset.play || returnFocus;
   closeModal(true);
@@ -507,7 +516,7 @@ async function openMovie(id) {
     return;
   }
   document.title = (m.show ? `${m.show} ${m.epLabel}` : i.title) + ' — HOMEFLIX';
-  startSource(i, m, pickAudio(i), null);
+  startSource(i, m, pickAudio(i), fromStart ? 0 : null);
 }
 
 // ---------- audio language ----------
@@ -628,6 +637,8 @@ function osdHtml(i, m, kind, audio = 0) {
       <button class="btn" data-osd="back">⟲ 10s</button>
       <button class="btn btn-play" data-osd="toggle" id="osdToggle">Pause</button>
       <button class="btn" data-osd="fwd">10s ⟳</button>
+      <button class="btn" data-osd="restart">↺ Start over</button>
+      ${boostAvailable(kind) ? `<button class="btn" data-osd="boost" id="osdBoost">${boostLabel()}</button>` : ''}
       ${i.audios && i.audios.length > 1 ? `<button class="btn" data-osd="audio" id="osdAudio">Audio: ${esc((i.audios[audio] || i.audios[0]).label)}</button>` : ''}
       ${i.subs.length ? '<button class="btn" data-osd="cc" id="osdCC">Subtitles: Off</button>' : ''}
       ${kind === 'file' && i.videoCodec === 'hevc' ? '<button class="btn" data-osd="compat">Picture missing?</button>' : ''}
@@ -640,6 +651,7 @@ function teardownVideo() {
   if (!player) return;
   player.timers.forEach(clearTimeout);
   if (player.hls) player.hls.destroy();
+  if (player.boost) player.boost.src.disconnect();
   const v = player.v;
   v.pause();
   v.removeAttribute('src');
@@ -655,8 +667,10 @@ function play(i, m, kind, startAt, audio = 0) {
   // TVs, and anyone who got here with arrow keys, get HOMEFLIX's own controls: the browser's are
   // usually out of reach for a remote.
   const remote = IS_TV || usingKeys;
-  const topActions = !remote && (multiAudio || hevcFile)
+  const topActions = !remote
     ? `<div class="top-actions">
+        <button class="pill" data-restart>↺ Start over</button>
+        ${boostAvailable(kind) ? `<button class="pill" data-boost>${boostPill()}</button>` : ''}
         ${multiAudio ? `<button class="pill" data-audio-menu>🔊 ${esc((i.audios[audio] || i.audios[0]).label)}</button>` : ''}
         ${hevcFile ? '<button class="pill" data-compat>Picture missing?</button>' : ''}
       </div>`
@@ -747,6 +761,7 @@ function play(i, m, kind, startAt, audio = 0) {
     v.addEventListener('ended', () => { location.replace('#/watch/' + next.id); });
   }
   v.play().catch(() => {});
+  if (boostWanted()) applyBoost();
 }
 
 function toCompatible() {
@@ -817,6 +832,77 @@ function showOsd() {
 }
 $('watch').addEventListener('pointermove', showOsd);
 $('watch').addEventListener('pointerdown', showOsd);
+
+// ---------- volume boost ----------
+// Films mixed quietly for cinemas can be too quiet on phone and TV speakers, which (unlike VLC)
+// can't go above 100%. Boost makes them louder on this device: Web Audio evens out the peaks with
+// a compressor, raises the level, and a limiter stops distortion. The stream itself is untouched,
+// so sound stays in time with the picture. Remembered per device.
+const BOOST_GAIN = 1.4; // with the compressor's own make-up gain: about +8 dB overall
+let audioCtx = null;
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const IS_SAFARI = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+const boostWanted = () => { try { return localStorage.getItem('boost') === '1'; } catch { return false; } };
+// Safari's own HLS player goes silent when its sound is routed through Web Audio.
+const boostAvailable = (kind) => !!AudioCtx && !(kind === 'hls' && nativeHls() && IS_SAFARI);
+const boostLabel = () => `Volume boost: ${boostWanted() ? 'On' : 'Off'}`;
+
+// The pill says "Boost: On" on narrow screens and "Volume boost: On" elsewhere.
+const boostPill = () => `${boostWanted() ? '🔊' : '🔈'} <span class="wide">Volume boost</span><span class="narrow">Boost</span>: ${boostWanted() ? 'On' : 'Off'}`;
+
+function updateBoostButtons() {
+  document.querySelectorAll('#watch .pill[data-boost]').forEach((b) => (b.innerHTML = boostPill()));
+  if ($('osdBoost')) $('osdBoost').textContent = boostLabel();
+}
+
+function applyBoost() {
+  const p = player;
+  if (!p || p.boost || !boostWanted() || !boostAvailable(p.kind)) return updateBoostButtons();
+  audioCtx = audioCtx || new AudioCtx();
+  // Browsers only let Web Audio play after a tap or click. Routing the video into a context that
+  // isn't running would mute it, so wait until it runs.
+  if (audioCtx.state !== 'running') {
+    audioCtx.resume().then(() => { if (player === p && audioCtx.state === 'running') applyBoost(); }).catch(() => {});
+    const retry = () => audioCtx.resume().then(() => { if (player === p) applyBoost(); }).catch(() => {});
+    document.addEventListener('pointerdown', retry, { once: true, capture: true });
+    document.addEventListener('keydown', retry, { once: true, capture: true });
+    return updateBoostButtons();
+  }
+  const src = audioCtx.createMediaElementSource(p.v);
+  // Measured on a quiet film: about +8 dB louder, loudest peaks around 0.7 of full scale. (Web
+  // Audio compressors add their own make-up gain, hence the trim at the end.)
+  const comp = audioCtx.createDynamicsCompressor();
+  comp.threshold.value = -24; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.25;
+  const gain = audioCtx.createGain();
+  gain.gain.value = BOOST_GAIN;
+  const limiter = audioCtx.createDynamicsCompressor();
+  limiter.threshold.value = -3; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.1;
+  const trim = audioCtx.createGain();
+  trim.gain.value = 0.8;
+  src.connect(comp).connect(gain).connect(limiter).connect(trim).connect(audioCtx.destination);
+  p.boost = { src, out: trim };
+  updateBoostButtons();
+}
+
+function toggleBoost() {
+  try { localStorage.setItem('boost', boostWanted() ? '0' : '1'); } catch {}
+  const p = player;
+  if (!p) return;
+  if (boostWanted()) applyBoost();
+  // Off: reload the video at the same point, so the sound is back to exactly what the stream carries.
+  else if (p.boost) play(p.i, p.m, p.kind, p.v.currentTime || null, p.audio);
+  else updateBoostButtons();
+  showOsd();
+}
+
+// Back to 0:00 and play.
+function startOver() {
+  const v = $('v');
+  if (!v) return;
+  v.currentTime = 0;
+  v.play().catch(() => {});
+  showOsd();
+}
 
 function seek(by) {
   const v = $('v');
@@ -999,8 +1085,10 @@ document.addEventListener('keydown', (e) => {
 
 // ---------- routing & events ----------
 function route() {
-  const m = location.hash.match(/^#\/watch\/(\w+)/);
-  if (m) return openMovie(m[1]);
+  // #/watch/<id> resumes where this device stopped; #/watch/<id>/start starts over from 0:00.
+  const m = location.hash.match(/^#\/watch\/(\w+)(\/start)?/);
+  if (m && m[2]) history.replaceState(history.state, '', '#/watch/' + m[1]); // reloading then resumes, not restarts
+  if (m) return openMovie(m[1], !!m[2]);
   closePlayer();
   loadLibrary().then(() => {
     // Back from the player with a remote: land on the title you were on.
@@ -1011,10 +1099,10 @@ function route() {
 }
 
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-show],[data-info],[data-close],[data-home],[data-jump],[data-back],[data-osd],[data-compat],[data-audio],[data-audio-menu],[data-audio-close]');
+  const t = e.target.closest('[data-play],[data-show],[data-info],[data-close],[data-home],[data-jump],[data-back],[data-osd],[data-compat],[data-audio],[data-audio-menu],[data-audio-close],[data-restart],[data-boost]');
   if (!t) { if (e.target === $('modal')) closeModal(); return; }
   if (t.dataset.play) {
-    const target = '#/watch/' + t.dataset.play;
+    const target = '#/watch/' + t.dataset.play + ('fromStart' in t.dataset ? '/start' : '');
     // From the popup or a finished episode, replace that history entry so Back returns home.
     if ((history.state && history.state.modal) || $('watch').classList.contains('on')) { closeModal(true); location.replace(target); }
     else location.hash = target;
@@ -1027,8 +1115,10 @@ document.addEventListener('click', (e) => {
   else if (t.dataset.audio) switchAudio(Number(t.dataset.audio));
   else if ('audioMenu' in t.dataset) openAudioMenu();
   else if ('audioClose' in t.dataset) closeAudioMenu();
+  else if ('restart' in t.dataset) startOver();
+  else if ('boost' in t.dataset) toggleBoost();
   else if (t.dataset.osd) {
-    ({ back: () => seek(-10), fwd: () => seek(10), toggle: togglePlay, cc: cycleSubtitles, compat: toCompatible, audio: openAudioMenu })[t.dataset.osd]();
+    ({ back: () => seek(-10), fwd: () => seek(10), toggle: togglePlay, cc: cycleSubtitles, compat: toCompatible, audio: openAudioMenu, restart: startOver, boost: toggleBoost })[t.dataset.osd]();
   }
   else if ('home' in t.dataset) { $('search').value = ''; setSearch(''); location.hash = ''; window.scrollTo({ top: 0, behavior: 'smooth' }); }
   else if (t.dataset.jump) {
