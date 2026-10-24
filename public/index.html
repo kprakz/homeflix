@@ -458,13 +458,11 @@ function canPlayHevc(tenBit) {
 }
 const nativeHls = () => testVideo.canPlayType('application/vnd.apple.mpegurl') !== '';
 
-// mp4: the copy the laptop makes once (original video, evened-out audio)
-// hls: converted to H.264 while it plays, for devices that can't play the original video
+// direct: the file as-is · mp4: a quick repackage the laptop makes once · hls: converted to H.264 while it plays
 function pickSource(i) {
   if (i.mode === 'transcode' || (i.videoCodec === 'hevc' && !canPlayHevc(i.tenBit))) return 'hls';
-  return 'mp4';
+  return i.mode === 'direct' ? 'direct' : 'mp4';
 }
-const canStream = () => nativeHls() || !!(window.MediaSource || window.ManagedMediaSource);
 
 let hlsLib = null;
 function loadHlsLib() {
@@ -530,17 +528,13 @@ function pickAudio(i) {
 const audioQuery = (audio) => (audio ? `?audio=${audio}` : '');
 
 // Start playing in the given language: the file itself, its prepared copy, or the converted stream.
-// The copy takes the laptop a few minutes the first time (it re-does the soundtrack). Until it's
-// ready, play the converted stream, which starts in seconds, and have the copy made meanwhile;
-// later plays use the copy. Only a browser that can't play streams waits for the copy.
 async function startSource(i, m, audio, startAt) {
   const source = pickSource(i);
   if (source === 'hls') return play(i, m, 'hls', startAt, audio);
+  if (source === 'direct' && audio === 0) return play(i, m, 'file', startAt, audio);
   const status = await (await fetch('/api/status/' + i.id + audioQuery(audio))).json().catch(() => ({}));
   if (status.state === 'ready') return play(i, m, 'file', startAt, audio);
-  if (!canStream()) return prepare(i, m, audio, startAt);
-  fetch('/api/prepare/' + i.id + audioQuery(audio), { method: 'POST' }).catch(() => {});
-  play(i, m, 'hls', startAt, audio);
+  prepare(i, m, audio, startAt);
 }
 
 function prepare(i, m, audio = 0, startAt = null) {
@@ -594,9 +588,10 @@ function closeAudioMenu() {
   return true;
 }
 
-// Switch language at the same point in the movie (from its copy, or the converted stream until the
-// copy is made; see startSource).
-function switchAudio(n) {
+// Switch language at the same point in the movie. If that language's copy isn't made yet, play the
+// converted stream in that language straight away and have the laptop make the copy meanwhile,
+// so switching never means waiting for a whole movie to be copied.
+async function switchAudio(n) {
   const p = player;
   if (!p) return;
   closeAudioMenu();
@@ -610,7 +605,12 @@ function switchAudio(n) {
   const at = p.v.currentTime || null;
   teardownVideo();
   $('stage').innerHTML = `<div class="stage" style="background-image:url('/thumb/${i.id}?size=hero')"><div class="shade"><div class="spinner"></div></div></div>`;
-  startSource(i, m, n, at);
+  const source = pickSource(i);
+  if (source === 'hls' || (source === 'direct' && n === 0)) return startSource(i, m, n, at);
+  const status = await (await fetch('/api/status/' + i.id + audioQuery(n))).json().catch(() => ({}));
+  if (status.state === 'ready') return play(i, m, 'file', at, n);
+  fetch('/api/prepare/' + i.id + audioQuery(n), { method: 'POST' }).catch(() => {});
+  play(i, m, 'hls', at, n);
 }
 
 function fmtClock(s) {

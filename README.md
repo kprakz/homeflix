@@ -72,9 +72,8 @@ Subtitles inside the movie, or a `.srt` / `.vtt` file next to it with the same n
 - **Keep the laptop awake and plugged in** while you watch. Nothing plays on the laptop itself: the movie plays on your device.
 - **Closing the window doesn't stop HOMEFLIX.** It keeps running in the system tray, near the clock. Right-click the red **H** icon → **Quit HOMEFLIX** to stop it.
 - **Start with Windows** in Settings makes HOMEFLIX start quietly when you sign in.
-- **The first time you play a movie** (or pick a new language), it starts in a few seconds as a version converted while you watch. Meanwhile the laptop makes a full-quality copy in the background, which takes about 10 minutes for a 1½-hour film. Every later play uses that copy, and skipping around is instant.
-- **Sound is evened out** to the loudness streaming services use, so quietly mixed films aren't too quiet on phones and TVs. Audio that a file says to start late (common with dubbed languages) is lined up with the picture for every device.
-- **Devices that can't play HEVC (x265)**, which includes many Android phones and TVs, always get the converted version. HOMEFLIX uses the laptop's Intel, NVIDIA or AMD graphics chip for this when it can. If you see sound but no picture, tap **Picture missing?** in the player.
+- **MKV files** are repackaged once into a format phones and TVs play. This usually takes seconds, or a few minutes for movies with Dolby audio.
+- **Devices that can't play HEVC (x265)**, which includes many Android phones and TVs, get a version converted while you watch. It starts in a few seconds, and HOMEFLIX uses the laptop's Intel, NVIDIA or AMD graphics chip for this when it can. If you see sound but no picture, tap **Picture missing?** in the player.
 - **Disk space:** converted copies are stored on the laptop. When space runs low, HOMEFLIX deletes the ones watched longest ago, keeping 2 GB free. **Settings → Free up space** removes them all, and they're made again when needed.
 - **Files still downloading** show a *Downloading* badge and become playable when finished.
 
