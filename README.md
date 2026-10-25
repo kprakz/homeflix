@@ -1,15 +1,25 @@
 # HOMEFLIX
 
-Watch the movies on your Windows laptop from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. No account, no internet upload, no subscription.
+Watch the movies on your Windows PC or Mac from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. No account, no internet upload, no subscription.
 
 **Website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
 
 ---
 
-## Install (5 minutes, one time)
+## Install on a Mac
+
+1. **[Download HOMEFLIX for Mac](https://kprakz.github.io/homeflix/#download)**. Choose **Apple Silicon** for Macs with an M1–M4 chip, or **Intel**. (Apple menu → About This Mac shows which you have.) Requires macOS 12 or later.
+2. Open the downloaded `.dmg` and drag **HOMEFLIX** onto **Applications**.
+3. Open HOMEFLIX from Applications. The first time, macOS says it can't verify the app. Click **Done**, open System Settings → **Privacy & Security**, scroll down and click **Open Anyway**. You only do this once. (HOMEFLIX isn't notarized by Apple, which needs a paid developer account.)
+4. Click **Choose your movies folder**.
+5. When macOS asks whether HOMEFLIX may **accept incoming network connections**, click **Allow**. Your phone and TV can't connect otherwise.
+
+HOMEFLIX then lives in the menu bar at the top right of the screen. Everything else below works the same as on Windows.
+
+## Install on Windows (5 minutes, one time)
 
 ### 1. Download and run the installer
-**[⬇ Download HOMEFLIX for Windows](https://github.com/kprakz/homeflix/releases/latest)**. On that page, under *Assets*, click **`HOMEFLIX-Setup-<version>.exe`**, then double-click the downloaded file.
+**[⬇ Download HOMEFLIX for Windows](https://kprakz.github.io/homeflix/#download)**, then double-click the downloaded `HOMEFLIX-Setup-<version>.exe`.
 
 Requires Windows 10 or 11 (64-bit).
 
@@ -109,10 +119,12 @@ Requirements: Node.js 20+, and ffmpeg on PATH (`winget install Gyan.FFmpeg.Essen
 
 ```bash
 npm install
-npm run ffmpeg      # copy ffmpeg.exe/ffprobe.exe into vendor/ffmpeg
+npm run ffmpeg      # copy ffmpeg/ffprobe into vendor/ffmpeg
 npm start           # run the desktop app
-npm run dist        # build dist/HOMEFLIX-Setup-<version>.exe
+npm run dist        # Windows: build dist/HOMEFLIX-Setup-<version>.exe
 ```
+
+**Mac builds** are made by GitHub Actions (`.github/workflows/mac.yml`) on Apple Silicon and Intel Macs whenever a release is published. The workflow starts the built app with a test movie, checks it lists, streams and prepares it, and attaches `HOMEFLIX-<version>-mac-arm64.dmg` and `-mac-x64.dmg` to the release. To build on a Mac yourself: `npm install --no-save ffmpeg-static ffprobe-static && npm run dist:mac`.
 
 `npm run serve` runs only the streaming server (`server.js`), configured by `config.json` (copy `config.example.json` to start). `npm run icons` redraws the icons.
 
@@ -124,6 +136,6 @@ npm run dist        # build dist/HOMEFLIX-Setup-<version>.exe
 | `build/` | Installer icons and NSIS uninstall script |
 | `vendor/ffmpeg/` | Bundled ffmpeg (not committed; created by `npm run ffmpeg`) |
 
-App settings live in `%APPDATA%\HOMEFLIX\settings.json`. Converted copies live in `%LOCALAPPDATA%\HOMEFLIX\cache`.
+App settings live in `%APPDATA%\HOMEFLIX\settings.json` (Mac: `~/Library/Application Support/HOMEFLIX/settings.json`). Converted copies live in `%LOCALAPPDATA%\HOMEFLIX\cache` (Mac: `~/Library/Caches/HOMEFLIX`).
 
 HOMEFLIX ships unmodified FFmpeg programs, which are GPL-licensed. See `vendor/ffmpeg/LICENSE.txt` and `SOURCE.txt`, which are installed to `resources\ffmpeg`.
