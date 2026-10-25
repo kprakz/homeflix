@@ -1,7 +1,9 @@
 // Copies ffmpeg and ffprobe into vendor/ffmpeg so the installer can ship them.
+// - FFMPEG_SRC_DIR set: takes ffmpeg and ffprobe from that folder (the Mac build downloads native
+//   static builds for each chip there; see .github/workflows/mac.yml).
 // - Windows: uses the ffmpeg on this PC's PATH (install it with: winget install Gyan.FFmpeg.Essentials).
-// - macOS: uses the standalone builds from the ffmpeg-static and ffprobe-static npm packages
-//   (npm install --no-save ffmpeg-static ffprobe-static), which need nothing else installed.
+// - macOS otherwise: uses the ffmpeg-static and ffprobe-static npm packages
+//   (npm install --no-save ffmpeg-static ffprobe-static). Note ffprobe-static's Mac build is Intel-only.
 
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -21,6 +23,16 @@ function fail(msg) {
 
 // Where to copy ffmpeg and ffprobe from, plus a license file and a note on the build's origin.
 function findSources() {
+  const fromDir = process.env.FFMPEG_SRC_DIR;
+  if (fromDir) {
+    const license = ['LICENSE', 'LICENSE.txt', 'LICENSE.md'].map((f) => path.join(fromDir, f)).find((f) => fs.existsSync(f));
+    return {
+      ffmpeg: path.join(fromDir, 'ffmpeg' + exe),
+      ffprobe: path.join(fromDir, 'ffprobe' + exe),
+      license,
+      origin: process.env.FFMPEG_ORIGIN || `Build from ${fromDir}`,
+    };
+  }
   if (isWin) {
     let ffmpeg;
     try {

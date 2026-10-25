@@ -27,8 +27,10 @@ jobs:
         include:
           - runner: macos-15
             arch: arm64
+            ffarch: arm64
           - runner: macos-15-intel
             arch: x64
+            ffarch: amd64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -39,12 +41,26 @@ jobs:
           cache: npm
 
       - name: Install
-        run: |
-          npm ci
-          npm install --no-save ffmpeg-static@5 ffprobe-static@3
+        run: npm ci
 
+      # Native static ffmpeg + ffprobe for this chip (no Rosetta needed on Apple Silicon), from
+      # Martin Riedl's macOS builds. Checked to match the chip before they're bundled.
       - name: Bundle ffmpeg
-        run: node scripts/get-ffmpeg.mjs
+        env:
+          FFMPEG_SRC_DIR: ${{ runner.temp }}/ffmpeg
+          FFMPEG_ORIGIN: 'macOS static build: https://ffmpeg.martin-riedl.de (configuration and sources listed there)'
+        run: |
+          set -euo pipefail
+          mkdir -p "$FFMPEG_SRC_DIR"
+          for tool in ffmpeg ffprobe; do
+            curl -fsSL -o "$RUNNER_TEMP/$tool.zip" "https://ffmpeg.martin-riedl.de/redirect/latest/macos/${{ matrix.ffarch }}/release/$tool.zip"
+            unzip -o -q "$RUNNER_TEMP/$tool.zip" -d "$FFMPEG_SRC_DIR"
+            chmod +x "$FFMPEG_SRC_DIR/$tool"
+            lipo -archs "$FFMPEG_SRC_DIR/$tool"
+            lipo -archs "$FFMPEG_SRC_DIR/$tool" | grep -qw "${{ matrix.arch == 'arm64' && 'arm64' || 'x86_64' }}"
+          done
+          curl -fsSL -o "$FFMPEG_SRC_DIR/LICENSE.txt" https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/COPYING.GPLv3 || true
+          node scripts/get-ffmpeg.mjs
 
       - name: Build the app
         run: npx electron-builder --mac --${{ matrix.arch }} --publish never
@@ -60,8 +76,11 @@ jobs:
           "$FF/ffmpeg" -version | head -1
           "$FF/ffprobe" -version | head -1
           mkdir -p "$HOME/Movies/HOMEFLIX test"
+          for tool in ffmpeg ffprobe; do echo "$tool: $(lipo -archs "$FF/$tool")"; done
           "$FF/ffmpeg" -v error -f lavfi -i testsrc2=size=1280x720:rate=24:duration=20 -f lavfi -i sine=frequency=440:duration=20 \
             -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$HOME/Movies/HOMEFLIX test/Test Movie (2024).mkv"
+          # A file changed in the last 2 minutes counts as still downloading: make it look older.
+          touch -t 202401010000 "$HOME/Movies/HOMEFLIX test/Test Movie (2024).mkv"
           SETTINGS="$HOME/Library/Application Support/HOMEFLIX"
           mkdir -p "$SETTINGS"
           printf '{"folders":["%s"],"port":8080}' "$HOME/Movies/HOMEFLIX test" > "$SETTINGS/settings.json"
