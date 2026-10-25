@@ -2,6 +2,8 @@
 
 Watch the movies on your Windows laptop from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. No account, no internet upload, no subscription.
 
+**Website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
+
 ---
 
 ## Install (5 minutes, one time)
