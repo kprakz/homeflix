@@ -70,11 +70,11 @@ jobs:
       - name: Test the built app
         run: |
           set -euo pipefail
-          APP=$(find dist -maxdepth 2 -name HOMEFLIX.app -type d | head -1)
+          APP=$(find dist -maxdepth 2 -name HOMEFLIX.app -type d | sed -n 1p)
           echo "Testing $APP"
           FF="$APP/Contents/Resources/ffmpeg"
-          "$FF/ffmpeg" -version | head -1
-          "$FF/ffprobe" -version | head -1
+          "$FF/ffmpeg" -version | sed -n 1p
+          "$FF/ffprobe" -version | sed -n 1p
           mkdir -p "$HOME/Movies/HOMEFLIX test"
           for tool in ffmpeg ffprobe; do echo "$tool: $(lipo -archs "$FF/$tool")"; done
           "$FF/ffmpeg" -v error -f lavfi -i testsrc2=size=1280x720:rate=24:duration=20 -f lavfi -i sine=frequency=440:duration=20 \
@@ -86,10 +86,11 @@ jobs:
           printf '{"folders":["%s"],"port":8080}' "$HOME/Movies/HOMEFLIX test" > "$SETTINGS/settings.json"
           "$APP/Contents/MacOS/HOMEFLIX" --hidden > app.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://localhost:8080/ > /dev/null && break; sleep 1; done
-          curl -sf http://localhost:8080/ | grep -q HOMEFLIX
+          curl -sf -o page.html http://localhost:8080/
+          grep -q HOMEFLIX page.html
           ID=$(curl -sf http://localhost:8080/api/library | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s);if(!l.length)process.exit(1);console.log(l[0].id)})')
           echo "Library has the test movie: $ID"
-          curl -sf "http://localhost:8080/api/info/$ID" | head -c 300; echo
+          curl -sf "http://localhost:8080/api/info/$ID" | cut -c1-300
           curl -sf -o seg.ts "http://localhost:8080/hls/$ID/0/0.ts" || curl -sf -o seg.ts "http://localhost:8080/hls/$ID/0.ts"
           "$FF/ffprobe" -v error -show_entries stream=codec_name -of csv=p=0 seg.ts
           curl -sf -X POST "http://localhost:8080/api/prepare/$ID"; echo
