@@ -1,0 +1,93 @@
+# Builds the macOS app (Apple Silicon and Intel) on GitHub's Mac machines, tests that the built app
+# really serves and converts video, and attaches the .dmg installers to the release.
+#
+# Runs when a release is published, or by hand (Actions → Mac build → Run workflow), optionally
+# attaching the installers to an existing release tag.
+
+name: Mac build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the installers to (leave empty to only build and test)
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: |
+          npm ci
+          npm install --no-save ffmpeg-static@5 ffprobe-static@3
+
+      - name: Bundle ffmpeg
+        run: node scripts/get-ffmpeg.mjs
+
+      - name: Build the app
+        run: npx electron-builder --mac --${{ matrix.arch }} --publish never
+
+      # Start the built app with a test movie and check it lists it, converts it into a stream
+      # (what devices that can't play the original get) and prepares a copy.
+      - name: Test the built app
+        run: |
+          set -euo pipefail
+          APP=$(find dist -maxdepth 2 -name HOMEFLIX.app -type d | head -1)
+          echo "Testing $APP"
+          FF="$APP/Contents/Resources/ffmpeg"
+          "$FF/ffmpeg" -version | head -1
+          "$FF/ffprobe" -version | head -1
+          mkdir -p "$HOME/Movies/HOMEFLIX test"
+          "$FF/ffmpeg" -v error -f lavfi -i testsrc2=size=1280x720:rate=24:duration=20 -f lavfi -i sine=frequency=440:duration=20 \
+            -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$HOME/Movies/HOMEFLIX test/Test Movie (2024).mkv"
+          SETTINGS="$HOME/Library/Application Support/HOMEFLIX"
+          mkdir -p "$SETTINGS"
+          printf '{"folders":["%s"],"port":8080}' "$HOME/Movies/HOMEFLIX test" > "$SETTINGS/settings.json"
+          "$APP/Contents/MacOS/HOMEFLIX" --hidden > app.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:8080/ > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:8080/ | grep -q HOMEFLIX
+          ID=$(curl -sf http://localhost:8080/api/library | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s);if(!l.length)process.exit(1);console.log(l[0].id)})')
+          echo "Library has the test movie: $ID"
+          curl -sf "http://localhost:8080/api/info/$ID" | head -c 300; echo
+          curl -sf -o seg.ts "http://localhost:8080/hls/$ID/0/0.ts" || curl -sf -o seg.ts "http://localhost:8080/hls/$ID/0.ts"
+          "$FF/ffprobe" -v error -show_entries stream=codec_name -of csv=p=0 seg.ts
+          curl -sf -X POST "http://localhost:8080/api/prepare/$ID"; echo
+          for i in $(seq 1 60); do S=$(curl -sf "http://localhost:8080/api/status/$ID"); echo "$S" | grep -q '"ready"' && break; sleep 1; done
+          echo "Copy: $S"
+          echo "$S" | grep -q '"ready"'
+          cat app.log || true
+          pkill -f "HOMEFLIX.app/Contents/MacOS/HOMEFLIX" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HOMEFLIX-mac-${{ matrix.arch }}
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: github.event_name == 'release' || inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name || inputs.tag }}" dist/*.dmg --clobber

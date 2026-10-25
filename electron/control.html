@@ -96,7 +96,7 @@
   <div class="status" id="status"><span class="dot"></span><span id="statusText">Starting…</span></div>
 </header>
 <main id="app"></main>
-<footer>Closing this window keeps HOMEFLIX running in the system tray (near the clock). Right-click the tray icon to quit. · <span id="version"></span></footer>
+<footer><span id="footerNote">Closing this window keeps HOMEFLIX running in the system tray (near the clock). Right-click the tray icon to quit.</span> · <span id="version"></span></footer>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -138,13 +138,25 @@ function networkBanner(n) {
   return '';
 }
 
+// Folder name and where it is, for Windows (\) and macOS (/) paths alike.
+function splitPath(p) {
+  const sep = p.includes('\\') ? '\\' : '/';
+  const parts = p.split(sep).filter(Boolean);
+  return { name: parts.pop() || p, parent: (p.startsWith(sep) ? sep : '') + parts.join(sep) || p };
+}
+
 function render() {
+  const mac = s.platform === 'darwin';
+  const trayWord = mac ? 'the menu bar' : 'the tray';
+  $('footerNote').textContent = mac
+    ? 'Closing this window keeps HOMEFLIX running in the menu bar (top right of the screen). Click its icon there to quit.'
+    : 'Closing this window keeps HOMEFLIX running in the system tray (near the clock). Right-click the tray icon to quit.';
   $('version').textContent = 'Version ' + s.version;
   $('status').classList.toggle('bad', !s.running);
   $('statusText').textContent = s.running ? (s.movieCount ? `Streaming ${s.movieCount} video${s.movieCount === 1 ? '' : 's'}` : 'Running') : 'Not running';
 
   let html = '';
-  if (s.serverError) html += `<div class="banner err"><div><b>HOMEFLIX couldn’t start its server</b><p>${esc(s.serverError)} Try quitting HOMEFLIX from the tray and opening it again.</p></div></div>`;
+  if (s.serverError) html += `<div class="banner err"><div><b>HOMEFLIX couldn’t start its server</b><p>${esc(s.serverError)} Try quitting HOMEFLIX from ${trayWord} and opening it again.</p></div></div>`;
   if (!s.ffmpegFound) html += `<div class="banner err"><div><b>Video tools are missing</b><p>Part of HOMEFLIX (ffmpeg) wasn’t found. MKV files won’t play and there will be no thumbnails. Reinstalling HOMEFLIX fixes this.</p></div></div>`;
 
   if (!s.folders.length) {
@@ -182,7 +194,7 @@ function render() {
       <p class="lead">HOMEFLIX shows every video in these folders and their sub-folders.</p>
       <ul class="folders">${s.folders.map((f) => `<li>
         <div class="folder-icon">${FOLDER_SVG}</div>
-        <div class="folder-text"><div class="folder-path" title="${esc(f.path)}">${esc(f.path.split('\\').filter(Boolean).pop())}</div><div class="folder-count" title="${esc(f.path)}">${f.count} video${f.count === 1 ? '' : 's'} · ${esc(f.path.split('\\').slice(0, -1).join('\\') || f.path)}</div></div>
+        <div class="folder-text"><div class="folder-path" title="${esc(f.path)}">${esc(splitPath(f.path).name)}</div><div class="folder-count" title="${esc(f.path)}">${f.count} video${f.count === 1 ? '' : 's'} · ${esc(splitPath(f.path).parent)}</div></div>
         <button class="btn-ghost btn" data-act="open" data-folder="${esc(f.path)}">Open</button>
         <button class="btn-ghost btn" data-act="remove" data-folder="${esc(f.path)}">Remove</button>
       </li>`).join('')}</ul>
@@ -191,7 +203,7 @@ function render() {
 
     <section class="card">
       <h2>Settings</h2>
-      <div class="setting" style="margin-top:14px"><div><b>Start with Windows</b><span>HOMEFLIX starts quietly in the tray when you sign in.</span></div>
+      <div class="setting" style="margin-top:14px"><div><b>${mac ? 'Start at login' : 'Start with Windows'}</b><span>HOMEFLIX starts quietly in ${trayWord} when you sign in.</span></div>
         <label class="switch"><input type="checkbox" id="login" ${s.openAtLogin ? 'checked' : ''}><i></i></label></div>
       <div class="setting"><div><b>Storage used</b><span>${s.cacheBytes ? `Converted copies use ${fmtBytes(s.cacheBytes)}. The oldest are removed automatically when the laptop runs low on space, and they’re made again when needed.` : 'No converted copies yet. MKV and other files get one the first time you play them.'}</span></div>
         <button class="btn" data-act="clear" ${s.cacheBytes ? '' : 'disabled'}>Free up space</button></div>
@@ -201,8 +213,9 @@ function render() {
       <h2>Help</h2>
       <details><summary>The page won’t open on my iPad or phone</summary><ul>
         <li>Check both are on the same Wi-Fi (not mobile data, not a guest network).</li>
-        <li>Your home Wi-Fi should be set to <b>Private</b> in Windows network settings, and HOMEFLIX allowed on home networks. The banner at the top of this window tells you if either needs doing.</li>
-        <li>To check by hand: Windows Security → Firewall &amp; network protection → Allow an app through firewall → Change settings → HOMEFLIX should have <b>Private</b> ticked.</li>
+        ${mac ? `<li>If your Mac asked whether HOMEFLIX may <b>accept incoming network connections</b>, it must be <b>Allow</b>. To change it later: System Settings → Network → Firewall → Options → HOMEFLIX → Allow incoming connections.</li>`
+          : `<li>Your home Wi-Fi should be set to <b>Private</b> in Windows network settings, and HOMEFLIX allowed on home networks. The banner at the top of this window tells you if either needs doing.</li>
+        <li>To check by hand: Windows Security → Firewall &amp; network protection → Allow an app through firewall → Change settings → HOMEFLIX should have <b>Private</b> ticked.</li>`}
         <li>Keep this laptop awake and plugged in while you watch.</li>
       </ul></details>
       <details><summary>A movie won’t play</summary><ul>

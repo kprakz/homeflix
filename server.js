@@ -716,7 +716,8 @@ function publicItem({ path: _p, ...rest }) {
 // Home-network IPv4 addresses, real Wi-Fi/Ethernet first. Virtual adapters (Hyper-V, WSL, VirtualBox,
 // VPNs) can't be reached from a phone, so they go last.
 function lanAddresses() {
-  const virtual = /vEthernet|Virtual|VMware|WSL|Hyper-V|Loopback|Bluetooth|Tailscale|ZeroTier|VPN|TAP/i;
+  // (utun/awdl/llw/bridge/anpi: macOS VPN, AirDrop, Wi-Fi low-latency, bridges and internal links)
+  const virtual = /vEthernet|Virtual|VMware|WSL|Hyper-V|Loopback|Bluetooth|Tailscale|ZeroTier|VPN|TAP|^utun|^awdl|^llw|^bridge|^anpi|^ap\d/i;
   return Object.entries(os.networkInterfaces())
     .flatMap(([name, addrs]) => (addrs || []).map((a) => ({ name, ...a })))
     .filter((a) => a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.'))

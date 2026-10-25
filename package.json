@@ -12,7 +12,8 @@
     "serve": "node server.js",
     "ffmpeg": "node scripts/get-ffmpeg.mjs",
     "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-icons.ps1",
-    "dist": "node scripts/get-ffmpeg.mjs && electron-builder --win --publish never"
+    "dist": "node scripts/get-ffmpeg.mjs && electron-builder --win --publish never",
+    "dist:mac": "node scripts/get-ffmpeg.mjs && electron-builder --mac --publish never"
   },
   "dependencies": {
     "hls.js": "^1.7.3",
@@ -62,6 +63,23 @@
       "runAfterFinish": true,
       "include": "build/installer.nsh",
       "artifactName": "HOMEFLIX-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg"
+        }
+      ],
+      "category": "public.app-category.video",
+      "icon": "build/icon.png",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "notarize": false,
+      "artifactName": "HOMEFLIX-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "HOMEFLIX ${version}"
     }
   }
 }

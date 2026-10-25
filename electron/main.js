@@ -1,18 +1,29 @@
-// HOMEFLIX desktop app: runs the streaming server in the background, lives in the system tray,
-// and gives a small window to pick movie folders and see the address to open on other devices.
+// HOMEFLIX desktop app (Windows and macOS): runs the streaming server in the background, lives in
+// the system tray / menu bar, and gives a small window to pick movie folders and see the address to
+// open on other devices.
 
-const { app, BrowserWindow, Tray, Menu, dialog, ipcMain, shell, clipboard, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, dialog, ipcMain, shell, clipboard, nativeImage } = require('electron');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const { execFile } = require('child_process');
 const QRCode = require('qrcode');
 const homeflix = require('../server');
 
+const IS_WIN = process.platform === 'win32';
+const IS_MAC = process.platform === 'darwin';
 const ICON = path.join(__dirname, 'icon.png');
-const TRAY_ICON = path.join(__dirname, 'tray.png');
+// macOS menu-bar icons are "template" images (black + transparency) that the system tints.
+const TRAY_ICON = path.join(__dirname, IS_MAC ? 'trayTemplate.png' : 'tray.png');
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
-const CACHE_DIR = path.join(process.env.LOCALAPPDATA || app.getPath('userData'), 'HOMEFLIX', 'cache');
+// Converted copies can be many GB: keep them where each system expects caches.
+const CACHE_DIR = IS_WIN
+  ? path.join(process.env.LOCALAPPDATA || app.getPath('userData'), 'HOMEFLIX', 'cache')
+  : IS_MAC
+    ? path.join(os.homedir(), 'Library', 'Caches', 'HOMEFLIX')
+    : path.join(app.getPath('userData'), 'cache');
 const FFMPEG_DIR = app.isPackaged ? path.join(process.resourcesPath, 'ffmpeg') : path.join(__dirname, '..', 'vendor', 'ffmpeg');
+const EXE = IS_WIN ? '.exe' : '';
 
 let settings = { folders: [], port: 8080, openAtLogin: false };
 let port = null;
@@ -45,8 +56,8 @@ function applyConfig() {
   homeflix.configure({
     folders: settings.folders,
     cacheDir: CACHE_DIR,
-    ffmpeg: path.join(FFMPEG_DIR, 'ffmpeg.exe'),
-    ffprobe: path.join(FFMPEG_DIR, 'ffprobe.exe'),
+    ffmpeg: path.join(FFMPEG_DIR, 'ffmpeg' + EXE),
+    ffprobe: path.join(FFMPEG_DIR, 'ffprobe' + EXE),
   });
 }
 
@@ -73,13 +84,18 @@ async function startServer() {
 }
 
 async function boot() {
-  app.setAppUserModelId('com.homeflix.app');
+  if (IS_WIN) app.setAppUserModelId('com.homeflix.app');
   loadSettings();
   applyConfig();
   await startServer();
   createTray();
-  if (!process.argv.includes('--hidden')) showWindow();
+  // Started at sign-in: stay in the tray / menu bar. (Windows passes --hidden; macOS reports it.)
+  const atLogin = process.argv.includes('--hidden') || (IS_MAC && app.getLoginItemSettings().wasOpenedAtLogin);
+  if (!atLogin) showWindow();
 }
+
+// macOS: clicking the Dock icon brings the window back.
+app.on('activate', () => showWindow());
 
 function address() {
   const ip = homeflix.lanAddresses()[0];
@@ -132,7 +148,9 @@ function showWindow() {
     win.hide();
     if (!toldAboutTray) {
       toldAboutTray = true;
-      tray.displayBalloon({ iconType: 'info', title: 'HOMEFLIX is still running', content: 'Your movies stay available. Right-click the HOMEFLIX icon here to quit.' });
+      const title = 'HOMEFLIX is still running';
+      if (IS_WIN) tray.displayBalloon({ iconType: 'info', title, content: 'Your movies stay available. Right-click the HOMEFLIX icon here to quit.' });
+      else if (Notification.isSupported()) new Notification({ title, body: 'Your movies stay available. Quit from the HOMEFLIX icon in the menu bar.', silent: true }).show();
     }
   });
   win.on('closed', () => (win = null));
@@ -150,6 +168,7 @@ app.on('window-all-closed', () => {}); // stay in the tray
 const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
 let networkCheck = { at: 0, value: null };
 function networkStatus() {
+  if (!IS_WIN) return Promise.resolve(null); // macOS asks once ("accept incoming connections?") by itself
   if (Date.now() - networkCheck.at < 30000) return Promise.resolve(networkCheck.value);
   const script = [
     `$exe = ${psQuote(process.execPath)}`,
@@ -210,7 +229,8 @@ async function state() {
     openAtLogin: settings.openAtLogin,
     cacheBytes: await homeflix.cacheSize(),
     network: await networkStatus(),
-    ffmpegFound: fs.existsSync(path.join(FFMPEG_DIR, 'ffmpeg.exe')),
+    ffmpegFound: fs.existsSync(path.join(FFMPEG_DIR, 'ffmpeg' + EXE)),
+    platform: process.platform,
   };
 }
 
@@ -244,7 +264,7 @@ ipcMain.handle('open-folder', (_e, folder) => shell.openPath(folder));
 ipcMain.handle('open-browser', () => port && shell.openExternal(`http://localhost:${port}`));
 ipcMain.handle('open-wifi-settings', () => {
   networkCheck.at = 0; // look again when the user comes back
-  return shell.openExternal('ms-settings:network-status');
+  return shell.openExternal(IS_WIN ? 'ms-settings:network-status' : 'x-apple.systempreferences:com.apple.Network-Settings.extension');
 });
 ipcMain.handle('allow-firewall', async () => ({ result: await allowOnHomeNetworks(), state: await state() }));
 ipcMain.handle('copy', (_e, text) => clipboard.writeText(String(text)));
@@ -252,7 +272,7 @@ ipcMain.handle('copy', (_e, text) => clipboard.writeText(String(text)));
 ipcMain.handle('set-open-at-login', (_e, on) => {
   settings.openAtLogin = !!on;
   saveSettings();
-  app.setLoginItemSettings({ openAtLogin: settings.openAtLogin, args: ['--hidden'] });
+  app.setLoginItemSettings(IS_WIN ? { openAtLogin: settings.openAtLogin, args: ['--hidden'] } : { openAtLogin: settings.openAtLogin });
   return state();
 });
 

@@ -3,7 +3,7 @@
 Add-Type -AssemblyName System.Drawing
 $root = Split-Path $PSScriptRoot
 
-function New-Icon([int]$size, [string]$out, [bool]$background) {
+function New-Icon([int]$size, [string]$out, [bool]$background, [bool]$mono = $false) {
     $bmp = New-Object System.Drawing.Bitmap $size, $size
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = 'AntiAlias'
@@ -18,7 +18,8 @@ function New-Icon([int]$size, [string]$out, [bool]$background) {
         $g.FillPath((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 20, 20, 20))), $p)
     }
     # The letter is drawn as three bars so it looks the same on every PC, whatever fonts are installed.
-    $red = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 229, 9, 20))
+    # macOS menu-bar ("template") icons must be black on transparent; the system tints them.
+    $red = New-Object System.Drawing.SolidBrush $(if ($mono) { [System.Drawing.Color]::Black } else { [System.Drawing.Color]::FromArgb(255, 229, 9, 20) })
     $pad = if ($background) { $size * 0.24 } else { $size * 0.08 }
     $h = $size - 2 * $pad
     $bar = $h * 0.27
@@ -64,4 +65,7 @@ New-Icon 192 (Join-Path $root 'public\icon-192.png') $true
 New-Icon 512 (Join-Path $root 'public\icon-512.png') $true
 New-Icon 180 (Join-Path $root 'public\apple-touch-icon.png') $true
 New-Icon 32 (Join-Path $root 'electron\tray.png') $false
+# macOS menu bar: 18 pt, plus @2x for Retina screens.
+New-Icon 18 (Join-Path $root 'electron\trayTemplate.png') $false $true
+New-Icon 36 (Join-Path $root 'electron\trayTemplate@2x.png') $false $true
 "Icons written."
