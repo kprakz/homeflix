@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HOMEFLIX: your movies on every screen in the house</title>
+<meta name="description" content="HOMEFLIX turns your Windows laptop into a private Netflix for your home. Watch the movies on your laptop from your iPhone, iPad, Android phone or smart TV over your own Wi-Fi. Free, no account, nothing uploaded.">
+<meta name="theme-color" content="#0b0b0b">
+<meta property="og:title" content="HOMEFLIX: your movies on every screen in the house">
+<meta property="og:description" content="A private Netflix for your home. Watch the movies on your laptop from your phone, iPad or TV. Free for Windows.">
+<meta property="og:image" content="icon.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b0b; --bg-2: #141414; --panel: #1a1a1a; --panel-2: #222; --line: #2b2b2b;
+    --text: #f5f5f5; --muted: #a8a8a8; --dim: #767676;
+    --red: #e50914; --red-hover: #f6121d; --red-soft: rgba(229, 9, 20, .14); --green: #46d369;
+    --display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+    --body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --max: 1160px;
+    --pad: clamp(16px, 4vw, 40px);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 var(--body); overflow-x: hidden; }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 var(--pad); }
+  .display { font-family: var(--display); font-weight: 400; letter-spacing: .01em; line-height: .95; }
+
+  /* ---------- top bar ---------- */
+  .bar { position: sticky; top: 0; z-index: 20; background: rgba(11, 11, 11, .78); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255,255,255,.06); }
+  .bar .wrap { display: flex; align-items: center; gap: 28px; height: 68px; }
+  .logo { font-family: var(--display); font-size: 34px; color: var(--red); letter-spacing: .04em; text-decoration: none; line-height: 1; }
+  .bar nav { display: flex; gap: 24px; font-size: 15px; }
+  .bar nav a { color: #d6d6d6; text-decoration: none; }
+  .bar nav a:hover { color: #fff; }
+  .bar .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .gh { display: inline-flex; color: #d6d6d6; }
+  .gh:hover { color: #fff; }
+  .gh svg { width: 24px; height: 24px; }
+  @media (max-width: 760px) { .bar nav { display: none; } .bar .btn-sm span.long { display: none; } }
+
+  /* ---------- buttons ---------- */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 0; border-radius: 6px; padding: 15px 26px; font: 700 17px/1 var(--body); text-decoration: none; cursor: pointer; transition: background .15s, transform .15s; }
+  .btn svg { width: 22px; height: 22px; flex: none; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-red:hover { background: var(--red-hover); }
+  .btn-red:active { transform: translateY(1px); }
+  .btn-ghost { background: rgba(255,255,255,.1); color: #fff; }
+  .btn-ghost:hover { background: rgba(255,255,255,.16); }
+  .btn-sm { padding: 10px 16px; font-size: 14px; }
+  .btn:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; padding: clamp(48px, 9vw, 110px) 0 clamp(40px, 6vw, 80px); overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: -20% -10% auto; height: 120%; background: radial-gradient(60% 55% at 70% 30%, rgba(229,9,20,.28), transparent 70%), radial-gradient(40% 40% at 10% 0%, rgba(229,9,20,.12), transparent 70%); pointer-events: none; }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: clamp(32px, 5vw, 64px); align-items: center; }
+  @media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #ddd; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); padding: 6px 12px; border-radius: 99px; }
+  .eyebrow b { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(70,211,105,.18); }
+  .hero h1 { font-size: clamp(56px, 8.2vw, 104px); margin: 20px 0 18px; }
+  .hero h1 em { font-style: normal; color: var(--red); }
+  .hero .lead { font-size: clamp(17px, 1.6vw, 20px); color: #cfcfcf; max-width: 560px; margin: 0 0 30px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .dl-meta { margin-top: 14px; font-size: 14px; color: var(--muted); }
+  .dl-meta span + span::before { content: "·"; margin: 0 8px; color: var(--dim); }
+
+  /* ---------- device mockups (drawn, not screenshots) ---------- */
+  .devices { position: relative; aspect-ratio: 1.15; }
+  .tv { position: absolute; left: 0; right: 9%; top: 4%; aspect-ratio: 16 / 10; background: #050505; border: 10px solid #1d1d1d; border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.05); overflow: hidden; }
+  .tv::after { content: ""; position: absolute; left: 50%; bottom: -26px; width: 30%; height: 10px; transform: translateX(-50%); background: #1d1d1d; border-radius: 0 0 8px 8px; }
+  .phone { position: absolute; right: 0; bottom: 2%; width: 34%; aspect-ratio: 9 / 19; background: #050505; border: 7px solid #1d1d1d; border-radius: 26px; box-shadow: 0 24px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06); overflow: hidden; }
+  .ui { position: absolute; inset: 0; display: flex; flex-direction: column; background: #141414; font-family: var(--body); }
+  .ui-top { display: flex; align-items: center; gap: 8%; padding: 4% 5%; font-family: var(--display); color: var(--red); font-size: clamp(10px, 1.5vw, 18px); letter-spacing: .04em; }
+  .ui-top i { display: block; height: 4px; width: 9%; border-radius: 2px; background: #555; }
+  .ui-hero { position: relative; flex: 0 0 46%; margin: 0 5%; border-radius: 6px; overflow: hidden; background: linear-gradient(120deg, #3a0c12, #8a1520 45%, #d9822b); }
+  .ui-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(77deg, rgba(0,0,0,.7), transparent 60%); }
+  .ui-hero b { position: absolute; z-index: 1; left: 6%; bottom: 30%; font: 400 clamp(14px, 2.4vw, 30px)/1 var(--display); color: #fff; letter-spacing: .02em; }
+  .ui-hero s { position: absolute; z-index: 1; left: 6%; bottom: 12%; width: 22%; height: 11%; border-radius: 3px; background: #fff; text-decoration: none; }
+  .ui-hero s + s { left: 31%; background: rgba(255,255,255,.3); }
+  .ui-row { display: flex; gap: 3%; padding: 5% 5% 0; }
+  .ui-row div { flex: 1; aspect-ratio: 16 / 9; border-radius: 4px; position: relative; overflow: hidden; }
+  .ui-row div::after { content: ""; position: absolute; left: 0; bottom: 0; height: 8%; width: var(--p, 0%); background: var(--red); }
+  .c1 { background: linear-gradient(135deg, #1d4e89, #0a1f3a); } .c2 { background: linear-gradient(135deg, #2f6b3a, #0e2a14); } .c3 { background: linear-gradient(135deg, #6b2f63, #24102a); } .c4 { background: linear-gradient(135deg, #8a6a1f, #2c2108); } .c5 { background: linear-gradient(135deg, #2a6f78, #0a2629); } .c6 { background: linear-gradient(135deg, #7a2e2e, #2a0d0d); }
+  .phone .ui-top { font-size: clamp(9px, 1.1vw, 13px); padding: 9% 7% 6%; }
+  .phone .ui-hero { flex-basis: 38%; margin: 0 7%; }
+  .phone .ui-hero b { font-size: clamp(10px, 1.5vw, 18px); }
+  .phone .ui-row { padding: 9% 7% 0; gap: 5%; }
+  .phone .ui-row div { aspect-ratio: 2 / 3; }
+  .badge { position: absolute; z-index: 3; left: -2%; bottom: 10%; display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: rgba(20,20,20,.92); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.6); font-size: 13px; line-height: 1.35; }
+  .badge svg { width: 30px; height: 30px; flex: none; color: var(--red); }
+  .badge b { display: block; font-size: 14px; }
+  .badge span { color: var(--muted); }
+  @media (max-width: 520px) { .badge { display: none; } }
+
+  /* ---------- sections ---------- */
+  section { padding: clamp(56px, 8vw, 104px) 0; }
+  .section-head { max-width: 680px; margin-bottom: clamp(32px, 4vw, 52px); }
+  .kicker { color: var(--red); font-weight: 800; font-size: 13px; letter-spacing: .18em; text-transform: uppercase; }
+  h2 { font: 400 clamp(40px, 5.4vw, 64px)/.98 var(--display); margin: 10px 0 14px; letter-spacing: .01em; }
+  .section-head p { color: var(--muted); margin: 0; font-size: 18px; }
+  .alt { background: var(--bg-2); border-top: 1px solid rgba(255,255,255,.04); border-bottom: 1px solid rgba(255,255,255,.04); }
+
+  /* how it works */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: step; }
+  @media (max-width: 820px) { .steps { grid-template-columns: 1fr; } }
+  .step { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 26px 24px 24px; counter-increment: step; }
+  .step::before { content: counter(step); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--red); font: 400 24px/1 var(--display); margin-bottom: 18px; }
+  .step h3 { margin: 0 0 6px; font-size: 20px; }
+  .step p { margin: 0; color: var(--muted); font-size: 16px; }
+
+  /* features */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 980px) { .features { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 620px) { .features { grid-template-columns: 1fr; } }
+  .feature { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; transition: border-color .2s, transform .2s; }
+  .feature:hover { border-color: #3a3a3a; transform: translateY(-2px); }
+  .feature .ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; background: var(--red-soft); color: var(--red); margin-bottom: 16px; }
+  .feature .ic svg { width: 24px; height: 24px; }
+  .feature h3 { margin: 0 0 6px; font-size: 18px; }
+  .feature p { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+  /* screens */
+  .screens { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 860px) { .screens { grid-template-columns: repeat(2, 1fr); } }
+  .screen { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 20px; }
+  .screen svg { width: 34px; height: 34px; color: #fff; margin-bottom: 14px; }
+  .screen h3 { margin: 0 0 4px; font-size: 17px; }
+  .screen p { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+  /* download */
+  .download { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 4vw, 56px); align-items: start; }
+  @media (max-width: 880px) { .download { grid-template-columns: 1fr; } }
+  .dl-card { background: linear-gradient(160deg, #1d1d1d, #141414); border: 1px solid var(--line); border-radius: 18px; padding: clamp(24px, 3vw, 36px); }
+  .dl-card img { width: 72px; height: 72px; border-radius: 16px; margin-bottom: 18px; }
+  .dl-card h3 { font: 400 40px/1 var(--display); margin: 0 0 8px; letter-spacing: .02em; }
+  .dl-card p { color: var(--muted); margin: 0 0 22px; }
+  .dl-card .btn { width: 100%; }
+  .dl-card .small { font-size: 14px; color: var(--dim); margin-top: 14px; }
+  .dl-card .small a { color: var(--muted); }
+  .install { list-style: none; margin: 0; padding: 0; counter-reset: i; }
+  .install li { position: relative; padding: 0 0 22px 52px; counter-increment: i; }
+  .install li::before { content: counter(i); position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #3a3a3a; font-weight: 800; font-size: 15px; color: #ddd; }
+  .install li b { display: block; font-size: 17px; }
+  .install li span { color: var(--muted); font-size: 15.5px; }
+  .note { margin-top: 6px; padding: 14px 16px; border-radius: 10px; background: rgba(245,179,1,.08); border: 1px solid rgba(245,179,1,.28); font-size: 14.5px; color: #e8d9a8; }
+
+  /* faq */
+  .faq { max-width: 820px; }
+  details { border-bottom: 1px solid var(--line); }
+  details summary { list-style: none; cursor: pointer; padding: 20px 40px 20px 0; position: relative; font-weight: 600; font-size: 18px; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "+"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 28px; font-weight: 300; color: var(--muted); transition: transform .2s; }
+  details[open] summary::after { transform: translateY(-50%) rotate(45deg); }
+  details p { margin: -6px 0 20px; color: var(--muted); font-size: 16px; }
+
+  /* footer */
+  footer { padding: 40px 0 56px; border-top: 1px solid rgba(255,255,255,.06); color: var(--dim); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+  footer .logo { font-size: 26px; }
+  footer a { color: var(--muted); }
+  footer .fine { flex-basis: 100%; font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="HOMEFLIX home">HOMEFLIX</a>
+    <nav aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#screens">Devices</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="right">
+      <a class="gh" href="https://github.com/kprakz/homeflix" aria-label="HOMEFLIX on GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
+      <a class="btn btn-red btn-sm" href="#download"><span>Download<span class="long">&nbsp;free</span></span></a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <span class="eyebrow"><b></b>Free for Windows · No account</span>
+        <h1 class="display">Your movies.<br><em>Every screen</em><br>in the house.</h1>
+        <p class="lead">HOMEFLIX turns your Windows laptop into a private Netflix for your home. Watch the films already on your laptop from your iPhone, iPad, Android phone or smart TV, over your own Wi-Fi.</p>
+        <div class="cta">
+          <a class="btn btn-red" data-download href="https://github.com/kprakz/homeflix/releases/latest">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.6 10.4 4.6v7.1H3V5.6Zm0 12.8 7.4 1v-7H3v6Zm8.2 1.1L21 21v-8.4h-9.8v6.9Zm0-15V11.7H21V3l-9.8 1.5Z"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn btn-ghost" href="#how">How it works</a>
+        </div>
+        <div class="dl-meta"><span data-version>Latest version</span><span data-size>Windows 10 &amp; 11</span><span>Free</span></div>
+      </div>
+
+      <div class="devices" aria-hidden="true">
+        <div class="tv">
+          <div class="ui">
+            <div class="ui-top">HOMEFLIX <i></i><i></i><i></i></div>
+            <div class="ui-hero"><b>MIDNIGHT HARBOUR</b><s></s><s></s></div>
+            <div class="ui-row"><div class="c1" style="--p:60%"></div><div class="c2"></div><div class="c3" style="--p:25%"></div><div class="c4"></div></div>
+            <div class="ui-row"><div class="c5"></div><div class="c6"></div><div class="c1"></div><div class="c3"></div></div>
+          </div>
+        </div>
+        <div class="phone">
+          <div class="ui">
+            <div class="ui-top">HOMEFLIX</div>
+            <div class="ui-hero"><b>MIDNIGHT HARBOUR</b><s></s><s></s></div>
+            <div class="ui-row"><div class="c2" style="--p:70%"></div><div class="c4"></div><div class="c6"></div></div>
+            <div class="ui-row"><div class="c5"></div><div class="c1"></div><div class="c3"></div></div>
+          </div>
+        </div>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+          <div><b>Stays in your home</b><span>Nothing is uploaded, ever</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">How it works</div>
+        <h2>Three steps. Then just press play.</h2>
+        <p>No account to create, no cloud, no subscription. HOMEFLIX runs quietly on your laptop and your other screens open it like a website.</p>
+      </div>
+      <div class="steps">
+        <div class="step"><h3>Install and pick your folder</h3><p>Download HOMEFLIX, run the installer and choose the folder where your movies are. Sub-folders are included.</p></div>
+        <div class="step"><h3>Scan the code</h3><p>On your phone, iPad or TV, connect to the same Wi-Fi and scan the QR code HOMEFLIX shows, or type its address into the browser.</p></div>
+        <div class="step"><h3>Watch</h3><p>Browse your films and shows like on Netflix and press play. Each device remembers where you stopped.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Features</div>
+        <h2>Feels like streaming. Plays like your laptop.</h2>
+        <p>HOMEFLIX handles the awkward parts, like file formats, languages and quiet soundtracks, so every device just plays.</p>
+      </div>
+      <div class="features">
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><h3>A home screen you already know</h3><p>Big banner, rows of titles, Continue Watching, series grouped by season with the next episode playing on its own.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v5M15 4v5"/></svg></div><h3>Plays MKV and almost anything</h3><p>MKV, MP4, AVI and more. Files a device can't play directly are converted on the fly, using your laptop's graphics chip when it can.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14M5 12h9M5 16h6"/><circle cx="18" cy="16" r="3"/></svg></div><h3>Audio languages and subtitles</h3><p>Switch between Tamil, Hindi, English or whatever the file carries, mid-movie. Subtitles from the file or a .srt next to it.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></div><h3>Volume boost</h3><p>Films mixed quietly for cinemas get a one-tap boost on phones and TVs, about twice as loud, without distortion.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/><path d="M9 7h6M9 11h6"/></svg></div><h3>Made for the remote too</h3><p>On a smart TV, move around with the arrows and OK, and pause, skip and pick subtitles from on-screen controls.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><h3>Private by design</h3><p>Works only inside your own network. No accounts, no tracking, nothing sent to the internet. Your movies never leave the house.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Every screen</div>
+        <h2>If it has a browser, it plays.</h2>
+        <p>Nothing to install on your other devices. Open the address once and add it to the home screen for an app icon.</p>
+      </div>
+      <div class="screens">
+        <div class="screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg><h3>iPhone</h3><p>Safari, with Add to Home Screen.</p></div>
+        <div class="screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="2" width="17" height="20" rx="2.5"/><path d="M11 18.5h2"/></svg><h3>iPad</h3><p>Big-screen browsing, AirPlay to a TV.</p></div>
+        <div class="screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M9 5h6"/></svg><h3>Android</h3><p>Chrome, installable as an app.</p></div>
+        <div class="screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><h3>Smart TV</h3><p>Samsung, LG, Android TV and Fire TV browsers.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap download">
+      <div class="dl-card">
+        <img src="icon.png" alt="" width="72" height="72">
+        <h3>HOMEFLIX for Windows</h3>
+        <p>Free. For Windows 10 and 11 (64-bit). Includes everything it needs, with nothing else to install.</p>
+        <a class="btn btn-red" data-download href="https://github.com/kprakz/homeflix/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+          <span data-download-label>Download HOMEFLIX</span>
+        </a>
+        <div class="small"><span data-download-detail>Opens the latest release on GitHub.</span> · <a href="https://github.com/kprakz/homeflix/releases">All versions &amp; what's new</a></div>
+      </div>
+      <div>
+        <div class="kicker">Installing</div>
+        <h2 style="margin-bottom:26px">Up and running in five minutes.</h2>
+        <ol class="install">
+          <li><b>Run the installer</b><span>Open the downloaded <code>HOMEFLIX-Setup</code> file. No admin password needed.</span></li>
+          <li><b>Choose your movies folder</b><span>For example Downloads or Videos. You can add more folders later.</span></li>
+          <li><b>Allow it on your home network</b><span>If HOMEFLIX asks, click <em>Allow on home networks</em> and say Yes. Set your home Wi-Fi to Private in Windows if it suggests it.</span></li>
+          <li><b>Scan and watch</b><span>Point your phone's camera at the QR code. That's it.</span></li>
+        </ol>
+        <div class="note"><b>"Windows protected your PC"?</b> Windows shows this for new apps from small publishers. Click <b>More info</b>, then <b>Run anyway</b>. HOMEFLIX is open source, so you can <a href="https://github.com/kprakz/homeflix">read every line</a>.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="alt">
+    <div class="wrap faq">
+      <div class="section-head">
+        <div class="kicker">Questions</div>
+        <h2>Good to know.</h2>
+      </div>
+      <details><summary>Is it really free?</summary><p>Yes. There's no subscription, no account and no ads. HOMEFLIX is open source on GitHub.</p></details>
+      <details><summary>Does it upload my movies anywhere?</summary><p>No. Your laptop streams straight to your devices over your own Wi-Fi. Nothing goes to the internet, and there's no tracking. Anyone on your Wi-Fi can open the page, so use it on networks you trust.</p></details>
+      <details><summary>Can I watch when I'm away from home?</summary><p>No. HOMEFLIX only works inside your home network. That's what keeps it simple and private.</p></details>
+      <details><summary>What do I need?</summary><p>A Windows 10 or 11 laptop or PC with your movies on it, and your devices on the same Wi-Fi. Keep the laptop awake and plugged in while you watch. The movie plays on your phone or TV, not on the laptop.</p></details>
+      <details><summary>Which file formats work?</summary><p>MP4, MKV, MOV, AVI, WebM, TS and more, including HEVC (x265). If a device can't play a file directly, HOMEFLIX converts it as it plays. Subtitles inside the file, or a .srt or .vtt file next to it, show up in the player.</p></details>
+      <details><summary>Does it work on Mac or Linux?</summary><p>The app that serves the movies is Windows-only for now. The devices you watch on can be anything with a modern browser.</p></details>
+      <details><summary>Why does Windows warn me when I install it?</summary><p>New apps without an expensive code-signing certificate get a SmartScreen warning at first. Click <b>More info</b> → <b>Run anyway</b>.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="logo">HOMEFLIX</span>
+    <a href="https://github.com/kprakz/homeflix">Source code</a>
+    <a href="https://github.com/kprakz/homeflix/releases">Releases</a>
+    <a href="https://github.com/kprakz/homeflix#readme">Help &amp; troubleshooting</a>
+    <span class="fine">HOMEFLIX plays files you already have; please only use it with media you have the right to watch. Not affiliated with Netflix. Includes FFmpeg, licensed under the GPL.</span>
+  </div>
+</footer>
+
+<script>
+// Point every download button at the newest installer. The GitHub API tells us its name, version
+// and size; if that fails, the buttons keep linking to the latest release page.
+(async () => {
+  try {
+    const r = await fetch('https://api.github.com/repos/kprakz/homeflix/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) return;
+    const release = await r.json();
+    const exe = (release.assets || []).find((a) => /\.exe$/i.test(a.name));
+    if (!exe) return;
+    const version = String(release.tag_name || '').replace(/^v/, '');
+    const mb = Math.round(exe.size / 1e6);
+    document.querySelectorAll('[data-download]').forEach((a) => {
+      a.href = exe.browser_download_url;
+      a.setAttribute('download', '');
+    });
+    document.querySelectorAll('[data-version]').forEach((el) => (el.textContent = `Version ${version}`));
+    document.querySelectorAll('[data-size]').forEach((el) => (el.textContent = `${mb} MB`));
+    document.querySelectorAll('[data-download-label]').forEach((el) => (el.textContent = `Download HOMEFLIX ${version}`));
+    document.querySelectorAll('[data-download-detail]').forEach((el) => (el.textContent = `${exe.name} · ${mb} MB`));
+  } catch {}
+})();
+</script>
+</body>
+</html>
