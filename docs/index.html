@@ -58,7 +58,8 @@
   .btn:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 
   /* ---------- hero ---------- */
-  .hero { position: relative; padding: clamp(48px, 9vw, 110px) 0 clamp(40px, 6vw, 80px); overflow: hidden; }
+  /* Clip the glow sideways only, so the macOS dropdown can open below the hero. */
+  .hero { position: relative; z-index: 2; padding: clamp(48px, 9vw, 110px) 0 clamp(40px, 6vw, 80px); overflow-x: clip; overflow-y: visible; }
   .hero::before { content: ""; position: absolute; inset: -20% -10% auto; height: 120%; background: radial-gradient(60% 55% at 70% 30%, rgba(229,9,20,.28), transparent 70%), radial-gradient(40% 40% at 10% 0%, rgba(229,9,20,.12), transparent 70%); pointer-events: none; }
   .hero .wrap { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: clamp(32px, 5vw, 64px); align-items: center; }
   @media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } }
@@ -72,6 +73,21 @@
   .dl-meta span + span::before { content: "·"; margin: 0 8px; color: var(--dim); }
   .dl-alt { margin-top: 6px; font-size: 14px; color: var(--dim); }
   .dl-alt a { color: var(--muted); }
+
+  /* macOS dropdown in the hero */
+  .dd { position: relative; display: inline-flex; }
+  .btn .caret { width: 18px; height: 18px; margin-left: -2px; transition: transform .15s; }
+  .dd .btn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+  .dd-menu { position: absolute; z-index: 30; top: calc(100% + 8px); left: 0; min-width: 100%; width: max-content; max-width: min(340px, calc(100vw - 32px)); padding: 6px; background: #1c1c1c; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.6); }
+  .dd-menu[hidden] { display: none; }
+  .dd-menu a { display: block; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: #fff; }
+  .dd-menu a:hover, .dd-menu a:focus-visible { background: #2a2a2a; outline: none; }
+  .dd-menu a b { display: block; font-size: 15px; }
+  .dd-menu a .sub { display: block; font-size: 13px; color: var(--muted); }
+  .dd-menu a .rec { margin-left: 8px; padding: 2px 7px; border-radius: 99px; background: var(--red-soft); color: #ff6b73; font-size: 11px; font-weight: 700; vertical-align: 2px; }
+  .dd-menu a[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+  .dd-hint { padding: 8px 12px 6px; font-size: 12.5px; color: var(--dim); border-top: 1px solid var(--line); margin-top: 4px; }
+  @media (max-width: 520px) { .cta > .btn, .cta > .dd, .cta > .dd > .btn { width: 100%; } .dd-menu { right: 0; } }
 
   /* ---------- device mockups (drawn, not screenshots) ---------- */
   .devices { position: relative; aspect-ratio: 1.15; }
@@ -218,13 +234,25 @@
         <span class="eyebrow"><b></b>Free for Windows &amp; Mac · No account</span>
         <h1 class="display">Your movies.<br><em>Every screen</em><br>in the house.</h1>
         <p class="lead">HOMEFLIX turns your Windows PC or Mac into a private Netflix for your home. Watch the films already on your computer from your iPhone, iPad, Android phone or smart TV, over your own Wi-Fi.</p>
+        <!-- One button per system. The script at the end points them at the latest release and makes the
+             visitor's own system the red one; without it they lead to the download section. -->
         <div class="cta">
-          <!-- Filled in for the visitor's system by the script at the end; works as a plain link without it. -->
-          <a class="btn btn-red" id="heroDownload" href="#download">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
-            Download free
+          <a class="btn btn-red" id="heroWin" data-asset="win" href="#download">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.6 10.4 4.6v7.1H3V5.6Zm0 12.8 7.4 1v-7H3v6Zm8.2 1.1L21 21v-8.4h-9.8v6.9Zm0-15V11.7H21V3l-9.8 1.5Z"/></svg>
+            Download for Windows
           </a>
-          <a class="btn btn-ghost" href="#how">How it works</a>
+          <div class="dd" id="macDd">
+            <button class="btn btn-ghost" id="heroMac" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="macMenu">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7a4.5 4.5 0 0 0-3.5-1.9c-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8A4.7 4.7 0 0 0 4.2 9.5c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7 0 0-2.4-.9-2.4-4ZM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.8-1.4Z"/></svg>
+              Download for macOS
+              <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="dd-menu" id="macMenu" role="menu" hidden>
+              <a role="menuitem" data-asset="mac-arm64" href="#download"><b>Apple Silicon</b><span class="sub">M1, M2, M3 and M4 Macs</span></a>
+              <a role="menuitem" data-asset="mac-x64" href="#download"><b>Intel</b><span class="sub">Older Macs with an Intel processor</span></a>
+              <div class="dd-hint">Not sure? Apple menu → About This Mac. "Chip: Apple M…" means Apple Silicon.</div>
+            </div>
+          </div>
         </div>
         <div class="dl-meta" id="heroMeta"><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Free</span></div>
         <div class="dl-alt" id="heroAlt"></div>
@@ -410,8 +438,6 @@
 // files; until it answers (or if it can't), every button links to the latest-release page.
 window.releaseReady = (async () => {
   const $ = (id) => document.getElementById(id);
-  const ICON_WIN = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.6 10.4 4.6v7.1H3V5.6Zm0 12.8 7.4 1v-7H3v6Zm8.2 1.1L21 21v-8.4h-9.8v6.9Zm0-15V11.7H21V3l-9.8 1.5Z"/></svg>';
-  const ICON_MAC = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7a4.5 4.5 0 0 0-3.5-1.9c-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8A4.7 4.7 0 0 0 4.2 9.5c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7 0 0-2.4-.9-2.4-4ZM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.8-1.4Z"/></svg>';
 
   // Which computer is this? iPads say "Mac" too, but have a touch screen.
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
@@ -450,33 +476,52 @@ window.releaseReady = (async () => {
       } else if (release && key.startsWith('mac')) {
         // This release has no Mac build (yet): say so rather than send people to a page without one.
         a.setAttribute('aria-disabled', 'true');
-        a.lastChild.textContent = key === 'mac-arm64' ? ' Mac version coming soon' : 'Intel Mac: coming soon';
+        const sub = a.querySelector('.sub');
+        if (sub) sub.textContent = 'Coming soon';
+        else a.lastChild.textContent = key === 'mac-arm64' ? ' Mac version coming soon' : 'Intel Mac: coming soon';
       }
     });
   }
   if (files.win) $('winCard').querySelector('[data-detail="win"]').textContent = `${files.win.name} · ${mb(files.win)}`;
   if (version) document.querySelector('[data-detail="version"]').textContent = `Version ${version} · `;
 
-  // Hero: one big button for this computer, with the other options underneath.
-  const hero = $('heroDownload');
-  const macFile = files[`mac-${macArch}`];
-  if (isWin && files.win) {
-    hero.innerHTML = ICON_WIN + 'Download for Windows';
-    hero.href = files.win.browser_download_url;
-    hero.setAttribute('download', '');
-    $('heroMeta').innerHTML = `<span>Version ${version}</span><span>${mb(files.win)}</span><span>Windows 10 &amp; 11</span>`;
-    $('heroAlt').innerHTML = files['mac-arm64'] ? 'Also for <a href="#download">Mac</a>' : '';
-  } else if (isMac && macFile) {
-    hero.innerHTML = ICON_MAC + 'Download for Mac';
-    hero.href = macFile.browser_download_url;
-    hero.setAttribute('download', '');
-    $('heroMeta').innerHTML = `<span>Version ${version}</span><span>${macArch === 'arm64' ? 'Apple Silicon' : 'Intel'}</span><span>${mb(macFile)}</span>`;
-    const other = files[`mac-${macArch === 'arm64' ? 'x64' : 'arm64'}`];
-    $('heroAlt').innerHTML = (other ? `${macArch === 'arm64' ? 'Intel Mac' : 'Apple Silicon Mac'}? <a href="${other.browser_download_url}" download>Download that version</a> · ` : '') + 'Also for <a href="#download">Windows</a>';
-  } else if (!isMac && !isWin) {
-    // A phone or tablet: HOMEFLIX goes on the computer with the movies.
-    $('heroAlt').textContent = 'Install it on your Windows PC or Mac, then watch on this device.';
+  // Hero: the visitor's own system gets the red button, and on a Mac the matching chip is marked.
+  if (isMac) {
+    $('heroMac').classList.replace('btn-ghost', 'btn-red');
+    $('heroWin').classList.replace('btn-red', 'btn-ghost');
+    const rec = document.querySelector(`#macMenu [data-asset="mac-${macArch}"] b`);
+    if (rec && files[`mac-${macArch}`]) rec.insertAdjacentHTML('beforeend', '<span class="rec">This Mac</span>');
   }
+  if (version) $('heroMeta').innerHTML = `<span>Version ${version}</span><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Free</span>`;
+  // A phone or tablet: HOMEFLIX goes on the computer with the movies.
+  if (!isMac && !isWin) $('heroAlt').textContent = 'Install it on your Windows PC or Mac, then watch on this device.';
+})();
+
+// The macOS dropdown: opens on click, closes on a choice, Escape or a click elsewhere.
+(() => {
+  const dd = document.getElementById('macDd'), btn = document.getElementById('heroMac'), menu = document.getElementById('macMenu');
+  const items = () => [...menu.querySelectorAll('a[role="menuitem"]:not([aria-disabled="true"])')];
+  const open = (focusFirst) => {
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    if (focusFirst && items()[0]) items()[0].focus();
+  };
+  const close = (refocus) => {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    if (refocus) btn.focus();
+  };
+  btn.addEventListener('click', () => (menu.hidden ? open(false) : close(false)));
+  btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); open(true); } });
+  menu.addEventListener('keydown', (e) => {
+    const list = items(), i = list.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); list[(i + 1) % list.length].focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); list[(i - 1 + list.length) % list.length].focus(); }
+  });
+  menu.addEventListener('click', (e) => { if (e.target.closest('a')) close(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(true); });
+  document.addEventListener('click', (e) => { if (!dd.contains(e.target)) close(false); });
 })();
 </script>
 <script>
