@@ -2,9 +2,24 @@
 // Marketplace → Upstash, which sets the env vars below). Plain fetch, no dependencies.
 // Files starting with "_" aren't routes on Vercel.
 
+// Standard names first; then any prefix chosen when connecting the database in Vercel
+// (e.g. STORAGE_KV_REST_API_URL / STORAGE_KV_REST_API_TOKEN).
 function redisConfig() {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  const env = process.env;
+  let url = env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL;
+  let token = env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    for (const key of Object.keys(env)) {
+      const m = /^(.*)(REST_API_URL|REDIS_REST_URL)$/.exec(key);
+      if (!m) continue;
+      const tokenKey = m[1] + m[2].replace('URL', 'TOKEN');
+      if (env[key] && env[tokenKey]) {
+        url = env[key];
+        token = env[tokenKey];
+        break;
+      }
+    }
+  }
   return url && token ? { url: url.replace(/\/$/, ''), token } : null;
 }
 

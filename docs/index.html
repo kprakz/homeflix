@@ -483,7 +483,7 @@ window.releaseReady = (async () => {
 // Download counter and world map. Both run on the HOMEFLIX Vercel project (api/download.js counts a
 // download by country, then sends the visitor on to GitHub; api/downloads.js returns the totals).
 // On that site itself the API is same-origin; from GitHub Pages it's called by its address.
-const COUNTER = 'https://homeflix.vercel.app';
+const COUNTER = 'https://homeflix-rho.vercel.app';
 (async () => {
   const API = /\.vercel\.app$/.test(location.hostname) ? '' : COUNTER;
   const $ = (id) => document.getElementById(id);

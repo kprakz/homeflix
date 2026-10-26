@@ -124,7 +124,7 @@ npm start           # run the desktop app
 npm run dist        # Windows: build dist/HOMEFLIX-Setup-<version>.exe
 ```
 
-**Website and download map.** The site in `docs/` is served by GitHub Pages and by a Vercel project, which also runs the download counter in `api/`:
+**Website and download map.** The site in `docs/` is served by GitHub Pages and by a Vercel project ([homeflix-rho.vercel.app](https://homeflix-rho.vercel.app)), which also runs the download counter in `api/`:
 - `api/download.js` counts a download for the visitor's country (Vercel's `x-vercel-ip-country` header; no IP addresses or personal data are stored), once per browser, then redirects to the installer on GitHub. It only redirects to HOMEFLIX's own release files.
 - `api/downloads.js` returns the totals per country and platform for the map.
 - Counts live in Upstash Redis (free). In the Vercel project: **Storage → Marketplace → Upstash (Redis)** → create a free database → connect it to the project → redeploy. Until then the map says counts are coming and the download buttons link straight to GitHub.
