@@ -124,6 +124,12 @@ npm start           # run the desktop app
 npm run dist        # Windows: build dist/HOMEFLIX-Setup-<version>.exe
 ```
 
+**Website and download map.** The site in `docs/` is served by GitHub Pages and by a Vercel project, which also runs the download counter in `api/`:
+- `api/download.js` counts a download for the visitor's country (Vercel's `x-vercel-ip-country` header; no IP addresses or personal data are stored), once per browser, then redirects to the installer on GitHub. It only redirects to HOMEFLIX's own release files.
+- `api/downloads.js` returns the totals per country and platform for the map.
+- Counts live in Upstash Redis (free). In the Vercel project: **Storage → Marketplace → Upstash (Redis)** → create a free database → connect it to the project → redeploy. Until then the map says counts are coming and the download buttons link straight to GitHub.
+- The map's square grid (`docs/world-grid.json`) is made by `npm run world-grid`.
+
 **Mac builds** are made by GitHub Actions (`.github/workflows/mac.yml`) on Apple Silicon and Intel Macs whenever a release is published. The workflow starts the built app with a test movie, checks it lists, streams and prepares it, and attaches `HOMEFLIX-<version>-mac-arm64.dmg` and `-mac-x64.dmg` to the release. To build on a Mac yourself: `npm install --no-save ffmpeg-static ffprobe-static && npm run dist:mac`.
 
 `npm run serve` runs only the streaming server (`server.js`), configured by `config.json` (copy `config.example.json` to start). `npm run icons` redraws the icons.
