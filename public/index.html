@@ -651,11 +651,18 @@ function teardownVideo() {
   if (!player) return;
   player.timers.forEach(clearTimeout);
   if (player.hls) player.hls.destroy();
-  if (player.boost) player.boost.src.disconnect();
+  if (player.boost && player.boost.src) {
+    try { player.boost.src.disconnect(); } catch {}
+  }
+  if (player._boostSrc) {
+    try { player._boostSrc.disconnect(); } catch {}
+  }
   const v = player.v;
-  v.pause();
-  v.removeAttribute('src');
-  v.load();
+  try { v.pause(); } catch {}
+  try {
+    v.removeAttribute('src');
+    v.load();
+  } catch {}
   player = null;
 }
 
@@ -761,7 +768,31 @@ function play(i, m, kind, startAt, audio = 0) {
     v.addEventListener('ended', () => { location.replace('#/watch/' + next.id); });
   }
   v.play().catch(() => {});
-  if (boostWanted()) applyBoost();
+  if (boostAvailable(kind)) {
+    // Set up passthrough Web Audio graph early to avoid reload on toggle-off.
+    audioCtx = audioCtx || new AudioCtx();
+    if (audioCtx.state === 'running') {
+      ensureBoostAudioGraph(p);
+      if (boostWanted()) applyBoost();
+    } else {
+      const initBoost = () => {
+        if (player !== p) return;
+        audioCtx = audioCtx || new AudioCtx();
+        if (audioCtx.state === 'running') {
+          ensureBoostAudioGraph(p);
+          if (boostWanted()) applyBoost();
+        } else {
+          audioCtx.resume().then(initBoost).catch(() => {});
+        }
+      };
+      audioCtx.resume().then(initBoost).catch(() => {});
+      document.addEventListener('pointerdown', initBoost, { once: true, capture: true });
+      document.addEventListener('keydown', initBoost, { once: true, capture: true });
+      if (boostWanted()) updateBoostButtons();
+    }
+  } else if (boostWanted()) {
+    applyBoost();
+  }
 }
 
 function toCompatible() {
@@ -855,9 +886,27 @@ function updateBoostButtons() {
   if ($('osdBoost')) $('osdBoost').textContent = boostLabel();
 }
 
+function ensureBoostAudioGraph(p) {
+  if (!p || p._boostGraphReady) return true;
+  if (!boostAvailable(p.kind)) return false;
+  audioCtx = audioCtx || new AudioCtx();
+  if (audioCtx.state !== 'running') return false;
+  try {
+    const src = audioCtx.createMediaElementSource(p.v);
+    // Keep passthrough connected by default; insert processing nodes only when boosting.
+    src.connect(audioCtx.destination);
+    p._boostSrc = src;
+    p._boostGraphReady = true;
+    p.boost = null;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function applyBoost() {
   const p = player;
-  if (!p || p.boost || !boostWanted() || !boostAvailable(p.kind)) return updateBoostButtons();
+  if (!p || !boostWanted() || !boostAvailable(p.kind)) return updateBoostButtons();
   audioCtx = audioCtx || new AudioCtx();
   // Browsers only let Web Audio play after a tap or click. Routing the video into a context that
   // isn't running would mute it, so wait until it runs.
@@ -868,7 +917,15 @@ function applyBoost() {
     document.addEventListener('keydown', retry, { once: true, capture: true });
     return updateBoostButtons();
   }
-  const src = audioCtx.createMediaElementSource(p.v);
+  if (!p._boostGraphReady) {
+    if (!ensureBoostAudioGraph(p)) return updateBoostButtons();
+  }
+  if (p.boost) return updateBoostButtons();
+  const src = p._boostSrc;
+  if (!src) return updateBoostButtons();
+  try {
+    src.disconnect();
+  } catch {}
   // Measured on a quiet film: about +8 dB louder, loudest peaks around 0.7 of full scale. (Web
   // Audio compressors add their own make-up gain, hence the trim at the end.)
   const comp = audioCtx.createDynamicsCompressor();
@@ -880,18 +937,47 @@ function applyBoost() {
   const trim = audioCtx.createGain();
   trim.gain.value = 0.8;
   src.connect(comp).connect(gain).connect(limiter).connect(trim).connect(audioCtx.destination);
-  p.boost = { src, out: trim };
+  p.boost = { src, out: trim, comp, gain, limiter };
   updateBoostButtons();
+}
+
+function disableBoost(p) {
+  if (!p || !p._boostGraphReady || !p._boostSrc) return false;
+  if (p.boost) {
+    try {
+      p._boostSrc.disconnect();
+      p.boost = null;
+    } catch {}
+  }
+  try {
+    p._boostSrc.connect(audioCtx.destination);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function toggleBoost() {
   try { localStorage.setItem('boost', boostWanted() ? '0' : '1'); } catch {}
   const p = player;
   if (!p) return;
-  if (boostWanted()) applyBoost();
-  // Off: reload the video at the same point, so the sound is back to exactly what the stream carries.
-  else if (p.boost) play(p.i, p.m, p.kind, p.v.currentTime || null, p.audio);
-  else updateBoostButtons();
+  if (boostWanted()) {
+    applyBoost();
+  } else {
+    // Turn off without reloading the video: revert to passthrough in the existing Web Audio graph.
+    if (p._boostGraphReady) {
+      if (!disableBoost(p)) {
+        // Fallback to reload if we can't cleanly revert
+        play(p.i, p.m, p.kind, p.v.currentTime || null, p.audio);
+      } else {
+        updateBoostButtons();
+      }
+    } else if (p.boost) {
+      play(p.i, p.m, p.kind, p.v.currentTime || null, p.audio);
+    } else {
+      updateBoostButtons();
+    }
+  }
   showOsd();
 }
 
