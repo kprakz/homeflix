@@ -207,6 +207,32 @@
   body.tv .card .s { font-size: 14px; }
   body.tv .row h2 { font-size: 24px; }
   body.tv .rows { padding-bottom: 120px; }
+
+  /* ---------- PIN screen (when the computer's owner turned on a PIN) ---------- */
+  #lock { display: none; position: fixed; inset: 0; z-index: 60; background: radial-gradient(ellipse at top, #2a0a0c 0%, var(--bg) 60%); overflow-y: auto; }
+  #lock.on { display: flex; padding: calc(24px + env(safe-area-inset-top)) 16px 24px; }
+  .lock-box { width: min(340px, 100%); margin: auto; text-align: center; } /* auto margins: centred, yet scrollable on short screens */
+  .lock-box .logo { font-size: 52px; cursor: default; margin-bottom: 18px; }
+  .lock-box p { color: var(--muted); margin: 0 0 18px; }
+  .dots { display: flex; justify-content: center; gap: 14px; height: 18px; margin-bottom: 14px; }
+  .dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #777; }
+  .dots i.on { background: #fff; border-color: #fff; }
+  .lock-msg { min-height: 24px; font-size: 15px; color: #ff6b6b; margin-bottom: 10px; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .keypad button { height: 64px; border: 0; border-radius: 50%; width: 64px; justify-self: center; background: rgba(255,255,255,.1); color: #fff; font-size: 26px; font-weight: 500; }
+  .keypad button:hover { background: rgba(255,255,255,.2); }
+  .keypad button:disabled { opacity: .35; }
+  .keypad .go { background: var(--red); font-size: 16px; font-weight: 700; }
+  .keypad .go:hover { background: #f6121d; }
+  .keypad button:focus-visible, body.tv .keypad button:focus { outline: 3px solid #fff; outline-offset: 3px; }
+  @media (max-height: 560px) {
+    .lock-box .logo { font-size: 36px; margin-bottom: 6px; }
+    .lock-box p { margin-bottom: 10px; font-size: 14px; }
+    .keypad { gap: 8px; }
+    .keypad button { width: 50px; height: 50px; font-size: 21px; }
+  }
+  #lock.shake .dots { animation: shake .35s; }
+  @keyframes shake { 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
 </style>
 </head>
 <body>
@@ -231,6 +257,16 @@
 <section id="results"></section>
 
 <div class="modal-bg" id="modal"><div class="modal" id="modalCard"></div></div>
+
+<section id="lock" aria-label="Enter PIN">
+  <div class="lock-box">
+    <div class="logo">HOMEFLIX</div>
+    <p>Enter the PIN set on the HOMEFLIX computer.</p>
+    <div class="dots" id="pinDots"></div>
+    <div class="lock-msg" id="pinMsg" role="alert"></div>
+    <div class="keypad" id="keypad"></div>
+  </div>
+</section>
 
 <section id="watch">
   <button class="back" data-back><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Back</button>
@@ -367,7 +403,9 @@ function renderResults(q) {
 
 async function loadLibrary() {
   try {
-    movies = (await (await fetch('/api/library')).json()).map(parse);
+    const r = await fetch('/api/library');
+    if (r.status === 401) return showLock(); // the PIN was turned on or changed
+    movies = (await r.json()).map(parse);
   } catch {
     $('rows').innerHTML = '<div class="empty error" style="padding-top:140px">Can’t reach the laptop. Is HOMEFLIX running?</div>';
     return;
@@ -535,6 +573,9 @@ function pickAudio(i) {
   return 0;
 }
 const audioQuery = (audio) => (audio ? `?audio=${audio}` : '');
+// With a PIN on, video addresses carry this device's key too: AirPlay hands them to the Apple TV,
+// which doesn't send this browser's cookie.
+const withKey = (url) => { const k = (() => { try { return localStorage.getItem('key'); } catch { return null; } })(); return k ? url + (url.includes('?') ? '&' : '?') + 'k=' + k : url; };
 
 // Start playing in the given language: the file itself, its prepared copy, or the converted stream.
 async function startSource(i, m, audio, startAt) {
@@ -697,11 +738,11 @@ function play(i, m, kind, startAt, audio = 0) {
         else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) h.recoverMediaError();
         else showPlayError();
       });
-      h.loadSource(`/hls/${i.id}/${audio}/index.m3u8`);
+      h.loadSource(withKey(`/hls/${i.id}/${audio}/index.m3u8`));
       h.attachMedia(v);
     }).catch(() => showPlayError('Couldn’t load the player. Check that the laptop is awake and HOMEFLIX is running.'));
   } else {
-    v.src = kind === 'hls' ? `/hls/${i.id}/${audio}/index.m3u8` : `/video/${i.id}${audioQuery(audio)}`;
+    v.src = withKey(kind === 'hls' ? `/hls/${i.id}/${audio}/index.m3u8` : `/video/${i.id}${audioQuery(audio)}`);
     if (resumeAt) v.addEventListener('loadedmetadata', () => { v.currentTime = resumeAt; }, { once: true });
   }
 
@@ -976,7 +1017,7 @@ function keyName(e) {
 
 const isShown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
 function focusables() {
-  const scope = $('audioSheet') || ($('watch').classList.contains('on') ? $('watch') : $('modal').classList.contains('on') ? $('modal') : document);
+  const scope = ($('lock').classList.contains('on') && $('lock')) || $('audioSheet') || ($('watch').classList.contains('on') ? $('watch') : $('modal').classList.contains('on') ? $('modal') : document);
   return [...scope.querySelectorAll('button:not([disabled]), input, [tabindex="0"]')].filter((el) => !el.closest('#watch.osd-hidden .osd') && isShown(el) && (scope !== document || !el.closest('#watch, #modal')));
 }
 
@@ -1142,7 +1183,64 @@ $('search').addEventListener('focus', () => $('searchBox').classList.add('open')
 $('search').addEventListener('blur', () => { if (!$('search').value) $('searchBox').classList.remove('open'); });
 window.addEventListener('scroll', () => $('bar').classList.toggle('solid', scrollY > 40), { passive: true });
 window.addEventListener('hashchange', route);
-route();
+
+// ---------- PIN ----------
+const PIN_MAX = 8;
+let pin = '';
+function drawPin(msg) {
+  $('pinDots').innerHTML = Array.from({ length: Math.max(4, pin.length) }, (_, n) => `<i class="${n < pin.length ? 'on' : ''}"></i>`).join('');
+  if (msg !== undefined) $('pinMsg').textContent = msg;
+  $('keypad').querySelector('.go').disabled = pin.length < 4;
+}
+function showLock() {
+  closePlayer();
+  $('lock').classList.add('on');
+  document.body.classList.add('lock');
+  pin = '';
+  drawPin('');
+  if (usingKeys) focusEl($('keypad').querySelector('button'));
+}
+async function unlock() {
+  if (pin.length < 4) return;
+  const tried = pin;
+  pin = '';
+  drawPin('');
+  const r = await fetch('/api/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: tried }) }).catch(() => null);
+  const d = r ? await r.json().catch(() => ({})) : { error: 'Can’t reach the computer. Is HOMEFLIX running?' };
+  if (r && r.ok) {
+    try { if (d.key) localStorage.setItem('key', d.key); } catch {}
+    $('lock').classList.remove('on');
+    document.body.classList.remove('lock');
+    return route();
+  }
+  drawPin(d.error || 'Wrong PIN. Try again.');
+  $('lock').classList.remove('shake'); void $('lock').offsetWidth; $('lock').classList.add('shake');
+}
+function pinKey(k) {
+  if (k === 'del') pin = pin.slice(0, -1);
+  else if (k === 'go') return unlock();
+  else if (pin.length < PIN_MAX) pin += k;
+  drawPin();
+}
+$('keypad').innerHTML = [...'123456789'].map((d) => `<button data-pin="${d}">${d}</button>`).join('') +
+  '<button data-pin="del" aria-label="Delete">⌫</button><button data-pin="0">0</button><button data-pin="go" class="go">OK</button>';
+$('keypad').addEventListener('click', (e) => { const b = e.target.closest('[data-pin]'); if (b) pinKey(b.dataset.pin); });
+// Number keys on a keyboard or TV remote type the PIN; Enter unlocks; Backspace deletes.
+document.addEventListener('keydown', (e) => {
+  if (!$('lock').classList.contains('on')) return;
+  if (/^[0-9]$/.test(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); pinKey(e.key); }
+  else if (e.key === 'Backspace') { e.preventDefault(); e.stopImmediatePropagation(); pinKey('del'); }
+  else if (e.key === 'Enter' && !document.activeElement.closest('#keypad')) { e.preventDefault(); e.stopImmediatePropagation(); pinKey('go'); }
+}, true);
+
+// Ask for the PIN first when one is set and this device hasn't got in yet.
+fetch('/api/auth').then((r) => r.json()).catch(() => ({})).then((a) => {
+  if (a.pin && !a.ok) {
+    try { localStorage.removeItem('key'); } catch {}
+    return showLock();
+  }
+  route();
+});
 </script>
 </body>
 </html>

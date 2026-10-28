@@ -1,4 +1,4 @@
-// HOMEFLIX desktop app (Windows and macOS): runs the streaming server in the background, lives in
+// HOMEFLIX desktop app (Windows, macOS and Linux): runs the streaming server in the background, lives in
 // the system tray / menu bar, and gives a small window to pick movie folders and see the address to
 // open on other devices.
 
@@ -6,12 +6,14 @@ const { app, BrowserWindow, Tray, Menu, Notification, dialog, ipcMain, shell, cl
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 const QRCode = require('qrcode');
 const homeflix = require('../server');
 
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
+const IS_LINUX = process.platform === 'linux';
 const ICON = path.join(__dirname, 'icon.png');
 // macOS menu-bar icons are "template" images (black + transparency) that the system tints.
 const TRAY_ICON = path.join(__dirname, IS_MAC ? 'trayTemplate.png' : 'tray.png');
@@ -21,11 +23,12 @@ const CACHE_DIR = IS_WIN
   ? path.join(process.env.LOCALAPPDATA || app.getPath('userData'), 'HOMEFLIX', 'cache')
   : IS_MAC
     ? path.join(os.homedir(), 'Library', 'Caches', 'HOMEFLIX')
-    : path.join(app.getPath('userData'), 'cache');
+    : path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'HOMEFLIX');
 const FFMPEG_DIR = app.isPackaged ? path.join(process.resourcesPath, 'ffmpeg') : path.join(__dirname, '..', 'vendor', 'ffmpeg');
 const EXE = IS_WIN ? '.exe' : '';
 
-let settings = { folders: [], port: 8080, openAtLogin: false };
+// pin: { salt, hash } when the owner wants devices to enter a PIN; secret signs the devices' cookies.
+let settings = { folders: [], port: 8080, openAtLogin: false, pin: null, secret: null };
 let port = null;
 let serverError = null;
 let win = null;
@@ -45,6 +48,10 @@ function loadSettings() {
     settings = { ...settings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) };
   } catch {}
   settings.folders = settings.folders.filter((f) => fs.existsSync(f));
+  if (!settings.secret) {
+    settings.secret = crypto.randomBytes(16).toString('hex');
+    saveSettings();
+  }
 }
 
 function saveSettings() {
@@ -55,6 +62,8 @@ function saveSettings() {
 function applyConfig() {
   homeflix.configure({
     folders: settings.folders,
+    pin: settings.pin,
+    secret: settings.secret,
     cacheDir: CACHE_DIR,
     ffmpeg: path.join(FFMPEG_DIR, 'ffmpeg' + EXE),
     ffprobe: path.join(FFMPEG_DIR, 'ffprobe' + EXE),
@@ -91,11 +100,18 @@ async function boot() {
   createTray();
   // Started at sign-in: stay in the tray / menu bar. (Windows passes --hidden; macOS reports it.)
   const atLogin = process.argv.includes('--hidden') || (IS_MAC && app.getLoginItemSettings().wasOpenedAtLogin);
+  if (IS_LINUX && settings.openAtLogin) setLinuxAutostart(true); // keep the entry pointing at this copy
   if (!atLogin) showWindow();
 }
 
 // macOS: clicking the Dock icon brings the window back.
 app.on('activate', () => showWindow());
+
+// "Watch on this laptop": with a PIN on, sign this computer's browser in without typing it.
+function localUrl() {
+  const key = homeflix.deviceKey();
+  return port ? `http://localhost:${port}${key ? `/?k=${key}` : ''}` : null;
+}
 
 function address() {
   const ip = homeflix.lanAddresses()[0];
@@ -109,7 +125,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open HOMEFLIX', click: showWindow },
-      { label: 'Watch on this laptop', click: () => port && shell.openExternal(`http://localhost:${port}`) },
+      { label: IS_LINUX ? 'Watch on this computer' : 'Watch on this laptop', click: () => port && shell.openExternal(localUrl()) },
       { type: 'separator' },
       { label: 'Quit HOMEFLIX', click: () => { quitting = true; app.quit(); } },
     ])
@@ -146,7 +162,7 @@ function showWindow() {
     if (quitting) return;
     e.preventDefault();
     win.hide();
-    if (!toldAboutTray) {
+    if (!toldAboutTray && !IS_LINUX) {
       toldAboutTray = true;
       const title = 'HOMEFLIX is still running';
       if (IS_WIN) tray.displayBalloon({ iconType: 'info', title, content: 'Your movies stay available. Right-click the HOMEFLIX icon here to quit.' });
@@ -231,6 +247,7 @@ async function state() {
     network: await networkStatus(),
     ffmpegFound: fs.existsSync(path.join(FFMPEG_DIR, 'ffmpeg' + EXE)),
     platform: process.platform,
+    pinOn: !!settings.pin,
   };
 }
 
@@ -261,7 +278,7 @@ ipcMain.handle('remove-folder', async (_e, folder) => {
 });
 
 ipcMain.handle('open-folder', (_e, folder) => shell.openPath(folder));
-ipcMain.handle('open-browser', () => port && shell.openExternal(`http://localhost:${port}`));
+ipcMain.handle('open-browser', () => port && shell.openExternal(localUrl()));
 ipcMain.handle('open-wifi-settings', () => {
   networkCheck.at = 0; // look again when the user comes back
   return shell.openExternal(IS_WIN ? 'ms-settings:network-status' : 'x-apple.systempreferences:com.apple.Network-Settings.extension');
@@ -272,7 +289,31 @@ ipcMain.handle('copy', (_e, text) => clipboard.writeText(String(text)));
 ipcMain.handle('set-open-at-login', (_e, on) => {
   settings.openAtLogin = !!on;
   saveSettings();
-  app.setLoginItemSettings(IS_WIN ? { openAtLogin: settings.openAtLogin, args: ['--hidden'] } : { openAtLogin: settings.openAtLogin });
+  if (IS_LINUX) setLinuxAutostart(settings.openAtLogin);
+  else app.setLoginItemSettings(IS_WIN ? { openAtLogin: settings.openAtLogin, args: ['--hidden'] } : { openAtLogin: settings.openAtLogin });
+  return state();
+});
+
+// Linux desktops start what's in ~/.config/autostart. An AppImage runs from a temporary mount, so the
+// entry points at the .AppImage file itself.
+function setLinuxAutostart(on) {
+  const file = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart', 'homeflix.desktop');
+  try {
+    if (!on) return fs.rmSync(file, { force: true });
+    const exe = process.env.APPIMAGE || process.execPath;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, ['[Desktop Entry]', 'Type=Application', 'Name=HOMEFLIX', `Exec="${exe.replace(/"/g, '\\"')}" --hidden`, 'X-GNOME-Autostart-enabled=true', ''].join('\n'));
+  } catch (err) {
+    console.error(`Couldn't change start at login: ${err.message}`);
+  }
+}
+
+// PIN: 4 to 8 digits, or null to turn it off. Every device has to enter the new one.
+ipcMain.handle('set-pin', (_e, pin) => {
+  if (pin !== null && !/^\d{4,8}$/.test(String(pin))) return { error: 'The PIN must be 4 to 8 digits.' };
+  settings.pin = pin === null ? null : homeflix.hashPin(String(pin));
+  saveSettings();
+  applyConfig();
   return state();
 });
 

@@ -1,9 +1,12 @@
 {
   "name": "homeflix",
   "productName": "HOMEFLIX",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Stream the movies on your laptop to your iPad, phone or TV over your home Wi-Fi.",
-  "author": "HOMEFLIX",
+  "author": {
+    "name": "HOMEFLIX",
+    "email": "kprakz@users.noreply.github.com"
+  },
   "private": true,
   "repository": "github:kprakz/homeflix",
   "main": "electron/main.js",
@@ -14,7 +17,8 @@
     "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-icons.ps1",
     "dist": "node scripts/get-ffmpeg.mjs && electron-builder --win --publish never",
     "dist:mac": "node scripts/get-ffmpeg.mjs && electron-builder --mac --publish never",
-    "world-grid": "node scripts/make-world-grid.mjs"
+    "world-grid": "node scripts/make-world-grid.mjs",
+    "dist:linux": "node scripts/get-ffmpeg.mjs && electron-builder --linux --publish never"
   },
   "dependencies": {
     "hls.js": "^1.7.3",
@@ -85,6 +89,27 @@
     },
     "dmg": {
       "title": "HOMEFLIX ${version}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage"
+        },
+        {
+          "target": "deb"
+        }
+      ],
+      "category": "AudioVideo",
+      "icon": "build/icon.png",
+      "synopsis": "Watch the movies on your computer from your phone, tablet or TV",
+      "description": "Stream the movies on your laptop to your iPad, phone or TV over your home Wi-Fi.",
+      "maintainer": "HOMEFLIX <kprakz@users.noreply.github.com>",
+      "executableName": "homeflix",
+      "artifactName": "HOMEFLIX-${version}-linux-${arch}.${ext}"
+    },
+    "deb": {
+      "packageName": "homeflix"
     }
-  }
+  },
+  "homepage": "https://kprakz.github.io/homeflix/"
 }

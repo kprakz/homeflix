@@ -20,8 +20,11 @@ const UNIVERSAL_AUDIO = new Set(['aac', 'mp3']);
 const TEXT_SUBS = new Set(['subrip', 'ass', 'ssa', 'mov_text', 'webvtt', 'text']);
 
 // The desktop app calls this with its own settings; `node server.js` uses config.json.
+// (config.json may give "pin": "1234" in plain text; it's kept hashed.)
 function configure(options) {
   CONFIG = { ...CONFIG, ...options };
+  if (typeof CONFIG.pin === 'string' || typeof CONFIG.pin === 'number') CONFIG.pin = /^\d{4,8}$/.test(String(CONFIG.pin)) ? hashPin(CONFIG.pin) : null;
+  if (!CONFIG.secret) CONFIG.secret = crypto.randomBytes(16).toString('hex');
   CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 }
@@ -468,11 +471,13 @@ function hlsState(item, info, audio = 0) {
   return st;
 }
 
-function hlsPlaylist(st) {
+// key: the ?k= the playlist was asked with, passed on to its segments (AirPlay sends no cookies).
+function hlsPlaylist(st, key) {
+  const q = key ? `?k=${encodeURIComponent(key)}` : '';
   const lines = ['#EXTM3U', '#EXT-X-VERSION:3', `#EXT-X-TARGETDURATION:${SEG + 1}`, '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD'];
   for (let i = 0; i < st.total; i++) {
     const len = i === st.total - 1 ? st.duration - SEG * i : SEG;
-    lines.push(`#EXTINF:${Math.max(0.1, len).toFixed(3)},`, `${i}.ts`);
+    lines.push(`#EXTINF:${Math.max(0.1, len).toFixed(3)},`, `${i}.ts${q}`);
   }
   lines.push('#EXT-X-ENDLIST', '');
   return lines.join('\n');
@@ -630,9 +635,123 @@ async function streamFile(req, res, file, type) {
   res.on('close', () => stream.destroy());
 }
 
+// ---------- who may watch ----------
+
+// Only devices on the home network (and this computer) get in. Someone on the internet reaching the
+// port — a router port-forward, a server with a public address — is turned away.
+function isLocalAddress(ip) {
+  ip = String(ip || '').toLowerCase().replace(/^::ffff:/, '');
+  if (ip === '::1') return true;
+  const v4 = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(ip);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+  }
+  return /^f[cd][0-9a-f]{2}:/.test(ip) || /^fe[89ab][0-9a-f]:/.test(ip); // IPv6 private and link-local
+}
+
+// The page must be opened by address (192.168.1.20:8080, localhost) or a home name (laptop.local), not
+// through some website's domain: that stops a web page on a phone from reading the library through it.
+function isLocalHost(host) {
+  const name = String(host || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+  return !name || name === 'localhost' || /^[\d.]+$/.test(name) || name.includes(':') || !name.includes('.') ||
+    /\.(local|lan|home|internal|localhost|home\.arpa)$/.test(name);
+}
+
+// Optional PIN. CONFIG.pin is { salt, hash } (scrypt) or null; CONFIG.secret signs the device cookie,
+// so changing or removing the PIN signs every device out.
+const PIN_COOKIE = 'homeflix_key';
+function hashPin(pin, salt = crypto.randomBytes(16).toString('hex')) {
+  return { salt, hash: crypto.scryptSync(String(pin), salt, 32).toString('hex') };
+}
+function deviceKey() {
+  return CONFIG.pin ? crypto.createHmac('sha256', String(CONFIG.secret || '')).update(CONFIG.pin.hash).digest('hex').slice(0, 32) : null;
+}
+function keyFrom(req, url) {
+  const cookie = /(?:^|;\s*)homeflix_key=([0-9a-f]+)/.exec(req.headers.cookie || '');
+  return url.searchParams.get('k') || (cookie && cookie[1]) || '';
+}
+function hasKey(req, url) {
+  const want = deviceKey();
+  if (!want) return true;
+  const got = Buffer.from(keyFrom(req, url));
+  return got.length === want.length && crypto.timingSafeEqual(got, Buffer.from(want));
+}
+
+// Wrong PINs: 5 free tries, then each try waits longer (30 s, 1 min, 2 min … up to an hour).
+const pinTries = new Map(); // ip -> { fails, until }
+function pinWait(ip) {
+  const t = pinTries.get(ip);
+  return t && t.until > Date.now() ? Math.ceil((t.until - Date.now()) / 1000) : 0;
+}
+function checkPin(ip, pin) {
+  const t = pinTries.get(ip) || { fails: 0, until: 0 };
+  const ok = /^\d{4,8}$/.test(String(pin)) && crypto.timingSafeEqual(Buffer.from(hashPin(pin, CONFIG.pin.salt).hash, 'hex'), Buffer.from(CONFIG.pin.hash, 'hex'));
+  if (ok) pinTries.delete(ip);
+  else {
+    t.fails++;
+    if (t.fails >= 5) t.until = Date.now() + Math.min(3600, 30 * 2 ** (t.fails - 5)) * 1000;
+    pinTries.set(ip, t);
+  }
+  return ok;
+}
+
+function readBody(req, limit = 1024) {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (d) => { body += d; if (body.length > limit) req.destroy(); });
+    req.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve({}); } });
+    req.on('error', () => resolve({}));
+  });
+}
+
+const keyCookie = (key) => `${PIN_COOKIE}=${key}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax`;
+
+const NOT_HOME = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>HOMEFLIX</title>
+<body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#141414;color:#fff;font:17px/1.5 system-ui,sans-serif;text-align:center;padding:24px">
+<div><h1 style="color:#e50914;letter-spacing:.04em">HOMEFLIX</h1><p>HOMEFLIX only works on the home network it runs on.<br>Connect to the same Wi-Fi as the computer and open its address again.</p></div>`;
+
+// Returns true when the request may go on; otherwise answers it.
+async function gate(req, res, url, parts) {
+  const ip = req.socket.remoteAddress;
+  if (!isLocalAddress(ip)) {
+    res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(NOT_HOME);
+    return false;
+  }
+  if (!isLocalHost(req.headers.host)) {
+    send(res, 403, 'Open HOMEFLIX by its address, like http://192.168.1.20:8080', 'text/plain; charset=utf-8');
+    return false;
+  }
+  if (parts[0] === 'api' && parts[1] === 'unlock' && req.method === 'POST') {
+    if (!CONFIG.pin) return send(res, 200, { ok: true }), false;
+    const wait = pinWait(ip);
+    if (wait) return send(res, 429, { error: `Too many tries. Wait ${wait} seconds.`, wait }), false;
+    const { pin } = await readBody(req);
+    if (!checkPin(ip, pin)) {
+      const next = pinWait(ip);
+      return send(res, 401, { error: next ? `Wrong PIN. Wait ${next} seconds before trying again.` : 'Wrong PIN. Try again.', wait: next }), false;
+    }
+    const key = deviceKey();
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': keyCookie(key) });
+    res.end(JSON.stringify({ ok: true, key }));
+    return false;
+  }
+  const ok = hasKey(req, url);
+  if (parts[0] === 'api' && parts[1] === 'auth') return send(res, 200, { pin: !!CONFIG.pin, ok }), false;
+  // A valid ?k= (from the desktop app's "Watch on this laptop", or AirPlay) also signs this browser in.
+  if (ok && CONFIG.pin && url.searchParams.has('k') && !/homeflix_key=/.test(req.headers.cookie || '')) res.setHeader('Set-Cookie', keyCookie(deviceKey()));
+  // The page itself, its icons and scripts load without the PIN so it can ask for it; movies don't.
+  const open = !['api', 'video', 'thumb', 'subs', 'hls'].includes(parts[0]);
+  if (ok || open) return true;
+  send(res, 401, { error: 'PIN needed', pin: true });
+  return false;
+}
+
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x');
   const parts = url.pathname.split('/').filter(Boolean);
+  if (!(await gate(req, res, url, parts))) return;
   // /api/<action>/<id>  or  /video|thumb|subs|hls/<id>/...
   const id = parts[0] === 'api' ? parts[2] : parts[1];
   // Unknown movie (just added, or a device resuming right after a restart): look again before giving up.
@@ -682,7 +801,7 @@ async function handle(req, res) {
     const withAudio = /^\d+$/.test(parts[2]) && parts[3];
     const audio = withAudio ? Math.min(Number(parts[2]), Math.max(0, info.audios.length - 1)) : 0;
     const file = withAudio ? parts[3] : parts[2];
-    if (file === 'index.m3u8') return send(res, 200, hlsPlaylist(hlsState(item, info, audio)), 'application/vnd.apple.mpegurl');
+    if (file === 'index.m3u8') return send(res, 200, hlsPlaylist(hlsState(item, info, audio), CONFIG.pin && url.searchParams.get('k')), 'application/vnd.apple.mpegurl');
     const n = /^(\d+)\.ts$/.exec(file);
     if (n) return hlsSegment(req, res, item, Number(n[1]), audio);
   }
@@ -775,7 +894,7 @@ function stop() {
   });
 }
 
-module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, VIDEO_EXT };
+module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT };
 
 if (require.main === module) {
   configure(loadConfig());

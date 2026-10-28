@@ -1,0 +1,143 @@
+# Builds the Linux app (AppImage and .deb, for x64 and ARM64) on GitHub's Ubuntu machines, tests that
+# the built app really serves and converts video and keeps outsiders out, and attaches the installers
+# to the release.
+#
+# Runs when a release is published, or by hand (Actions → Linux build → Run workflow), optionally
+# attaching the installers to an existing release tag.
+
+name: Linux build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the installers to (leave empty to only build and test)
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x64
+            ffarch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            ffarch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Static ffmpeg + ffprobe for this chip from John Van Sickle's Linux builds (no system libraries
+      # needed, so they run on any distro).
+      - name: Bundle ffmpeg
+        env:
+          FFMPEG_SRC_DIR: ${{ runner.temp }}/ffmpeg
+          FFMPEG_ORIGIN: 'Linux static build: https://johnvansickle.com/ffmpeg/ (configuration and sources listed there)'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/ffmpeg.tar.xz" "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${{ matrix.ffarch }}-static.tar.xz"
+          mkdir -p "$RUNNER_TEMP/ffmpeg-x" "$FFMPEG_SRC_DIR"
+          tar -xJf "$RUNNER_TEMP/ffmpeg.tar.xz" -C "$RUNNER_TEMP/ffmpeg-x" --strip-components=1
+          cp "$RUNNER_TEMP/ffmpeg-x/ffmpeg" "$RUNNER_TEMP/ffmpeg-x/ffprobe" "$FFMPEG_SRC_DIR/"
+          cp "$RUNNER_TEMP/ffmpeg-x/GPLv3.txt" "$FFMPEG_SRC_DIR/LICENSE.txt"
+          file "$FFMPEG_SRC_DIR/ffmpeg" "$FFMPEG_SRC_DIR/ffprobe"
+          node scripts/get-ffmpeg.mjs
+
+      - name: Build the app
+        run: npx electron-builder --linux --${{ matrix.arch }} --publish never
+
+      # Install the .deb like a user would, start it with a test movie and check it lists it, converts
+      # it into a stream (what devices that can't play the original get), prepares a copy, refuses a
+      # foreign web address, and asks for the PIN once one is set.
+      - name: Test the built app
+        run: |
+          set -euo pipefail
+          ls -la dist
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb > /dev/null
+          sudo apt-get install -y -qq ./dist/*.deb
+          FF=/opt/HOMEFLIX/resources/ffmpeg
+          "$FF/ffmpeg" -version | sed -n 1p
+          "$FF/ffprobe" -version | sed -n 1p
+          mkdir -p "$HOME/Videos/HOMEFLIX test"
+          "$FF/ffmpeg" -v error -f lavfi -i testsrc2=size=1280x720:rate=24:duration=20 -f lavfi -i sine=frequency=440:duration=20 \
+            -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$HOME/Videos/HOMEFLIX test/Test Movie (2024).mkv"
+          # A file changed in the last 2 minutes counts as still downloading: make it look older.
+          touch -t 202401010000 "$HOME/Videos/HOMEFLIX test/Test Movie (2024).mkv"
+          SETTINGS="$HOME/.config/HOMEFLIX"
+          mkdir -p "$SETTINGS"
+          printf '{"folders":["%s"],"port":8080}' "$HOME/Videos/HOMEFLIX test" > "$SETTINGS/settings.json"
+          xvfb-run -a homeflix --hidden > app.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:8080/ > /dev/null && break; sleep 1; done
+          cat app.log
+          curl -sf -o page.html http://localhost:8080/
+          grep -q HOMEFLIX page.html
+          ID=$(curl -sf http://localhost:8080/api/library | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s);if(!l.length)process.exit(1);console.log(l[0].id)})')
+          echo "Library has the test movie: $ID"
+          curl -sf "http://localhost:8080/api/info/$ID" | cut -c1-300
+          curl -sf -o seg.ts "http://localhost:8080/hls/$ID/0/0.ts"
+          "$FF/ffprobe" -v error -show_entries stream=codec_name -of csv=p=0 seg.ts
+          curl -sf -X POST "http://localhost:8080/api/prepare/$ID"; echo
+          for i in $(seq 1 60); do S=$(curl -sf "http://localhost:8080/api/status/$ID"); echo "$S" | grep -q '"ready"' && break; sleep 1; done
+          echo "Copy: $S"
+          echo "$S" | grep -q '"ready"'
+          # Opened through a website's domain: refused.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example.com' http://localhost:8080/api/library)" = 403
+          pkill -f /opt/HOMEFLIX/homeflix || true
+          sleep 2
+          # With a PIN: the library needs it, the right PIN unlocks it.
+          node -e '
+            const fs = require("fs"), crypto = require("crypto"), f = process.argv[1];
+            const s = JSON.parse(fs.readFileSync(f, "utf8")), salt = crypto.randomBytes(16).toString("hex");
+            s.pin = { salt, hash: crypto.scryptSync("2468", salt, 32).toString("hex") };
+            fs.writeFileSync(f, JSON.stringify(s));' "$SETTINGS/settings.json"
+          xvfb-run -a homeflix --hidden > app2.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:8080/ > /dev/null && break; sleep 1; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/library)" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"pin":"1111"}' http://localhost:8080/api/unlock)" = 401
+          curl -sf -c jar -X POST -d '{"pin":"2468"}' http://localhost:8080/api/unlock; echo
+          curl -sf -b jar http://localhost:8080/api/library | cut -c1-200; echo
+          pkill -f /opt/HOMEFLIX/homeflix || true
+
+      # The AppImage needs no install; check it starts too.
+      - name: Test the AppImage
+        run: |
+          set -euo pipefail
+          IMG=$(ls dist/*.AppImage | sed -n 1p)
+          chmod +x "$IMG"
+          printf '{"folders":["%s"],"port":8090}' "$HOME/Videos/HOMEFLIX test" > "$HOME/.config/HOMEFLIX/settings.json"
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a "$IMG" --hidden > appimage.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:8090/ > /dev/null && break; sleep 1; done
+          cat appimage.log
+          curl -sf http://localhost:8090/api/library | cut -c1-200; echo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HOMEFLIX-linux-${{ matrix.arch }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: github.event_name == 'release' || inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name || inputs.tag }}" dist/*.AppImage dist/*.deb --clobber

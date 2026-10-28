@@ -86,6 +86,11 @@
   details p, details li { color: var(--muted); font-size: 14px; }
   details ul { padding-left: 18px; margin: 0 0 10px; }
   footer { color: var(--dim); font-size: 13px; text-align: center; padding: 8px 32px 28px; }
+  .pin-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 0 0 14px; border-bottom: 1px solid var(--line); }
+  .pin-form input { width: 150px; padding: 9px 12px; border-radius: 5px; border: 1px solid #4a4a4a; background: #111; color: #fff; font: 600 18px/1 Consolas, monospace; letter-spacing: .3em; }
+  .pin-form input:focus { outline: 2px solid var(--red); border-color: transparent; }
+  .pin-form small { flex-basis: 100%; color: var(--muted); font-size: 13px; }
+  .pin-form small.err { color: #ff6b6b; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; background: #fff; color: #000; font-weight: 600; padding: 10px 18px; border-radius: 6px; transition: .25s; pointer-events: none; }
   .toast.on { opacity: 1; transform: translate(-50%, 0); }
 </style>
@@ -103,6 +108,7 @@
 const $ = (id) => document.getElementById(id);
 const FOLDER_SVG = '<svg viewBox="0 0 24 24" fill="#e50914"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4l2 2.5h7A2.5 2.5 0 0 1 21 9v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>';
 let s = null;
+let pinEditing = false; // the PIN form is open: don't redraw under the user's typing
 
 function esc(v) { return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 function fmtBytes(b) { return b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b >= 1e6 ? Math.round(b / 1e6) + ' MB' : b > 0 ? '< 1 MB' : 'nothing'; }
@@ -147,10 +153,14 @@ function splitPath(p) {
 
 function render() {
   const mac = s.platform === 'darwin';
+  const linux = s.platform === 'linux';
   const trayWord = mac ? 'the menu bar' : 'the tray';
+  const pc = linux ? 'computer' : 'laptop';
   $('footerNote').textContent = mac
     ? 'Closing this window keeps HOMEFLIX running in the menu bar (top right of the screen). Click its icon there to quit.'
-    : 'Closing this window keeps HOMEFLIX running in the system tray (near the clock). Right-click the tray icon to quit.';
+    : linux
+      ? 'Closing this window keeps HOMEFLIX running in the system tray (top or bottom panel). Click its icon there to quit.'
+      : 'Closing this window keeps HOMEFLIX running in the system tray (near the clock). Right-click the tray icon to quit.';
   $('version').textContent = 'Version ' + s.version;
   $('status').classList.toggle('bad', !s.running);
   $('statusText').textContent = s.running ? (s.movieCount ? `Streaming ${s.movieCount} video${s.movieCount === 1 ? '' : 's'}` : 'Running') : 'Not running';
@@ -162,7 +172,7 @@ function render() {
   if (!s.folders.length) {
     $('app').innerHTML = html + `<section class="welcome">
       <h1>Welcome to HOMEFLIX</h1>
-      <p>Watch the movies on this laptop from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. Start by telling HOMEFLIX where your movies are.</p>
+      <p>Watch the movies on this ${pc} from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. Start by telling HOMEFLIX where your movies are.</p>
       <button class="btn btn-red" data-act="add">${FOLDER_SVG.replace('#e50914', '#fff')}Choose your movies folder</button>
       <small>You can add more folders later. Sub-folders are included.</small>
     </section>`;
@@ -174,14 +184,14 @@ function render() {
   html += `<div class="grid">
     <section class="card span">
       <h2>Watch on your iPad, phone or TV</h2>
-      <p class="lead">Any device on the same Wi-Fi as this laptop.</p>
+      <p class="lead">Any device on the same Wi-Fi as this ${pc}.${s.pinOn ? ' Each device asks for your PIN the first time.' : ''}</p>
       <div class="connect">
         <div class="qr">${s.qr ? `<img src="${s.qr}" alt="QR code for ${esc(s.url)}">` : ''}</div>
         <div>
           <div class="url">${esc(s.url || '—')}</div>
-          <div class="row-btns"><button class="btn" data-act="copy">Copy address</button><button class="btn" data-act="browser">Watch on this laptop</button></div>
+          <div class="row-btns"><button class="btn" data-act="copy">Copy address</button><button class="btn" data-act="browser">Watch on this ${pc}</button></div>
           <ol class="steps">
-            <li>Connect your device to the <b>same Wi-Fi</b> as this laptop.</li>
+            <li>Connect your device to the <b>same Wi-Fi</b> as this ${pc}.</li>
             <li>Point the camera at this code, or type the address into the browser (Safari, Chrome, or your TV’s browser).</li>
             <li>Tip: for an app icon, on iPhone/iPad tap Share → <b>Add to Home Screen</b>; on Android tap Chrome’s ⋮ menu → <b>Add to Home screen</b>.</li>
           </ol>
@@ -203,9 +213,13 @@ function render() {
 
     <section class="card">
       <h2>Settings</h2>
-      <div class="setting" style="margin-top:14px"><div><b>${mac ? 'Start at login' : 'Start with Windows'}</b><span>HOMEFLIX starts quietly in ${trayWord} when you sign in.</span></div>
+      <div class="setting" style="margin-top:14px"><div><b>Require a PIN</b><span>${s.pinOn ? 'On. Phones, tablets and TVs must enter your PIN once before they can watch.' : 'Off. Anyone on your Wi-Fi can watch. Turn on to make each device enter a PIN first.'}</span></div>
+        ${s.pinOn ? '<button class="btn" data-act="pin-change">Change PIN</button>' : ''}
+        <label class="switch"><input type="checkbox" id="pinSwitch" ${s.pinOn ? 'checked' : ''}><i></i></label></div>
+      <div id="pinForm"></div>
+      <div class="setting"><div><b>${mac || linux ? 'Start at login' : 'Start with Windows'}</b><span>HOMEFLIX starts quietly in ${trayWord} when you sign in.</span></div>
         <label class="switch"><input type="checkbox" id="login" ${s.openAtLogin ? 'checked' : ''}><i></i></label></div>
-      <div class="setting"><div><b>Storage used</b><span>${s.cacheBytes ? `Converted copies use ${fmtBytes(s.cacheBytes)}. The oldest are removed automatically when the laptop runs low on space, and they’re made again when needed.` : 'No converted copies yet. MKV and other files get one the first time you play them.'}</span></div>
+      <div class="setting"><div><b>Storage used</b><span>${s.cacheBytes ? `Converted copies use ${fmtBytes(s.cacheBytes)}. The oldest are removed automatically when the ${pc} runs low on space, and they’re made again when needed.` : 'No converted copies yet. MKV and other files get one the first time you play them.'}</span></div>
         <button class="btn" data-act="clear" ${s.cacheBytes ? '' : 'disabled'}>Free up space</button></div>
     </section>
 
@@ -213,14 +227,15 @@ function render() {
       <h2>Help</h2>
       <details><summary>The page won’t open on my iPad or phone</summary><ul>
         <li>Check both are on the same Wi-Fi (not mobile data, not a guest network).</li>
-        ${mac ? `<li>If your Mac asked whether HOMEFLIX may <b>accept incoming network connections</b>, it must be <b>Allow</b>. To change it later: System Settings → Network → Firewall → Options → HOMEFLIX → Allow incoming connections.</li>`
+        ${linux ? `<li>If this computer has a firewall turned on (for example <b>ufw</b> on Ubuntu), allow HOMEFLIX’s port from your home network: <b>sudo ufw allow from 192.168.0.0/16 to any port ${esc((s.localUrl || ':8080').split(':').pop())} proto tcp</b></li>`
+          : mac ? `<li>If your Mac asked whether HOMEFLIX may <b>accept incoming network connections</b>, it must be <b>Allow</b>. To change it later: System Settings → Network → Firewall → Options → HOMEFLIX → Allow incoming connections.</li>`
           : `<li>Your home Wi-Fi should be set to <b>Private</b> in Windows network settings, and HOMEFLIX allowed on home networks. The banner at the top of this window tells you if either needs doing.</li>
         <li>To check by hand: Windows Security → Firewall &amp; network protection → Allow an app through firewall → Change settings → HOMEFLIX should have <b>Private</b> ticked.</li>`}
-        <li>Keep this laptop awake and plugged in while you watch.</li>
+        <li>Keep this ${pc} awake and plugged in while you watch.</li>
       </ul></details>
       <details><summary>A movie won’t play</summary><ul>
         <li>The first time you open an MKV, HOMEFLIX repackages it for your device. Usually seconds, a few minutes for movies with Dolby audio.</li>
-        <li>Phones and TVs that can’t play HEVC (x265) get a converted version that starts in a few seconds. Converting uses this laptop’s graphics chip when it can.</li>
+        <li>Phones and TVs that can’t play HEVC (x265) get a converted version that starts in a few seconds. Converting uses this ${pc}’s graphics chip when it can.</li>
         <li>Picture missing but sound playing? Tap <b>Picture missing?</b> in the player. The device remembers the choice.</li>
         <li>Files still downloading show a “Downloading” badge and play once finished.</li>
       </ul></details>
@@ -238,7 +253,7 @@ function render() {
         <li>If HOMEFLIX doesn’t recognise your TV, add <b>?tv=1</b> to the end of the address once.</li>
         <li>From an iPhone or iPad you can also AirPlay to an Apple TV or AirPlay-compatible TV.</li>
       </ul></details>
-      <details><summary>Is it private?</summary><p>HOMEFLIX only works inside your own network. Nothing is uploaded to the internet. Anyone on your Wi-Fi can open the page, so don’t run it on public Wi-Fi.</p></details>
+      <details><summary>Is it private?</summary><p>HOMEFLIX only works inside your own network: devices connecting from the internet are turned away, even if your router forwards the port. Nothing is uploaded anywhere. Without a PIN, anyone on your Wi-Fi can open the page, so turn on <b>Require a PIN</b> if you share the Wi-Fi (flatmates, guests, an office), and don’t run it on public Wi-Fi.</p></details>
     </section>
   </div>`;
   const open = [...document.querySelectorAll('details')].map((d) => d.open);
@@ -246,7 +261,30 @@ function render() {
   document.querySelectorAll('details').forEach((d, i) => (d.open = !!open[i]));
   const login = $('login');
   if (login) login.onchange = async () => { s = await homeflix.setOpenAtLogin(login.checked); render(); };
+  const pinSwitch = $('pinSwitch');
+  if (pinSwitch) pinSwitch.onchange = async () => {
+    if (pinSwitch.checked) return openPinForm();
+    s = await homeflix.setPin(null);
+    pinEditing = false;
+    render();
+    toast('PIN turned off');
+  };
 }
+
+function openPinForm() {
+  pinEditing = true;
+  $('pinForm').innerHTML = `<div class="pin-form">
+    <input id="pinInput" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" placeholder="PIN" aria-label="New PIN">
+    <button class="btn btn-red" data-act="pin-save">Save PIN</button>
+    <button class="btn btn-ghost" data-act="pin-cancel">Cancel</button>
+    <small id="pinNote">4 to 8 digits. Devices already watching will be asked for it.</small>
+  </div>`;
+  const input = $('pinInput');
+  input.oninput = () => { input.value = input.value.replace(/\D/g, '').slice(0, 8); };
+  input.onkeydown = (e) => { if (e.key === 'Enter') $('pinForm').querySelector('[data-act="pin-save"]').click(); if (e.key === 'Escape') closePinForm(); };
+  input.focus();
+}
+function closePinForm() { pinEditing = false; render(); }
 
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
@@ -266,10 +304,24 @@ document.addEventListener('click', async (e) => {
     toast(r.result === 'ok' ? 'HOMEFLIX is allowed on home networks' : r.result === 'cancelled' ? 'Nothing changed: Windows permission was declined' : 'Couldn’t change the firewall setting');
   }
   if (act === 'copy') { await homeflix.copy(s.url); toast('Address copied'); }
+  if (act === 'pin-change') openPinForm();
+  if (act === 'pin-cancel') closePinForm();
+  if (act === 'pin-save') {
+    const value = $('pinInput').value;
+    if (!/^\d{4,8}$/.test(value)) { $('pinNote').textContent = 'The PIN must be 4 to 8 digits.'; $('pinNote').className = 'err'; return; }
+    const had = s.pinOn;
+    const r = await homeflix.setPin(value);
+    if (r.error) { $('pinNote').textContent = r.error; $('pinNote').className = 'err'; return; }
+    s = r;
+    pinEditing = false;
+    render();
+    toast(had ? 'PIN changed' : 'PIN turned on');
+  }
   if (act === 'clear') { const before = s.cacheBytes; s = await homeflix.clearCache(); render(); toast(`Freed ${fmtBytes(before - s.cacheBytes)}`); }
 });
 
 async function refresh() {
+  if (pinEditing) return;
   try { s = await homeflix.state(); render(); } catch (err) { $('app').innerHTML = `<div class="banner err"><div><b>Something went wrong</b><p>${esc(err.message)}</p></div></div>`; }
 }
 refresh();

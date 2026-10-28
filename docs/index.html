@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>HOMEFLIX: your movies on every screen in the house</title>
-<meta name="description" content="HOMEFLIX turns your Windows PC or Mac into a private Netflix for your home. Watch the movies on your computer from your iPhone, iPad, Android phone or smart TV over your own Wi-Fi. Free, no account, nothing uploaded.">
+<meta name="description" content="HOMEFLIX turns your Windows PC, Mac or Linux computer into a private Netflix for your home. Watch the movies on your computer from your iPhone, iPad, Android phone or smart TV over your own Wi-Fi. Free, no account, nothing uploaded.">
 <meta name="theme-color" content="#0b0b0b">
 <meta property="og:title" content="HOMEFLIX: your movies on every screen in the house">
-<meta property="og:description" content="A private Netflix for your home. Watch the movies on your computer from your phone, iPad or TV. Free for Windows and Mac.">
+<meta property="og:description" content="A private Netflix for your home. Watch the movies on your computer from your phone, iPad or TV. Free for Windows, Mac and Linux.">
 <meta property="og:image" content="icon.png">
 <meta property="og:type" content="website">
 <link rel="icon" href="icon.png">
@@ -153,9 +153,11 @@
   .screen p { margin: 0; color: var(--muted); font-size: 14.5px; }
 
   /* download */
-  .download { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 4vw, 56px); align-items: start; }
+  .download { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(28px, 4vw, 56px); align-items: start; }
+  @media (max-width: 1060px) { .download { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 880px) { .download { grid-template-columns: 1fr; } }
-  .platforms { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .platforms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 1060px) { .platforms { grid-template-columns: 1fr 1fr; } .platforms > :last-child { grid-column: 1 / -1; } }
   @media (max-width: 760px) { .platforms { grid-template-columns: 1fr; } }
   .dl-head { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
   .dl-head .os { width: 34px; height: 34px; color: #fff; }
@@ -231,9 +233,9 @@
   <section class="hero">
     <div class="wrap">
       <div>
-        <span class="eyebrow"><b></b>Free for Windows &amp; Mac · No account</span>
+        <span class="eyebrow"><b></b>Free for Windows, Mac &amp; Linux · No account</span>
         <h1 class="display">Your movies.<br><em>Every screen</em><br>in the house.</h1>
-        <p class="lead">HOMEFLIX turns your Windows PC or Mac into a private Netflix for your home. Watch the films already on your computer from your iPhone, iPad, Android phone or smart TV, over your own Wi-Fi.</p>
+        <p class="lead">HOMEFLIX turns your Windows PC, Mac or Linux computer into a private Netflix for your home. Watch the films already on your computer from your iPhone, iPad, Android phone or smart TV, over your own Wi-Fi.</p>
         <!-- One button per system. The script at the end points them at the latest release and makes the
              visitor's own system the red one; without it they lead to the download section. -->
         <div class="cta">
@@ -253,8 +255,21 @@
               <div class="dd-hint">Not sure? Apple menu → About This Mac. "Chip: Apple M…" means Apple Silicon.</div>
             </div>
           </div>
+          <div class="dd" id="linuxDd">
+            <button class="btn btn-ghost" id="heroLinux" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="linuxMenu">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2.2 0-3.6 1.8-3.6 4.4 0 1.1.2 1.9.1 2.8-.2 1.4-1.6 2.6-2.5 4.3-.9 1.6-1.4 3.4-.9 4.6-.8.4-1.7.6-1.6 1.4.1.9 1.6.9 2.6 1.4 1 .5 2 1.1 2.9.9.7-.2 1-.7 1.2-1.2h3.6c.2.5.5 1 1.2 1.2.9.2 1.9-.4 2.9-.9 1-.5 2.5-.5 2.6-1.4.1-.8-.8-1-1.6-1.4.5-1.2 0-3-.9-4.6-.9-1.7-2.3-2.9-2.5-4.3-.1-.9.1-1.7.1-2.8C15.6 3.8 14.2 2 12 2Zm-1.4 4c.4 0 .7.5.7 1.1s-.3 1.1-.7 1.1-.7-.5-.7-1.1.3-1.1.7-1.1Zm2.8 0c.4 0 .7.5.7 1.1s-.3 1.1-.7 1.1-.7-.5-.7-1.1.3-1.1.7-1.1ZM12 9.2c.9 0 2 .5 2 .9s-1.1 1.1-2 1.1-2-.7-2-1.1.9-.9 2-.9Z"/></svg>
+              Linux
+              <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="dd-menu" id="linuxMenu" role="menu" hidden>
+              <a role="menuitem" data-asset="linux-deb-x64" href="#download"><b>Ubuntu, Debian, Mint (.deb)</b><span class="sub">64-bit PCs</span></a>
+              <a role="menuitem" data-asset="linux-appimage-x64" href="#download"><b>Any distro (AppImage)</b><span class="sub">64-bit PCs, nothing to install</span></a>
+              <a role="menuitem" data-asset="linux-deb-arm64" href="#download"><b>ARM .deb</b><span class="sub">Raspberry Pi 4/5 (64-bit OS) and ARM boards</span></a>
+              <a role="menuitem" data-asset="linux-appimage-arm64" href="#download"><b>ARM AppImage</b><span class="sub">Raspberry Pi 4/5 and ARM boards</span></a>
+            </div>
+          </div>
         </div>
-        <div class="dl-meta" id="heroMeta"><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Free</span></div>
+        <div class="dl-meta" id="heroMeta"><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Linux</span><span>Free</span></div>
         <div class="dl-alt" id="heroAlt"></div>
       </div>
 
@@ -291,7 +306,7 @@
         <p>No account to create, no cloud, no subscription. HOMEFLIX runs quietly on your computer and your other screens open it like a website.</p>
       </div>
       <div class="steps">
-        <div class="step"><h3>Install and pick your folder</h3><p>Download HOMEFLIX for Windows or Mac, install it and choose the folder where your movies are. Sub-folders are included.</p></div>
+        <div class="step"><h3>Install and pick your folder</h3><p>Download HOMEFLIX for Windows, Mac or Linux, install it and choose the folder where your movies are. Sub-folders are included.</p></div>
         <div class="step"><h3>Scan the code</h3><p>On your phone, iPad or TV, connect to the same Wi-Fi and scan the QR code HOMEFLIX shows, or type its address into the browser.</p></div>
         <div class="step"><h3>Watch</h3><p>Browse your films and shows like on Netflix and press play. Each device remembers where you stopped.</p></div>
       </div>
@@ -311,7 +326,7 @@
         <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14M5 12h9M5 16h6"/><circle cx="18" cy="16" r="3"/></svg></div><h3>Audio languages and subtitles</h3><p>Switch between Tamil, Hindi, English or whatever the file carries, mid-movie. Subtitles from the file or a .srt next to it.</p></div>
         <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></div><h3>Volume boost</h3><p>Films mixed quietly for cinemas get a one-tap boost on phones and TVs, about twice as loud, without distortion.</p></div>
         <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/><path d="M9 7h6M9 11h6"/></svg></div><h3>Made for the remote too</h3><p>On a smart TV, move around with the arrows and OK, and pause, skip and pick subtitles from on-screen controls.</p></div>
-        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><h3>Private by design</h3><p>Works only inside your own network. No accounts, no tracking, nothing sent to the internet. Your movies never leave the house.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><h3>Private by design</h3><p>Works only inside your own network: connections from the internet are turned away. Add an optional PIN so only your devices get in. No tracking, nothing uploaded.</p></div>
       </div>
     </div>
   </section>
@@ -336,7 +351,7 @@
     <div class="wrap">
       <div class="section-head">
         <div class="kicker">Download</div>
-        <h2>Free for Windows and Mac.</h2>
+        <h2>Free for Windows, Mac and Linux.</h2>
         <p>Install it on the computer that has your movies. Your phone, iPad and TV need nothing installed.</p>
       </div>
       <div class="platforms">
@@ -358,6 +373,16 @@
           </a>
           <a class="btn btn-ghost" data-asset="mac-x64" href="https://github.com/kprakz/homeflix/releases/latest" style="margin-top:10px">Intel Mac</a>
           <div class="small">Not sure which? Apple menu → <b>About This Mac</b>. "Chip: Apple M…" means Apple Silicon; "Processor: Intel" means Intel.</div>
+        </div>
+        <div class="dl-card" id="linuxCard">
+          <div class="dl-head"><svg class="os" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2.2 0-3.6 1.8-3.6 4.4 0 1.1.2 1.9.1 2.8-.2 1.4-1.6 2.6-2.5 4.3-.9 1.6-1.4 3.4-.9 4.6-.8.4-1.7.6-1.6 1.4.1.9 1.6.9 2.6 1.4 1 .5 2 1.1 2.9.9.7-.2 1-.7 1.2-1.2h3.6c.2.5.5 1 1.2 1.2.9.2 1.9-.4 2.9-.9 1-.5 2.5-.5 2.6-1.4.1-.8-.8-1-1.6-1.4.5-1.2 0-3-.9-4.6-.9-1.7-2.3-2.9-2.5-4.3-.1-.9.1-1.7.1-2.8C15.6 3.8 14.2 2 12 2Zm-1.4 4c.4 0 .7.5.7 1.1s-.3 1.1-.7 1.1-.7-.5-.7-1.1.3-1.1.7-1.1Zm2.8 0c.4 0 .7.5.7 1.1s-.3 1.1-.7 1.1-.7-.5-.7-1.1.3-1.1.7-1.1ZM12 9.2c.9 0 2 .5 2 .9s-1.1 1.1-2 1.1-2-.7-2-1.1.9-.9 2-.9Z"/></svg><h3>Linux</h3></div>
+          <p>Ubuntu 22.04 or later, Debian 12, Mint, Fedora and most others. 64-bit PCs and ARM.</p>
+          <a class="btn btn-red" data-asset="linux-deb-x64" href="https://github.com/kprakz/homeflix/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+            Ubuntu / Debian (.deb)
+          </a>
+          <a class="btn btn-ghost" data-asset="linux-appimage-x64" href="https://github.com/kprakz/homeflix/releases/latest" style="margin-top:10px">AppImage (any distro)</a>
+          <div class="small">On a Raspberry Pi or other ARM computer? Pick the ARM version from the <b>Linux</b> menu at the top, or from <a href="https://github.com/kprakz/homeflix/releases/latest">the release page</a>.</div>
         </div>
       </div>
       <div class="small" style="margin-top:16px"><span data-detail="version"></span><a href="https://github.com/kprakz/homeflix/releases">All versions &amp; what's new</a> · <a href="https://github.com/kprakz/homeflix">Source code</a></div>
@@ -382,6 +407,16 @@
             <li><b>Scan and watch</b><span>Point your phone's camera at the QR code.</span></li>
           </ol>
           <div class="note"><b>Why the extra step?</b> Apple charges developers yearly to "notarize" apps; HOMEFLIX is a free open-source project, so macOS asks you to confirm once. You can <a href="https://github.com/kprakz/homeflix">read every line</a> of it.</div>
+        </div>
+        <div>
+          <div class="kicker">Installing on Linux</div>
+          <ol class="install" style="margin-top:18px">
+            <li><b>Install it</b><span><code>.deb</code>: open it with Software Install, or run <code>sudo apt install ./HOMEFLIX-*.deb</code>. AppImage: right-click it → Properties → <b>Allow executing as program</b>, then double-click.</span></li>
+            <li><b>Choose your movies folder</b><span>Open HOMEFLIX from your apps menu. Don't run it with <code>sudo</code>: it doesn't need admin rights.</span></li>
+            <li><b>Open the port if you use a firewall</b><span>With ufw: <code>sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp</code></span></li>
+            <li><b>Scan and watch</b><span>Point your phone's camera at the QR code.</span></li>
+          </ol>
+          <div class="note"><b>AppImage won't start?</b> Ubuntu 22.04 and later need <code>sudo apt install libfuse2t64</code> (or <code>libfuse2</code>) once. Or use the .deb.</div>
         </div>
       </div>
     </div>
@@ -413,11 +448,12 @@
         <h2>Good to know.</h2>
       </div>
       <details><summary>Is it really free?</summary><p>Yes. There's no subscription, no account and no ads. HOMEFLIX is open source on GitHub.</p></details>
-      <details><summary>Does it upload my movies anywhere?</summary><p>No. Your computer streams straight to your devices over your own Wi-Fi. Nothing goes to the internet, and there's no tracking. Anyone on your Wi-Fi can open the page, so use it on networks you trust.</p></details>
+      <details><summary>Does it upload my movies anywhere?</summary><p>No. Your computer streams straight to your devices over your own Wi-Fi. Nothing goes to the internet, and there's no tracking. Devices connecting from the internet are turned away, even if your router forwards the port.</p></details>
+      <details><summary>Can I stop others on my Wi-Fi from watching?</summary><p>Yes. Turn on <b>Require a PIN</b> in HOMEFLIX's settings and choose 4 to 8 digits. Each phone, tablet or TV asks for it once, then remembers it. Change the PIN and every device has to enter the new one. After 5 wrong tries, HOMEFLIX makes people wait before trying again.</p></details>
       <details><summary>Can I watch when I'm away from home?</summary><p>No. HOMEFLIX only works inside your home network. That's what keeps it simple and private.</p></details>
-      <details><summary>What do I need?</summary><p>A Windows 10/11 PC or a Mac (macOS 12 or later) with your movies on it, and your devices on the same Wi-Fi. Keep the computer awake and plugged in while you watch. The movie plays on your phone or TV, not on the computer.</p></details>
+      <details><summary>What do I need?</summary><p>A Windows 10/11 PC, a Mac (macOS 12 or later) or a Linux computer with your movies on it, and your devices on the same Wi-Fi. Keep the computer awake and plugged in while you watch. The movie plays on your phone or TV, not on the computer.</p></details>
       <details><summary>Which file formats work?</summary><p>MP4, MKV, MOV, AVI, WebM, TS and more, including HEVC (x265). If a device can't play a file directly, HOMEFLIX converts it as it plays. Subtitles inside the file, or a .srt or .vtt file next to it, show up in the player.</p></details>
-      <details><summary>Does it work on Mac or Linux?</summary><p>Yes on Mac: there are versions for Apple Silicon and Intel Macs (macOS 12 or later). Not on Linux yet. The devices you watch on can be anything with a modern browser.</p></details>
+      <details><summary>Does it work on Mac or Linux?</summary><p>Yes. There are versions for Apple Silicon and Intel Macs (macOS 12 or later), and for Linux as a .deb (Ubuntu, Debian, Mint) or an AppImage that runs on most distros, on 64-bit PCs and ARM computers like the Raspberry Pi 4/5. The devices you watch on can be anything with a modern browser.</p></details>
       <details><summary>Why does my computer warn me when I install it?</summary><p>Windows and macOS warn about apps that haven't paid for a code-signing certificate. On Windows click <b>More info</b> → <b>Run anyway</b>. On a Mac open System Settings → <b>Privacy &amp; Security</b> → <b>Open Anyway</b>. Both are only needed the first time.</p></details>
     </div>
   </section>
@@ -443,6 +479,7 @@ window.releaseReady = (async () => {
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   const isMac = /mac/i.test(platform) && !(navigator.maxTouchPoints > 1);
   const isWin = /win/i.test(platform);
+  const isLinux = /linux/i.test(platform) && !/android/i.test(navigator.userAgent);
   // Intel Macs report an Intel graphics chip here. Anything else, including Macs that don't say,
   // gets the Apple Silicon build (every Mac sold since 2021).
   let macArch = 'arm64';
@@ -453,7 +490,7 @@ window.releaseReady = (async () => {
       if (ext && /intel/i.test(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL))) macArch = 'x64';
     } catch {}
   }
-  if (isMac || isWin) $(isMac ? 'macCard' : 'winCard').classList.add('suggested');
+  if (isMac || isWin || isLinux) $(isMac ? 'macCard' : isLinux ? 'linuxCard' : 'winCard').classList.add('suggested');
 
   let release = null;
   try {
@@ -462,7 +499,11 @@ window.releaseReady = (async () => {
   } catch {}
   const assets = (release && release.assets) || [];
   const find = (re) => assets.find((a) => re.test(a.name));
-  const files = { win: find(/\.exe$/i), 'mac-arm64': find(/mac-arm64\.dmg$/i), 'mac-x64': find(/mac-x64\.dmg$/i) };
+  const files = {
+    win: find(/\.exe$/i), 'mac-arm64': find(/mac-arm64\.dmg$/i), 'mac-x64': find(/mac-x64\.dmg$/i),
+    'linux-deb-x64': find(/linux-(amd64|x64)\.deb$/i), 'linux-appimage-x64': find(/linux-(x86_64|x64)\.AppImage$/i),
+    'linux-deb-arm64': find(/linux-arm64\.deb$/i), 'linux-appimage-arm64': find(/linux-arm64\.AppImage$/i),
+  };
   const version = release ? String(release.tag_name || '').replace(/^v/, '') : '';
   const mb = (a) => `${Math.round(a.size / 1e6)} MB`;
 
@@ -473,12 +514,12 @@ window.releaseReady = (async () => {
         a.href = asset.browser_download_url;
         a.setAttribute('download', '');
         a.title = `${asset.name} · ${mb(asset)}`;
-      } else if (release && key.startsWith('mac')) {
-        // This release has no Mac build (yet): say so rather than send people to a page without one.
+      } else if (release && key !== 'win') {
+        // This release has no build for it (yet): say so rather than send people to a page without one.
         a.setAttribute('aria-disabled', 'true');
         const sub = a.querySelector('.sub');
         if (sub) sub.textContent = 'Coming soon';
-        else a.lastChild.textContent = key === 'mac-arm64' ? ' Mac version coming soon' : 'Intel Mac: coming soon';
+        else a.lastChild.textContent = key === 'mac-arm64' ? ' Mac version coming soon' : key === 'mac-x64' ? 'Intel Mac: coming soon' : key === 'linux-deb-x64' ? ' Linux version coming soon' : 'Coming soon';
       }
     });
   }
@@ -492,14 +533,18 @@ window.releaseReady = (async () => {
     const rec = document.querySelector(`#macMenu [data-asset="mac-${macArch}"] b`);
     if (rec && files[`mac-${macArch}`]) rec.insertAdjacentHTML('beforeend', '<span class="rec">This Mac</span>');
   }
-  if (version) $('heroMeta').innerHTML = `<span>Version ${version}</span><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Free</span>`;
+  if (isLinux) {
+    $('heroLinux').classList.replace('btn-ghost', 'btn-red');
+    $('heroWin').classList.replace('btn-red', 'btn-ghost');
+  }
+  if (version) $('heroMeta').innerHTML = `<span>Version ${version}</span><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Linux</span><span>Free</span>`;
   // A phone or tablet: HOMEFLIX goes on the computer with the movies.
-  if (!isMac && !isWin) $('heroAlt').textContent = 'Install it on your Windows PC or Mac, then watch on this device.';
+  if (!isMac && !isWin && !isLinux) $('heroAlt').textContent = 'Install it on your Windows PC, Mac or Linux computer, then watch on this device.';
 })();
 
-// The macOS dropdown: opens on click, closes on a choice, Escape or a click elsewhere.
-(() => {
-  const dd = document.getElementById('macDd'), btn = document.getElementById('heroMac'), menu = document.getElementById('macMenu');
+// The macOS and Linux dropdowns: open on click, close on a choice, Escape or a click elsewhere.
+document.querySelectorAll('.dd').forEach((dd) => {
+  const btn = dd.querySelector('button'), menu = dd.querySelector('.dd-menu');
   const items = () => [...menu.querySelectorAll('a[role="menuitem"]:not([aria-disabled="true"])')];
   const open = (focusFirst) => {
     menu.hidden = false;
@@ -522,7 +567,7 @@ window.releaseReady = (async () => {
   menu.addEventListener('click', (e) => { if (e.target.closest('a')) close(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(true); });
   document.addEventListener('click', (e) => { if (!dd.contains(e.target)) close(false); });
-})();
+});
 </script>
 <script>
 // Download counter and world map. Both run on the HOMEFLIX Vercel project (api/download.js counts a
@@ -588,7 +633,8 @@ const COUNTER = 'https://homeflix-rho.vercel.app';
     const nCountries = Math.max(1, ranked.length);
     $('mapTitle').textContent = `Movie nights in ${nCountries.toLocaleString()} ${nCountries === 1 ? 'country' : 'countries'}.`;
     $('mapStats').innerHTML = `<span class="stat-strong">${stats.total.toLocaleString()}</span> ${stats.total === 1 ? 'download' : 'downloads'}`
-      + ` · <span class="stat-strong">${(p.windows || 0).toLocaleString()}</span> on Windows · <span class="stat-strong">${(p.mac || 0).toLocaleString()}</span> on Mac.`
+      + ` · <span class="stat-strong">${(p.windows || 0).toLocaleString()}</span> on Windows · <span class="stat-strong">${(p.mac || 0).toLocaleString()}</span> on Mac`
+      + (p.linux ? ` · <span class="stat-strong">${p.linux.toLocaleString()}</span> on Linux.` : '.')
       + ' The more downloads in a country, the redder it gets.';
     svg.setAttribute('aria-label', `World map of HOMEFLIX downloads in ${ranked.length} countries`);
   }

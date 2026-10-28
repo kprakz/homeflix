@@ -1,8 +1,8 @@
 // Copies ffmpeg and ffprobe into vendor/ffmpeg so the installer can ship them.
-// - FFMPEG_SRC_DIR set: takes ffmpeg and ffprobe from that folder (the Mac build downloads native
-//   static builds for each chip there; see .github/workflows/mac.yml).
+// - FFMPEG_SRC_DIR set: takes ffmpeg and ffprobe from that folder (the Mac and Linux builds download
+//   native static builds for each chip there; see .github/workflows/mac.yml and linux.yml).
 // - Windows: uses the ffmpeg on this PC's PATH (install it with: winget install Gyan.FFmpeg.Essentials).
-// - macOS otherwise: uses the ffmpeg-static and ffprobe-static npm packages
+// - macOS / Linux otherwise: uses the ffmpeg-static and ffprobe-static npm packages
 //   (npm install --no-save ffmpeg-static ffprobe-static). Note ffprobe-static's Mac build is Intel-only.
 
 import { execFileSync } from 'node:child_process';
@@ -58,7 +58,7 @@ function findSources() {
   }
   const pkgDir = path.dirname(require.resolve('ffmpeg-static/package.json'));
   const license = fs.readdirSync(pkgDir).filter((f) => /license/i.test(f)).map((f) => path.join(pkgDir, f)).find((f) => /ffmpeg/i.test(f)) || null;
-  return { ffmpeg, ffprobe, license, origin: 'macOS build: https://github.com/eugeneware/ffmpeg-static and https://github.com/joshwnj/ffprobe-static' };
+  return { ffmpeg, ffprobe, license, origin: 'Builds from https://github.com/eugeneware/ffmpeg-static and https://github.com/joshwnj/ffprobe-static' };
 }
 
 const src = findSources();

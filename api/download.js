@@ -14,6 +14,7 @@ const BOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|whatsapp|curl|wg
 function platformOf(url) {
   if (/\.exe$/i.test(url)) return 'windows';
   if (/\.dmg$/i.test(url)) return 'mac';
+  if (/\.(AppImage|deb)$/i.test(url)) return 'linux';
   return 'other';
 }
 

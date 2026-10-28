@@ -11,4 +11,5 @@ contextBridge.exposeInMainWorld('homeflix', {
   copy: (text) => ipcRenderer.invoke('copy', text),
   setOpenAtLogin: (on) => ipcRenderer.invoke('set-open-at-login', on),
   clearCache: () => ipcRenderer.invoke('clear-cache'),
+  setPin: (pin) => ipcRenderer.invoke('set-pin', pin),
 });
