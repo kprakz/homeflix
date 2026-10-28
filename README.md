@@ -151,7 +151,7 @@ With `npm run serve`, set a PIN by adding `"pin": "1234"` to `config.json`.
 
 **Mac builds** are made by GitHub Actions (`.github/workflows/mac.yml`) on Apple Silicon and Intel Macs whenever a release is published. The workflow starts the built app with a test movie, checks it lists, streams and prepares it, and attaches `HOMEFLIX-<version>-mac-arm64.dmg` and `-mac-x64.dmg` to the release. To build on a Mac yourself: `npm install --no-save ffmpeg-static ffprobe-static && npm run dist:mac`.
 
-**Linux builds** are made the same way by `.github/workflows/linux.yml` on x64 and ARM64 Ubuntu machines, with static ffmpeg from [johnvansickle.com](https://johnvansickle.com/ffmpeg/). It installs the .deb, checks it lists, streams and prepares a test movie, refuses a foreign web address and asks for a PIN once one is set, checks the AppImage starts, and attaches `HOMEFLIX-<version>-linux-*.deb` and `.AppImage` to the release. To build on Linux yourself: `npm install --no-save ffmpeg-static ffprobe-static && npm run dist:linux`.
+**Linux builds** are made the same way by `.github/workflows/linux.yml` on x64 and ARM64 Ubuntu machines, with static ffmpeg from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds). It installs the .deb, checks it lists, streams and prepares a test movie, refuses a foreign web address and asks for a PIN once one is set, checks the AppImage starts, and attaches `HOMEFLIX-<version>-linux-*.deb` and `.AppImage` to the release. To build on Linux yourself: `npm install --no-save ffmpeg-static ffprobe-static && npm run dist:linux`.
 
 `npm run serve` runs only the streaming server (`server.js`), configured by `config.json` (copy `config.example.json` to start). `npm run icons` redraws the icons.
 

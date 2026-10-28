@@ -28,10 +28,10 @@ jobs:
         include:
           - runner: ubuntu-24.04
             arch: x64
-            ffarch: amd64
+            ffarch: linux64
           - runner: ubuntu-24.04-arm
             arch: arm64
-            ffarch: arm64
+            ffarch: linuxarm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -44,19 +44,23 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Static ffmpeg + ffprobe for this chip from John Van Sickle's Linux builds (no system libraries
-      # needed, so they run on any distro).
+      # Static ffmpeg + ffprobe for this chip from BtbN's FFmpeg-Builds, newest release branch (no
+      # system libraries needed, so they run on any distro).
       - name: Bundle ffmpeg
         env:
+          GH_TOKEN: ${{ github.token }}
           FFMPEG_SRC_DIR: ${{ runner.temp }}/ffmpeg
-          FFMPEG_ORIGIN: 'Linux static build: https://johnvansickle.com/ffmpeg/ (configuration and sources listed there)'
+          FFMPEG_ORIGIN: 'Linux static build: https://github.com/BtbN/FFmpeg-Builds (configuration and sources listed there)'
         run: |
           set -euo pipefail
-          curl -fsSL -o "$RUNNER_TEMP/ffmpeg.tar.xz" "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${{ matrix.ffarch }}-static.tar.xz"
+          gh release view latest --repo BtbN/FFmpeg-Builds --json assets --jq '.assets[].name' > "$RUNNER_TEMP/ffmpeg-assets.txt"
+          NAME=$(grep -E '^ffmpeg-n[0-9.]+-latest-${{ matrix.ffarch }}-gpl-[0-9.]+\.tar\.xz$' "$RUNNER_TEMP/ffmpeg-assets.txt" | sort -V | tail -n 1)
+          echo "Using $NAME"
+          gh release download latest --repo BtbN/FFmpeg-Builds --pattern "$NAME" --output "$RUNNER_TEMP/ffmpeg.tar.xz"
           mkdir -p "$RUNNER_TEMP/ffmpeg-x" "$FFMPEG_SRC_DIR"
           tar -xJf "$RUNNER_TEMP/ffmpeg.tar.xz" -C "$RUNNER_TEMP/ffmpeg-x" --strip-components=1
-          cp "$RUNNER_TEMP/ffmpeg-x/ffmpeg" "$RUNNER_TEMP/ffmpeg-x/ffprobe" "$FFMPEG_SRC_DIR/"
-          cp "$RUNNER_TEMP/ffmpeg-x/GPLv3.txt" "$FFMPEG_SRC_DIR/LICENSE.txt"
+          cp "$RUNNER_TEMP/ffmpeg-x/bin/ffmpeg" "$RUNNER_TEMP/ffmpeg-x/bin/ffprobe" "$FFMPEG_SRC_DIR/"
+          cp "$RUNNER_TEMP/ffmpeg-x/LICENSE.txt" "$FFMPEG_SRC_DIR/LICENSE.txt"
           file "$FFMPEG_SRC_DIR/ffmpeg" "$FFMPEG_SRC_DIR/ffprobe"
           node scripts/get-ffmpeg.mjs
 
