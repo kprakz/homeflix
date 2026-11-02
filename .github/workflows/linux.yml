@@ -120,6 +120,19 @@ jobs:
           curl -sf -b jar http://localhost:8080/api/library | cut -c1-200; echo
           pkill -f /opt/HOMEFLIX/homeflix || true
 
+      # GitHub's machines come with most desktop libraries already, which hides a missing dependency.
+      # Install the .deb on a bare Ubuntu instead and check the app finds every library it needs.
+      - name: Check the .deb brings everything it needs
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/dist:/dist" ubuntu:24.04 bash -c '
+            set -euo pipefail
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /dist/*.deb > /dev/null
+            missing=$(ldd /opt/HOMEFLIX/homeflix /opt/HOMEFLIX/*.so | grep "not found" | sort -u || true)
+            if [ -n "$missing" ]; then echo "Missing libraries:"; echo "$missing"; exit 1; fi
+            echo "All libraries present"'
+
       # The AppImage needs no install; check it starts too.
       - name: Test the AppImage
         run: |
