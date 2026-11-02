@@ -72,7 +72,34 @@ This only opens HOMEFLIX's port to your home network. If the HOMEFLIX window sho
 
 ### Running it in WSL (Windows Subsystem for Linux)
 
-It installs and runs the same way, and the window appears on your Windows desktop. But **phones and TVs can't reach it**: WSL sits on a private network inside Windows. On a Windows PC, use the Windows version instead.
+It installs and runs the same way, and the window appears on your Windows desktop. But by default **phones and TVs can't reach it**: WSL sits on a private network inside Windows (its address starts with `172.`). **On a Windows PC, the Windows version is the easy choice.** If you want the Linux copy anyway, the steps below let your phone in.
+
+#### Watch from your phone when HOMEFLIX runs in WSL
+
+Needs **Windows 11 version 22H2 or later**; Windows 10 doesn't have this option. These steps change Windows networking settings and add a firewall rule, and they're easy to undo (see the end).
+
+1. **Quit the Windows HOMEFLIX** if it's running (tray icon → Quit HOMEFLIX). Both copies would want port 8080.
+2. **Turn on mirrored networking.** Open Notepad and paste:
+   ```
+   [wsl2]
+   networkingMode=mirrored
+   ```
+   Save it as `C:\Users\<you>\.wslconfig`, with **Save as type: All files**. Otherwise Notepad saves it as `.wslconfig.txt` and WSL ignores it. In File Explorer, turn on View → Show → File name extensions to check.
+3. **Open PowerShell as Administrator**: Start → type *PowerShell* → right-click → **Run as administrator** → Yes. The window title must start with **Administrator:**. Command Prompt (`C:\>`) or a normal PowerShell won't work ("not recognized" or "Access is denied").
+4. **Restart WSL and let your phone through**, in that Administrator PowerShell:
+   ```powershell
+   wsl --shutdown
+   ```
+   ```powershell
+   New-NetFirewallHyperVRule -Name HOMEFLIX-WSL -DisplayName "HOMEFLIX in WSL" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8080
+   ```
+   The second command prints a summary ending in `EnforcementStatus : OK`.
+5. **Start HOMEFLIX in Ubuntu** (`homeflix &`). Running `hostname -I` in Ubuntu should now show your PC's Wi-Fi address (like `192.168.1.57`) instead of `172.…`.
+6. **On your phone**, open `http://<that address>:8080`.
+
+On the PC itself, use `http://localhost:8080`. In mirrored mode, Windows can't reach its own Wi-Fi address inside WSL, so that address may time out on the PC even though phones work.
+
+**To undo it:** delete `.wslconfig`, run `wsl --shutdown`, and in an Administrator PowerShell run `Remove-NetFirewallHyperVRule -Name HOMEFLIX-WSL`.
 
 Everything else below works the same as on Windows.
 
@@ -175,7 +202,7 @@ Settings → Apps → Installed apps → **HOMEFLIX** → Uninstall. This also r
 | No thumbnails / MKV won't play | Reinstall HOMEFLIX (its video tools are missing). |
 | A device asks for a PIN I don't know | The owner of the HOMEFLIX computer turned on **Require a PIN**. The PIN is set (and can be changed or turned off) in Settings in the HOMEFLIX window. |
 | "HOMEFLIX only works on the home network it runs on" | The device isn't on the same network as the computer: it's on mobile data, a guest Wi-Fi or coming from the internet. Join the same Wi-Fi. |
-| Linux: phone can't connect | Allow the port in your firewall (see *Install on Linux*). In WSL, phones can't connect at all; use the Windows version. |
+| Linux: phone can't connect | Allow the port in your firewall (see *Install on Linux*). In WSL, phones need extra steps (see *Watch from your phone when HOMEFLIX runs in WSL*), or use the Windows version. |
 | Linux: `error while loading shared libraries: libasound.so.2` | Run `sudo apt install libasound2t64` (or `libasound2` on older systems), then start HOMEFLIX again. |
 | Linux: `E: Malformed entry … in list file /etc/apt/sources.list.d/…` or `The list of sources could not be read` | Another app's apt source file on your system is broken, not HOMEFLIX. Fix or remove the file it names (each `deb …` entry must be on one line), then run the install again. |
 | Linux: HOMEFLIX doesn't open, no error | Run `homeflix` in a terminal to see the message. If it mentions the "sandbox", use the .deb rather than the AppImage. |

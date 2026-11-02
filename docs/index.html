@@ -430,7 +430,7 @@
             <li><b>Phone can't connect?</b><span>Only if you use a firewall, let your home network in:</span>
               <div class="cmd"><code>sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp</code><button type="button">Copy</button></div></li>
           </ol>
-          <div class="note"><b>Something not working?</b> <code>libasound.so.2</code> error: run the second command above. AppImage won't start on Ubuntu 22.04+: <code>sudo apt install libfuse2t64</code>. In <b>WSL</b> on Windows it runs, but phones can't reach it; use the Windows version there. More fixes in the <a href="https://github.com/kprakz/homeflix#install-on-linux">full guide</a>.</div>
+          <div class="note"><b>Something not working?</b> <code>libasound.so.2</code> error: run the second command above. AppImage won't start on Ubuntu 22.04+: <code>sudo apt install libfuse2t64</code>. In <b>WSL</b> on Windows it runs, but phones only reach it after <a href="https://github.com/kprakz/homeflix#watch-from-your-phone-when-homeflix-runs-in-wsl">a few extra steps</a> (Windows 11); the Windows version is easier. More fixes in the <a href="https://github.com/kprakz/homeflix#install-on-linux">full guide</a>.</div>
         </div>
       </div>
     </div>
