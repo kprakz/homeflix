@@ -18,14 +18,63 @@ HOMEFLIX then lives in the menu bar at the top right of the screen. Everything e
 
 ## Install on Linux
 
-1. **[Download HOMEFLIX for Linux](https://kprakz.github.io/homeflix/#download)**: the **.deb** for Ubuntu, Debian and Mint, or the **AppImage** for any other distro. There are versions for 64-bit PCs (x64) and ARM computers such as the Raspberry Pi 4/5 (arm64).
-2. Install it:
-   - **.deb**: open it with Software Install, or run `sudo apt install ./HOMEFLIX-<version>-linux-amd64.deb`. HOMEFLIX then appears in your apps menu.
-   - **AppImage**: right-click it → Properties → **Allow executing as program** (or `chmod +x HOMEFLIX-*.AppImage`), then double-click it. On Ubuntu 22.04 and later, install `libfuse2t64` (or `libfuse2`) once if it won't start.
-3. Click **Choose your movies folder**. Don't run HOMEFLIX with `sudo`: it doesn't need admin rights.
-4. If your computer has a firewall turned on, let your home network reach HOMEFLIX's port. With ufw: `sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp`.
+### Which file?
 
-HOMEFLIX then lives in the system tray (on GNOME you may need the *AppIndicator* extension to see the icon). Everything else below works the same as on Windows.
+| Your computer | Download |
+|---|---|
+| Ubuntu, Debian, Mint, Pop!_OS (64-bit PC) | `HOMEFLIX-<version>-linux-amd64.deb` (recommended) |
+| Fedora, Arch, openSUSE or any other distro (64-bit PC) | `HOMEFLIX-<version>-linux-x86_64.AppImage` |
+| Raspberry Pi 4/5 (64-bit OS) or another ARM computer | `HOMEFLIX-<version>-linux-arm64.deb` or `-arm64.AppImage` |
+
+Not sure if it's a PC or ARM? Run `uname -m`: `x86_64` means 64-bit PC, `aarch64` means ARM.
+
+Download it from **[the website](https://kprakz.github.io/homeflix/#download)** or the [latest release](https://github.com/kprakz/homeflix/releases/latest).
+
+### Option A: the .deb (Ubuntu, Debian, Mint)
+
+Open a terminal in the folder you downloaded it to (usually `cd ~/Downloads`) and run these one at a time. Type your password when asked; nothing shows while you type.
+
+```bash
+sudo apt update
+sudo apt install libasound2t64 || sudo apt install libasound2
+sudo apt install ./HOMEFLIX-*-linux-amd64.deb
+```
+
+- The second line adds the sound library HOMEFLIX needs. Some minimal systems (servers, WSL) don't have it, and HOMEFLIX 1.4.0 doesn't install it by itself. If it's already there, the command just says so.
+- Keep the `./` in the last line: it tells apt to use the file in this folder.
+- At the end you may see `N: Download is performed unsandboxed as root…`. That's only a note, and the install worked.
+
+### Option B: the AppImage (any distro, nothing to install)
+
+```bash
+chmod +x HOMEFLIX-*.AppImage
+./HOMEFLIX-*.AppImage
+```
+
+Or right-click it → Properties → **Allow executing as program**, then double-click it. If it won't start on Ubuntu 22.04 or later, run `sudo apt install libfuse2t64` (or `libfuse2`) once and try again.
+
+### Start HOMEFLIX
+
+- Open **HOMEFLIX** from your apps menu, or type `homeflix &` in a terminal (.deb).
+- Click **Choose your movies folder** and pick the folder with your films. Sub-folders are included.
+- **Don't run it with `sudo`.** It doesn't need admin rights.
+- HOMEFLIX keeps running in the system tray when you close the window. On GNOME (Ubuntu's default desktop), you may need the *AppIndicator* extension to see the icon. To quit, use the tray icon or run `pkill homeflix`.
+
+### Let your phone and TV in (if you use a firewall)
+
+Most desktop installs have no firewall turned on, so skip this unless your phone can't connect. With ufw (Ubuntu):
+
+```bash
+sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp
+```
+
+This only opens HOMEFLIX's port to your home network. If the HOMEFLIX window shows a different port, use that number instead of `8080`.
+
+### Running it in WSL (Windows Subsystem for Linux)
+
+It installs and runs the same way, and the window appears on your Windows desktop. But **phones and TVs can't reach it**: WSL sits on a private network inside Windows. On a Windows PC, use the Windows version instead.
+
+Everything else below works the same as on Windows.
 
 ## Install on Windows (5 minutes, one time)
 
@@ -126,7 +175,10 @@ Settings → Apps → Installed apps → **HOMEFLIX** → Uninstall. This also r
 | No thumbnails / MKV won't play | Reinstall HOMEFLIX (its video tools are missing). |
 | A device asks for a PIN I don't know | The owner of the HOMEFLIX computer turned on **Require a PIN**. The PIN is set (and can be changed or turned off) in Settings in the HOMEFLIX window. |
 | "HOMEFLIX only works on the home network it runs on" | The device isn't on the same network as the computer: it's on mobile data, a guest Wi-Fi or coming from the internet. Join the same Wi-Fi. |
-| Linux: phone can't connect | Allow the port in your firewall (see *Install on Linux*). |
+| Linux: phone can't connect | Allow the port in your firewall (see *Install on Linux*). In WSL, phones can't connect at all; use the Windows version. |
+| Linux: `error while loading shared libraries: libasound.so.2` | Run `sudo apt install libasound2t64` (or `libasound2` on older systems), then start HOMEFLIX again. |
+| Linux: `E: Malformed entry … in list file /etc/apt/sources.list.d/…` or `The list of sources could not be read` | Another app's apt source file on your system is broken, not HOMEFLIX. Fix or remove the file it names (each `deb …` entry must be on one line), then run the install again. |
+| Linux: HOMEFLIX doesn't open, no error | Run `homeflix` in a terminal to see the message. If it mentions the "sandbox", use the .deb rather than the AppImage. |
 
 ---
 

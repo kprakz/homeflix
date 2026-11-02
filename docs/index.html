@@ -174,8 +174,15 @@
   .install { list-style: none; margin: 0; padding: 0; counter-reset: i; }
   .install li { position: relative; padding: 0 0 22px 52px; counter-increment: i; }
   .install li::before { content: counter(i); position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #3a3a3a; font-weight: 800; font-size: 15px; color: #ddd; }
-  .install li b { display: block; font-size: 17px; }
+  .install li > b { display: block; font-size: 17px; }
   .install li span { color: var(--muted); font-size: 15.5px; }
+  .install li span b { color: #ddd; }
+  code { font: 600 .9em/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; color: #eee; }
+  /* Terminal commands to copy: wrap rather than scroll on narrow screens. */
+  .cmd { position: relative; margin: 8px 0 2px; padding: 10px 62px 10px 12px; border-radius: 8px; background: #0b0b0b; border: 1px solid #2c2c2c; }
+  .cmd code { display: block; background: none; padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; color: #e8e8e8; }
+  .cmd button { position: absolute; top: 6px; right: 6px; border: 0; border-radius: 6px; padding: 5px 8px; background: #262626; color: #ccc; font: 600 12px/1 inherit; cursor: pointer; }
+  .cmd button:hover { background: #333; color: #fff; }
   .note { margin-top: 6px; padding: 14px 16px; border-radius: 10px; background: rgba(245,179,1,.08); border: 1px solid rgba(245,179,1,.28); font-size: 14.5px; color: #e8d9a8; }
 
   /* world map: GitHub contribution-graph squares, in HOMEFLIX red */
@@ -411,12 +418,19 @@
         <div>
           <div class="kicker">Installing on Linux</div>
           <ol class="install" style="margin-top:18px">
-            <li><b>Install it</b><span><code>.deb</code>: open it with Software Install, or run <code>sudo apt install ./HOMEFLIX-*.deb</code>. AppImage: right-click it → Properties → <b>Allow executing as program</b>, then double-click.</span></li>
-            <li><b>Choose your movies folder</b><span>Open HOMEFLIX from your apps menu. Don't run it with <code>sudo</code>: it doesn't need admin rights.</span></li>
-            <li><b>Open the port if you use a firewall</b><span>With ufw: <code>sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp</code></span></li>
-            <li><b>Scan and watch</b><span>Point your phone's camera at the QR code.</span></li>
+            <li><b>Pick the right file</b><span>Ubuntu, Debian, Mint: the <b>.deb</b>. Other distros: the <b>AppImage</b>. Raspberry Pi: the <b>ARM</b> version. Not sure? <code>uname -m</code> says <code>x86_64</code> (PC) or <code>aarch64</code> (ARM).</span></li>
+            <li><b>Install the .deb</b><span>Open a terminal where you downloaded it (usually <code>cd ~/Downloads</code>) and run these one at a time. Type your password when asked; nothing shows while you type.</span>
+              <div class="cmd"><code>sudo apt update</code><button type="button">Copy</button></div>
+              <div class="cmd"><code>sudo apt install libasound2t64 || sudo apt install libasound2</code><button type="button">Copy</button></div>
+              <div class="cmd"><code>sudo apt install ./HOMEFLIX-*-linux-amd64.deb</code><button type="button">Copy</button></div>
+              <span>The second line adds a sound library HOMEFLIX needs, which minimal systems may not have. A closing <code>N: Download is performed unsandboxed…</code> note is harmless.</span></li>
+            <li><b>Or run the AppImage</b><span>No install needed:</span>
+              <div class="cmd"><code>chmod +x HOMEFLIX-*.AppImage &amp;&amp; ./HOMEFLIX-*.AppImage</code><button type="button">Copy</button></div></li>
+            <li><b>Start it and choose your folder</b><span>Open HOMEFLIX from your apps menu (or type <code>homeflix &amp;</code>), then click <b>Choose your movies folder</b>. Don't run it with <code>sudo</code>.</span></li>
+            <li><b>Phone can't connect?</b><span>Only if you use a firewall, let your home network in:</span>
+              <div class="cmd"><code>sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp</code><button type="button">Copy</button></div></li>
           </ol>
-          <div class="note"><b>AppImage won't start?</b> Ubuntu 22.04 and later need <code>sudo apt install libfuse2t64</code> (or <code>libfuse2</code>) once. Or use the .deb.</div>
+          <div class="note"><b>Something not working?</b> <code>libasound.so.2</code> error: run the second command above. AppImage won't start on Ubuntu 22.04+: <code>sudo apt install libfuse2t64</code>. In <b>WSL</b> on Windows it runs, but phones can't reach it; use the Windows version there. More fixes in the <a href="https://github.com/kprakz/homeflix#install-on-linux">full guide</a>.</div>
         </div>
       </div>
     </div>
@@ -541,6 +555,20 @@ window.releaseReady = (async () => {
   // A phone or tablet: HOMEFLIX goes on the computer with the movies.
   if (!isMac && !isWin && !isLinux) $('heroAlt').textContent = 'Install it on your Windows PC, Mac or Linux computer, then watch on this device.';
 })();
+
+// Copy buttons on terminal commands.
+document.querySelectorAll('.cmd button').forEach((b) => b.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(b.previousElementSibling.textContent); b.textContent = 'Copied'; }
+  catch {
+    // Clipboard blocked: select the command so Ctrl+C / long-press copies it.
+    const range = document.createRange();
+    range.selectNodeContents(b.previousElementSibling);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    b.textContent = 'Selected';
+  }
+  setTimeout(() => (b.textContent = 'Copy'), 1500);
+}));
 
 // The macOS and Linux dropdowns: open on click, close on a choice, Escape or a click elsewhere.
 document.querySelectorAll('.dd').forEach((dd) => {
