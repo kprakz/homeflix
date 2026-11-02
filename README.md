@@ -85,21 +85,36 @@ Needs **Windows 11 version 22H2 or later**; Windows 10 doesn't have this option.
    networkingMode=mirrored
    ```
    Save it as `C:\Users\<you>\.wslconfig`, with **Save as type: All files**. Otherwise Notepad saves it as `.wslconfig.txt` and WSL ignores it. In File Explorer, turn on View → Show → File name extensions to check.
-3. **Open PowerShell as Administrator**: Start → type *PowerShell* → right-click → **Run as administrator** → Yes. The window title must start with **Administrator:**. Command Prompt (`C:\>`) or a normal PowerShell won't work ("not recognized" or "Access is denied").
+3. **Open PowerShell as Administrator**: Start → type *PowerShell* → right-click **Windows PowerShell** → **Run as administrator** → Yes. Check two things:
+   - The window title starts with **Administrator:**. If not, you get "Access is denied".
+   - The prompt starts with **`PS`** (`PS C:\Users\you>`). If it's just `C:\Users\you>`, it's Command Prompt and you get "is not recognized". Type `powershell` and press Enter to switch; the admin rights carry over.
 4. **Restart WSL and let your phone through**, in that Administrator PowerShell:
    ```powershell
    wsl --shutdown
    ```
    ```powershell
-   New-NetFirewallHyperVRule -Name HOMEFLIX-WSL -DisplayName "HOMEFLIX in WSL" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8080
+   New-NetFirewallHyperVRule -Name HOMEFLIX-WSL -DisplayName "HOMEFLIX in WSL" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8080 -Profiles Private -RemoteAddresses 192.168.0.0/16
    ```
-   The second command prints a summary ending in `EnforcementStatus : OK`.
+   The second command prints a summary ending in `EnforcementStatus : OK`. It only opens HOMEFLIX's port, only on networks Windows calls **Private** (your home Wi-Fi), and only to home addresses (192.168.x.x). On café or hotel Wi-Fi, which Windows treats as Public, it stays closed. If your home network uses 10.x.x.x addresses, put `10.0.0.0/8` instead of `192.168.0.0/16`. Your home Wi-Fi must be set to Private: Settings → Network & internet → Wi-Fi → your network → **Private network**.
 5. **Start HOMEFLIX in Ubuntu** (`homeflix &`). Running `hostname -I` in Ubuntu should now show your PC's Wi-Fi address (like `192.168.1.57`) instead of `172.…`.
 6. **On your phone**, open `http://<that address>:8080`.
 
 On the PC itself, use `http://localhost:8080`. In mirrored mode, Windows can't reach its own Wi-Fi address inside WSL, so that address may time out on the PC even though phones work.
 
-**To undo it:** delete `.wslconfig`, run `wsl --shutdown`, and in an Administrator PowerShell run `Remove-NetFirewallHyperVRule -Name HOMEFLIX-WSL`.
+**Set up once, and it stays.** Nothing here runs or reverts when you open or close HOMEFLIX. The firewall rule stays in Windows, and that's fine: while HOMEFLIX is closed nothing answers on port 8080, so phones just can't connect, and when you open it again they connect straight away. Mirrored networking applies to all of WSL, not just HOMEFLIX: Ubuntu shares your PC's Wi-Fi address, and everything else stays blocked by WSL's firewall.
+
+Made the rule earlier without the `-Profiles` and `-RemoteAddresses` parts? Tighten it in an Administrator PowerShell:
+```powershell
+Set-NetFirewallHyperVRule -Name HOMEFLIX-WSL -Profiles Private -RemoteAddresses 192.168.0.0/16
+```
+
+**To undo it all** (only if you stop using HOMEFLIX in WSL for good):
+1. In an Administrator PowerShell, remove the firewall rule:
+   ```powershell
+   Remove-NetFirewallHyperVRule -Name HOMEFLIX-WSL
+   ```
+2. Delete the file `C:\Users\<you>\.wslconfig`.
+3. Run `wsl --shutdown` (a normal PowerShell is fine). WSL is back exactly as before.
 
 Everything else below works the same as on Windows.
 
