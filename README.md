@@ -141,6 +141,24 @@ HOMEFLIX checks Windows Firewall and shows a box at the top of its window if som
 
 ---
 
+## Install on Android
+
+The native Android app is in [`android/`](android/). It connects to the same HOMEFLIX computer as the
+browser and has the same features: resume positions and start over, series and auto-play next episode,
+audio languages, subtitles, remembered volume boost, and HEVC fallback.
+
+1. Download **`HOMEFLIX-<version>.apk`** from the [latest release](../../releases/latest) and open it.
+   Android asks once whether to allow installing apps from this source; allow it, then tap **Install**.
+2. Open **HOMEFLIX**. It looks for your computer on the same Wi-Fi. Choose it, or tap **Scan QR code**
+   and point the camera at the QR code in the HOMEFLIX window. You can also type the address shown
+   (for example `192.168.1.57:8080`).
+3. If the computer has a PIN, enter it once. The app remembers the computer and the PIN.
+
+Requires **Android 7.0 or newer**. The same APK works on Android TV, Google TV and Fire TV; sideload it
+and it appears under your apps. On a phone or tablet, the Play Store listing (when published) is built
+from the same app bundle. The app is open source and lives in this repository: see
+[`android/README.md`](android/README.md) for building it, signing releases, and publishing to Play.
+
 ## Watch
 
 1. Connect your iPhone, iPad, Android phone or TV to the **same Wi-Fi** as the laptop.
