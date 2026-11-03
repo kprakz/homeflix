@@ -4,3 +4,10 @@ cache/
 vendor/
 config.json
 .claude/
+.agents/
+skills-lock.json
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db

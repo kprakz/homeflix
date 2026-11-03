@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -283,7 +284,7 @@ const SERIES_RE = /^(.*?)[\s-]*S(\d{1,2})\s*E(\d{1,3})\b/i;
 let movies = [];      // every video from the server
 let shows = new Map(); // show name -> episodes, in order
 let pollTimer = null;
-let infoCache = {};
+const infoCache = new Map();
 
 // ---------- watch progress, kept on this device ----------
 const store = {
@@ -300,8 +301,8 @@ function fmtSize(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round
 function fmtTime(s) { s = Math.floor(s); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? `${h}h ${m}m` : `${m}m`; }
 function isNew(m) { return Date.now() - m.mtime < 7 * 864e5; }
 async function info(id) {
-  if (!infoCache[id]) infoCache[id] = fetch('/api/info/' + id).then((r) => r.json());
-  return infoCache[id];
+  if (!infoCache.has(id)) infoCache.set(id, fetch('/api/info/' + encodeURIComponent(id)).then((r) => r.json()));
+  return infoCache.get(id);
 }
 
 function parse(m) {
@@ -322,9 +323,10 @@ function nextUp(show) {
 
 // ---------- cards ----------
 function movieCard(m) {
+  const safeId = encodeURIComponent(m.id);
   const p = pct(m.id);
   const sub = m.show ? `${m.epLabel}` : [m.year, fmtSize(m.size)].filter(Boolean).join(' · ');
-  return `<div class="card" tabindex="0" role="button" data-play="${m.id}" style="background-image:url('/thumb/${m.id}')">
+  return `<div class="card" tabindex="0" role="button" data-play="${safeId}" style="background-image:url('/thumb/${safeId}')">
     ${m.downloading ? '<span class="badge dl">DOWNLOADING</span>' : m.state === 'working' ? '<span class="badge">PREPARING</span>' : isNew(m) && !p ? '<span class="badge">NEW</span>' : ''}
     <div class="label"><div class="t">${esc(m.show ? m.show : m.title)}</div><div class="s">${esc(sub)}</div></div>
     ${p ? `<div class="bar"><div style="width:${p}%"></div></div>` : ''}
@@ -333,7 +335,8 @@ function movieCard(m) {
 function showCard(name) {
   const eps = shows.get(name);
   const cover = eps[0];
-  return `<div class="card" tabindex="0" role="button" data-show="${esc(name)}" style="background-image:url('/thumb/${cover.id}')">
+  const safeCoverId = encodeURIComponent(cover.id);
+  return `<div class="card" tabindex="0" role="button" data-show="${esc(name)}" style="background-image:url('/thumb/${safeCoverId}')">
     ${eps.some(isNew) ? '<span class="badge">NEW EPISODES</span>' : ''}
     <span class="count">${eps.length} EP</span>
     <div class="label"><div class="t">${esc(name)}</div><div class="s">${eps.length} episode${eps.length > 1 ? 's' : ''}</div></div>
@@ -372,21 +375,23 @@ async function renderHero(pick) {
   const isShow = !!pick.show;
   const target = isShow ? nextUp(pick.show) : pick;
   const p = pct(target.id);
-  hero.style.backgroundImage = `url('/thumb/${target.id}?size=hero')`;
+  const safeTargetId = encodeURIComponent(target.id);
+  const safePickId = encodeURIComponent(pick.id);
+  hero.style.backgroundImage = `url('/thumb/${safeTargetId}?size=hero')`;
   const eps = isShow ? shows.get(pick.show) : null;
   hero.innerHTML = `<div class="hero-body">
     <div class="hero-tag"><b>H</b>${isShow ? 'SERIES' : 'FILM'}</div>
     <h1 class="${(isShow ? pick.show : pick.title).length > 14 ? 'long' : ''}">${esc(isShow ? pick.show : pick.title)}</h1>
     <div class="hero-meta" id="heroMeta">
-      ${pick.year ? `<span>${pick.year}</span>` : ''}
+      ${pick.year ? `<span>${esc(pick.year)}</span>` : ''}
       ${isShow ? `<span>${eps.length} Episode${eps.length > 1 ? 's' : ''}</span><span class="pill">${target.epLabel}</span>` : ''}
       <span class="pill">HD</span>
     </div>
     ${p ? `<div class="hero-progress"><div style="width:${p}%"></div></div>` : ''}
     <div class="hero-actions">
-      <button class="btn btn-play" data-play="${target.id}">${ICON_PLAY}${p ? 'Resume' : 'Play'}</button>
-      ${p ? `<button class="btn btn-info" data-play="${target.id}" data-from-start>${ICON_RESTART}Start over</button>` : ''}
-      <button class="btn btn-info" ${isShow ? `data-show="${esc(pick.show)}"` : `data-info="${pick.id}"`}>${ICON_INFO}More Info</button>
+      <button class="btn btn-play" data-play="${safeTargetId}">${ICON_PLAY}${p ? 'Resume' : 'Play'}</button>
+      ${p ? `<button class="btn btn-info" data-play="${safeTargetId}" data-from-start>${ICON_RESTART}Start over</button>` : ''}
+      <button class="btn btn-info" ${isShow ? `data-show="${esc(pick.show)}"` : `data-info="${safePickId}"`}>${ICON_INFO}More Info</button>
     </div>
   </div>`;
   if (!isShow) {
@@ -428,22 +433,24 @@ async function openModal({ id, show }) {
   const target = show ? nextUp(show) : item;
   if (!target) return;
   const p = pct(target.id);
-  card.innerHTML = `<div class="modal-hero" style="background-image:url('/thumb/${target.id}?size=hero')">
+  const safeTargetId = encodeURIComponent(target.id);
+  card.innerHTML = `<div class="modal-hero" style="background-image:url('/thumb/${safeTargetId}?size=hero')">
       <button class="close" data-close aria-label="Close">✕</button>
       <div class="body"><h1>${esc(show || item.title)}</h1>
         <div class="hero-actions">
-          <button class="btn btn-play" data-play="${target.id}">${ICON_PLAY}${p ? 'Resume' : 'Play'}${show ? ' ' + target.epLabel : ''}</button>
-          ${p ? `<button class="btn btn-info" data-play="${target.id}" data-from-start>${ICON_RESTART}Start over</button>` : ''}
+          <button class="btn btn-play" data-play="${safeTargetId}">${ICON_PLAY}${p ? 'Resume' : 'Play'}${show ? ' ' + target.epLabel : ''}</button>
+          ${p ? `<button class="btn btn-info" data-play="${safeTargetId}" data-from-start>${ICON_RESTART}Start over</button>` : ''}
         </div></div>
     </div>
     <div class="modal-body">
-      <div class="facts" id="facts">${isNew(target) ? '<span class="hi">New</span>' : ''}${item && item.year ? `<span>${item.year}</span>` : ''}${show ? `<span>${eps.length} Episodes</span>` : ''}<span class="pill">HD</span></div>
+      <div class="facts" id="facts">${isNew(target) ? '<span class="hi">New</span>' : ''}${item && item.year ? `<span>${esc(item.year)}</span>` : ''}${show ? `<span>${eps.length} Episodes</span>` : ''}<span class="pill">HD</span></div>
       ${show ? `<div class="eps-head"><h3>Episodes</h3><span class="muted">${esc(show)}</span></div>` + eps.map((e) => {
         const ep = pct(e.id);
-        return `<div class="ep ${e.id === target.id ? 'next' : ''}" tabindex="0" role="button" data-play="${e.id}">
+        const safeEId = encodeURIComponent(e.id);
+        return `<div class="ep ${e.id === target.id ? 'next' : ''}" tabindex="0" role="button" data-play="${safeEId}">
           <div class="n">${e.ep}</div>
-          <div class="img" style="background-image:url('/thumb/${e.id}')">${ep ? `<div class="bar"><div style="width:${ep}%"></div></div>` : ''}</div>
-          <div><div class="et">Episode ${e.ep}</div><div class="es" data-dur="${e.id}">Season ${e.season} · ${fmtSize(e.size)}</div></div>
+          <div class="img" style="background-image:url('/thumb/${safeEId}')">${ep ? `<div class="bar"><div style="width:${ep}%"></div></div>` : ''}</div>
+          <div><div class="et">Episode ${e.ep}</div><div class="es" data-dur="${safeEId}">Season ${e.season} · ${fmtSize(e.size)}</div></div>
         </div>`;
       }).join('') : ''}
     </div>`;
@@ -461,7 +468,7 @@ async function openModal({ id, show }) {
   for (const eid of ids) {
     info(eid).then((i) => {
       if (!i || !i.duration) return;
-      const el = card.querySelector(`[data-dur="${eid}"]`);
+      const el = card.querySelector(`[data-dur="${encodeURIComponent(eid)}"]`);
       if (el) el.textContent = `Season ${movies.find((m) => m.id === eid).season} · ${fmtTime(i.duration)}`;
       if (!show && $('facts')) {
         $('facts').insertAdjacentHTML('beforeend', `<span>${fmtTime(i.duration)}</span><span>${fmtSize(item.size)}</span>` +
@@ -537,14 +544,15 @@ async function openMovie(id, fromStart = false) {
   $('watch').classList.remove('playing', 'waiting', 'osd-hidden');
   document.body.classList.add('lock');
   const stage = $('stage');
-  stage.innerHTML = `<div class="stage" style="background-image:url('/thumb/${id}?size=hero')"><div class="shade"><div class="spinner"></div></div></div>`;
+  const safeId = encodeURIComponent(id);
+  stage.innerHTML = `<div class="stage" style="background-image:url('/thumb/${safeId}?size=hero')"><div class="shade"><div class="spinner"></div></div></div>`;
   if (usingKeys) document.querySelector('#watch .back').focus({ preventScroll: true });
   let i;
   try {
     i = await info(id);
     if (i.error) throw new Error(i.error);
   } catch (e) {
-    delete infoCache[id];
+    infoCache.delete(id);
     stage.querySelector('.shade').innerHTML = `<div class="error">${esc(e.message || 'Could not load this title.')}</div>`;
     return;
   }
@@ -702,7 +710,8 @@ function teardownVideo() {
 
 function play(i, m, kind, startAt, audio = 0) {
   teardownVideo();
-  const tracks = i.subs.map((s) => `<track kind="subtitles" src="/subs/${i.id}/${s.key}.vtt" srclang="${esc(s.lang.slice(0, 2))}" label="${esc(s.label)}">`).join('');
+  const safeMovieId = encodeURIComponent(i.id);
+  const tracks = i.subs.map((s) => '<track kind="subtitles" src="/subs/' + safeMovieId + '/' + encodeURIComponent(s.key) + '.vtt" srclang="' + esc(s.lang.slice(0, 2)) + '" label="' + esc(s.label) + '">').join('');
   const hevcFile = kind === 'file' && i.videoCodec === 'hevc';
   const multiAudio = i.audios && i.audios.length > 1;
   // TVs, and anyone who got here with arrow keys, get HOMEFLIX's own controls: the browser's are
@@ -716,7 +725,7 @@ function play(i, m, kind, startAt, audio = 0) {
         ${hevcFile ? '<button class="pill" data-compat>Picture missing?</button>' : ''}
       </div>`
     : '';
-  $('stage').innerHTML = `<video id="v" ${remote ? '' : 'controls'} playsinline autoplay preload="auto" poster="/thumb/${i.id}?size=hero">${tracks}</video>
+  $('stage').innerHTML = `<video id="v" ${remote ? '' : 'controls'} playsinline autoplay preload="auto" poster="/thumb/${safeMovieId}?size=hero">${tracks}</video>
     <div class="buffering"><div class="spinner"></div><div>${kind === 'hls' ? 'Converting for this device…' : 'Loading…'}</div></div>
     ${topActions}`;
   const v = $('v');
@@ -1140,6 +1149,7 @@ function route() {
 }
 
 document.addEventListener('click', (e) => {
+  if ($('lock').classList.contains('on')) return;
   const t = e.target.closest('[data-play],[data-show],[data-info],[data-close],[data-home],[data-jump],[data-back],[data-osd],[data-compat],[data-audio],[data-audio-menu],[data-audio-close],[data-restart],[data-boost]');
   if (!t) { if (e.target === $('modal')) closeModal(); return; }
   if (t.dataset.play) {
@@ -1194,6 +1204,9 @@ function drawPin(msg) {
 }
 function showLock() {
   closePlayer();
+  for (const el of [$('bar'), $('home'), $('results')]) {
+    if (el) el.setAttribute('inert', '');
+  }
   $('lock').classList.add('on');
   document.body.classList.add('lock');
   pin = '';
@@ -1209,6 +1222,9 @@ async function unlock() {
   const d = r ? await r.json().catch(() => ({})) : { error: 'Can’t reach the computer. Is HOMEFLIX running?' };
   if (r && r.ok) {
     try { if (d.key) localStorage.setItem('key', d.key); } catch {}
+    for (const el of [$('bar'), $('home'), $('results')]) {
+      if (el) el.removeAttribute('inert');
+    }
     $('lock').classList.remove('on');
     document.body.classList.remove('lock');
     return route();

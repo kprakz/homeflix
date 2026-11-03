@@ -19,8 +19,16 @@ function platformOf(url) {
 }
 
 module.exports = async (req, res) => {
-  const requested = String((req.query && req.query.url) || '');
-  const ok = requested.startsWith(`${RELEASES}download/`) || requested.startsWith(`${RELEASES}latest/download/`);
+  const requested = String((req.query && req.query.url) || '').trim();
+  let ok = false;
+  if (!/[\r\n\x00-\x1f\x7f]/.test(requested)) {
+    try {
+      const u = new URL(requested);
+      if (u.protocol === 'https:' && (requested.startsWith(`${RELEASES}download/`) || requested.startsWith(`${RELEASES}latest/download/`))) {
+        ok = true;
+      }
+    } catch {}
+  }
   const target = ok ? requested : FALLBACK;
 
   const alreadyCounted = /(?:^|;\s*)homeflix_dl=/.test(req.headers.cookie || '');

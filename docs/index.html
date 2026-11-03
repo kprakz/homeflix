@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.github.com https://homeflix-rho.vercel.app; object-src 'none'; base-uri 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>HOMEFLIX: your movies on every screen in the house</title>
 <meta name="description" content="HOMEFLIX turns your Windows PC, Mac or Linux computer into a private Netflix for your home. Watch the movies on your computer from your iPhone, iPad, Android phone or smart TV over your own Wi-Fi. Free, no account, nothing uploaded.">
@@ -518,12 +519,14 @@ window.releaseReady = (async () => {
     'linux-deb-x64': find(/linux-(amd64|x64)\.deb$/i), 'linux-appimage-x64': find(/linux-(x86_64|x64)\.AppImage$/i),
     'linux-deb-arm64': find(/linux-arm64\.deb$/i), 'linux-appimage-arm64': find(/linux-arm64\.AppImage$/i),
   };
-  const version = release ? String(release.tag_name || '').replace(/^v/, '') : '';
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const rawVersion = release ? String(release.tag_name || '').replace(/^v/, '') : '';
+  const version = /^\d+(\.\d+)*(-[\w.]+)?$/.test(rawVersion) ? rawVersion : '';
   const mb = (a) => `${Math.round(a.size / 1e6)} MB`;
 
   for (const [key, asset] of Object.entries(files)) {
     document.querySelectorAll(`[data-asset="${key}"]`).forEach((a) => {
-      if (asset) {
+      if (asset && typeof asset.browser_download_url === 'string' && asset.browser_download_url.startsWith('https://github.com/')) {
         a.removeAttribute('aria-disabled');
         a.href = asset.browser_download_url;
         a.setAttribute('download', '');
@@ -551,7 +554,7 @@ window.releaseReady = (async () => {
     $('heroLinux').classList.replace('btn-ghost', 'btn-red');
     $('heroWin').classList.replace('btn-red', 'btn-ghost');
   }
-  if (version) $('heroMeta').innerHTML = `<span>Version ${version}</span><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Linux</span><span>Free</span>`;
+  if (version) $('heroMeta').innerHTML = `<span>Version ${esc(version)}</span><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Linux</span><span>Free</span>`;
   // A phone or tablet: HOMEFLIX goes on the computer with the movies.
   if (!isMac && !isWin && !isLinux) $('heroAlt').textContent = 'Install it on your Windows PC, Mac or Linux computer, then watch on this device.';
 })();
@@ -659,10 +662,14 @@ const COUNTER = 'https://homeflix-rho.vercel.app';
   } else {
     const p = stats.platforms || {};
     const nCountries = Math.max(1, ranked.length);
+    const totalDownloads = Number(stats.total) || 0;
+    const winDownloads = Number(p.windows) || 0;
+    const macDownloads = Number(p.mac) || 0;
+    const linuxDownloads = Number(p.linux) || 0;
     $('mapTitle').textContent = `Movie nights in ${nCountries.toLocaleString()} ${nCountries === 1 ? 'country' : 'countries'}.`;
-    $('mapStats').innerHTML = `<span class="stat-strong">${stats.total.toLocaleString()}</span> ${stats.total === 1 ? 'download' : 'downloads'}`
-      + ` · <span class="stat-strong">${(p.windows || 0).toLocaleString()}</span> on Windows · <span class="stat-strong">${(p.mac || 0).toLocaleString()}</span> on Mac`
-      + (p.linux ? ` · <span class="stat-strong">${p.linux.toLocaleString()}</span> on Linux.` : '.')
+    $('mapStats').innerHTML = `<span class="stat-strong">${totalDownloads.toLocaleString()}</span> ${totalDownloads === 1 ? 'download' : 'downloads'}`
+      + ` · <span class="stat-strong">${winDownloads.toLocaleString()}</span> on Windows · <span class="stat-strong">${macDownloads.toLocaleString()}</span> on Mac`
+      + (linuxDownloads ? ` · <span class="stat-strong">${linuxDownloads.toLocaleString()}</span> on Linux.` : '.')
       + ' The more downloads in a country, the redder it gets.';
     svg.setAttribute('aria-label', `World map of HOMEFLIX downloads in ${ranked.length} countries`);
   }

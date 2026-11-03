@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';">
 <title>HOMEFLIX</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
 <style>
@@ -110,7 +110,7 @@ const FOLDER_SVG = '<svg viewBox="0 0 24 24" fill="#e50914"><path d="M3 6.5A2.5 
 let s = null;
 let pinEditing = false; // the PIN form is open: don't redraw under the user's typing
 
-function esc(v) { return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+function esc(v) { return v == null ? '' : String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 function fmtBytes(b) { return b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b >= 1e6 ? Math.round(b / 1e6) + ' MB' : b > 0 ? '< 1 MB' : 'nothing'; }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1800); }
 
@@ -186,7 +186,7 @@ function render() {
       <h2>Watch on your iPad, phone or TV</h2>
       <p class="lead">Any device on the same Wi-Fi as this ${pc}.${s.pinOn ? ' Each device asks for your PIN the first time.' : ''}</p>
       <div class="connect">
-        <div class="qr">${s.qr ? `<img src="${s.qr}" alt="QR code for ${esc(s.url)}">` : ''}</div>
+        <div class="qr">${s.qr ? `<img src="${esc(s.qr)}" alt="QR code for ${esc(s.url)}">` : ''}</div>
         <div>
           <div class="url">${esc(s.url || '—')}</div>
           <div class="row-btns"><button class="btn" data-act="copy">Copy address</button><button class="btn" data-act="browser">Watch on this ${pc}</button></div>
@@ -204,7 +204,7 @@ function render() {
       <p class="lead">HOMEFLIX shows every video in these folders and their sub-folders.</p>
       <ul class="folders">${s.folders.map((f) => `<li>
         <div class="folder-icon">${FOLDER_SVG}</div>
-        <div class="folder-text"><div class="folder-path" title="${esc(f.path)}">${esc(splitPath(f.path).name)}</div><div class="folder-count" title="${esc(f.path)}">${f.count} video${f.count === 1 ? '' : 's'} · ${esc(splitPath(f.path).parent)}</div></div>
+        <div class="folder-text"><div class="folder-path" title="${esc(f.path)}">${esc(splitPath(f.path).name)}</div><div class="folder-count" title="${esc(f.path)}">${esc(f.count)} video${f.count === 1 ? '' : 's'} · ${esc(splitPath(f.path).parent)}</div></div>
         <button class="btn-ghost btn" data-act="open" data-folder="${esc(f.path)}">Open</button>
         <button class="btn-ghost btn" data-act="remove" data-folder="${esc(f.path)}">Remove</button>
       </li>`).join('')}</ul>
@@ -219,7 +219,7 @@ function render() {
       <div id="pinForm"></div>
       <div class="setting"><div><b>${mac || linux ? 'Start at login' : 'Start with Windows'}</b><span>HOMEFLIX starts quietly in ${trayWord} when you sign in.</span></div>
         <label class="switch"><input type="checkbox" id="login" ${s.openAtLogin ? 'checked' : ''}><i></i></label></div>
-      <div class="setting"><div><b>Storage used</b><span>${s.cacheBytes ? `Converted copies use ${fmtBytes(s.cacheBytes)}. The oldest are removed automatically when the ${pc} runs low on space, and they’re made again when needed.` : 'No converted copies yet. MKV and other files get one the first time you play them.'}</span></div>
+      <div class="setting"><div><b>Storage used</b><span>${s.cacheBytes ? `Converted copies use ${esc(fmtBytes(s.cacheBytes))}. The oldest are removed automatically when the ${pc} runs low on space, and they’re made again when needed.` : 'No converted copies yet. MKV and other files get one the first time you play them.'}</span></div>
         <button class="btn" data-act="clear" ${s.cacheBytes ? '' : 'disabled'}>Free up space</button></div>
     </section>
 
