@@ -18,10 +18,12 @@ on:
         default: ''
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   linux:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -125,7 +127,7 @@ jobs:
       - name: Check the .deb brings everything it needs
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD/dist:/dist" ubuntu:24.04 bash -c '
+          docker run --rm -v "$PWD/dist:/dist:ro" ubuntu:24.04 bash -c '
             set -euo pipefail
             apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /dist/*.deb > /dev/null
@@ -157,4 +159,5 @@ jobs:
         if: github.event_name == 'release' || inputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name || inputs.tag }}" dist/*.AppImage dist/*.deb --clobber
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$RELEASE_TAG" dist/*.AppImage dist/*.deb --clobber

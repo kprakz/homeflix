@@ -31,6 +31,7 @@ async function pipeline(commands) {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(6000),
   });
   if (!res.ok) throw new Error(`Redis responded with HTTP ${res.status}.`);
   const results = await res.json();

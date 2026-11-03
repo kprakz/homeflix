@@ -5,9 +5,17 @@
 
 const { redisConfig, pipeline, KEYS } = require('./_redis');
 
+const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function toCounts(flat) {
-  const counts = {};
-  if (Array.isArray(flat)) for (let i = 0; i + 1 < flat.length; i += 2) counts[String(flat[i])] = Number(flat[i + 1]) || 0;
+  const counts = Object.create(null);
+  if (Array.isArray(flat)) {
+    for (let i = 0; i + 1 < flat.length; i += 2) {
+      const key = String(flat[i]);
+      if (BLOCKED_KEYS.has(key)) continue;
+      counts[key] = Number(flat[i + 1]) || 0;
+    }
+  }
   return counts;
 }
 
