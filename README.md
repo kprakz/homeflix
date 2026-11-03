@@ -4,6 +4,8 @@ Watch the movies on your Windows PC, Mac or Linux computer from your iPad, iPhon
 
 **Website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
 
+> **This fork** adds a native Android app. The Windows, macOS and Linux installers are still published by the upstream project; Android builds and release files come from [this fork](https://github.com/VigneshVijayK/homeflix).
+
 ---
 
 ## Install on a Mac
@@ -143,21 +145,74 @@ HOMEFLIX checks Windows Firewall and shows a box at the top of its window if som
 
 ## Install on Android
 
-The native Android app is in [`android/`](android/). It connects to the same HOMEFLIX computer as the
-browser and has the same features: resume positions and start over, series and auto-play next episode,
-audio languages, subtitles, remembered volume boost, and HEVC fallback.
+This fork includes a native Android app for phones, tablets, Android TV, Google TV and Fire TV. It
+talks to the same HOMEFLIX computer as the browser and has the same features: resume positions and
+start over, series and auto-play next episode, audio languages, subtitles, remembered volume boost,
+and HEVC fallback.
 
-1. Download **`HOMEFLIX-<version>.apk`** from the [latest release](../../releases/latest) and open it.
-   Android asks once whether to allow installing apps from this source; allow it, then tap **Install**.
+### Install the APK
+
+1. Download **`HOMEFLIX-<version>.apk`** from [this fork's latest release](https://github.com/VigneshVijayK/homeflix/releases/latest)
+   and open it. Android asks once whether to allow installing apps from this source; allow it, then
+   tap **Install**.
 2. Open **HOMEFLIX**. It looks for your computer on the same Wi-Fi. Choose it, or tap **Scan QR code**
    and point the camera at the QR code in the HOMEFLIX window. You can also type the address shown
    (for example `192.168.1.57:8080`).
 3. If the computer has a PIN, enter it once. The app remembers the computer and the PIN.
 
 Requires **Android 7.0 or newer**. The same APK works on Android TV, Google TV and Fire TV; sideload it
-and it appears under your apps. On a phone or tablet, the Play Store listing (when published) is built
-from the same app bundle. The app is open source and lives in this repository: see
-[`android/README.md`](android/README.md) for building it, signing releases, and publishing to Play.
+and it appears under your apps. If no release is available yet, build it from source below or run the
+**Android build** GitHub Actions workflow and download the `HOMEFLIX-android` artifact.
+
+### Build from source
+
+Requirements: JDK 17 or newer and Android SDK 36 (`platforms;android-36` and
+`build-tools;36.0.0`). Point `ANDROID_HOME` at the SDK, or create `android/local.properties` with
+`sdk.dir=/path/to/android-sdk` (that file is gitignored).
+
+```bash
+cd android
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+For Android TV / Google TV / Fire TV over ADB:
+
+```bash
+adb connect <tv-ip>:5555
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Useful checks:
+
+```bash
+./gradlew :app:testDebugUnitTest :app:lintDebug
+```
+
+The app version and `versionCode` come from the root `package.json` (`1.4.1` → `10401`), so bumping
+the desktop version also bumps Android. See [`android/README.md`](android/README.md) for the project
+layout and Play publishing steps.
+
+### Signed releases and GitHub Actions
+
+Create a keystore once and set the `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` environment variables (or use
+`keystore.properties` inside `android/`). Then build:
+
+```bash
+cd android
+./gradlew :app:assembleRelease :app:bundleRelease
+```
+
+Outputs:
+
+- `app/build/outputs/apk/release/app-release.apk` for GitHub Releases
+- `app/build/outputs/bundle/release/app-release.aab` for Google Play
+
+`.github/workflows/android.yml` builds and tests the app on pushes and pull requests, attaches a
+signed APK/AAB to published GitHub releases, and optionally uploads the AAB to Google Play's internal
+track. Without keystore secrets it uploads a debug APK instead. Configuration details are in
+[`android/README.md`](android/README.md).
 
 ## Watch
 
