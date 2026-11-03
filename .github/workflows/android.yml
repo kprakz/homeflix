@@ -34,6 +34,7 @@ permissions:
 
 jobs:
   android:
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'android-')
     runs-on: ubuntu-latest
     env:
       PLAY_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
