@@ -15,7 +15,7 @@ also work the other way around and share the phone's own videos.
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/screenshots/android-library.png" alt="HOMEFLIX client mode showing a movie and TV show library" width="300"><br>
+      <img src="docs/screenshots/android-client-mode.png" alt="HOMEFLIX client mode showing a movie and TV show library" width="300"><br>
       <strong>Client mode</strong><br>
       Browse and watch the movies stored on your computer.
     </td>
