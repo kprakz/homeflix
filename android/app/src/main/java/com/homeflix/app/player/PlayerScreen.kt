@@ -7,7 +7,6 @@ import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -33,7 +32,10 @@ import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material3.Button
+import com.homeflix.app.ui.PremiumButton
+import com.homeflix.app.ui.PremiumIconButton
+import com.homeflix.app.ui.PremiumOutlinedButton
+import com.homeflix.app.ui.bounceClickable
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -410,11 +412,11 @@ fun PlayerScreen(
                 ) {
                     Text("Can't play this one", style = MaterialTheme.typography.titleLarge)
                     Text(error, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(
+                    PremiumButton(
                         onClick = { playbackError = null; vm.retry() },
                         modifier = Modifier.focusRequester(retryFocus),
                     ) { Text("Try again") }
-                    OutlinedButton(onClick = onClose) { Text("Back to library") }
+                    PremiumOutlinedButton(onClick = onClose) { Text("Back to library") }
                 }
             }
         }
@@ -442,7 +444,7 @@ fun PlayerScreen(
                             color = Gold,
                             style = MaterialTheme.typography.labelSmall,
                         )
-                        Button(
+                        PremiumButton(
                             onClick = { onNext(next.id) },
                             modifier = Modifier.focusRequester(nextFocus),
                         ) {
@@ -451,7 +453,7 @@ fun PlayerScreen(
                             Text("Play next episode")
                         }
                     }
-                    OutlinedButton(
+                    PremiumOutlinedButton(
                         onClick = {
                             ended = false
                             exo.seekTo(0)
@@ -459,7 +461,7 @@ fun PlayerScreen(
                         },
                         modifier = Modifier.focusRequester(againFocus),
                     ) { Text("Watch again") }
-                    OutlinedButton(onClick = onClose) { Text("Back to library") }
+                    PremiumOutlinedButton(onClick = onClose) { Text("Back to library") }
                 }
             }
         }
@@ -696,7 +698,7 @@ private fun ControlButton(
                 color = if (focused) Color.White else Color.Transparent,
                 shape = shape,
             )
-            .clickable(onClick = onClick)
+            .bounceClickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

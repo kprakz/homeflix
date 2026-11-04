@@ -28,17 +28,14 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +44,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -59,6 +59,7 @@ import com.homeflix.app.server.ServerState
 import com.homeflix.app.ui.theme.HomeflixRed
 import com.homeflix.app.ui.theme.Ink
 import com.homeflix.app.ui.theme.Panel
+import com.homeflix.app.ui.theme.PanelHigh
 import java.io.File
 
 @Composable
@@ -70,6 +71,18 @@ fun ServerScreen(
 ) {
     val context = LocalContext.current
     var storageAllowed by remember { mutableStateOf(hasAllFilesAccess()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                storageAllowed = hasAllFilesAccess()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
     var folders by remember { mutableStateOf(ServerFolders.list(context)) }
     var folderError by remember { mutableStateOf<String?>(null) }
     var currentPin by remember { mutableStateOf<String?>(ServerPin.get(context)) }
@@ -104,7 +117,7 @@ fun ServerScreen(
                 .padding(horizontal = 24.dp, vertical = 20.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
+                PremiumIconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                 }
                 Text(
@@ -133,15 +146,23 @@ fun ServerScreen(
                                 ),
                         )
                         Spacer(Modifier.size(10.dp))
-                        Text(
-                            text = when {
-                                state.running -> "Server running"
-                                state.starting -> "Starting server…"
-                                else -> "Server stopped"
-                            },
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+                        Column {
+                            Text(
+                                text = "Server Mode",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                            )
+                            Text(
+                                text = when {
+                                    state.running -> "Running (Active)"
+                                    state.starting -> "Starting…"
+                                    else -> "Disabled (Off)"
+                                },
+                                color = if (state.running) Color(0xFF43D17A) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
 
                     if (state.starting) {
@@ -174,12 +195,12 @@ fun ServerScreen(
                     Spacer(Modifier.height(18.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (state.running || state.starting) {
-                            OutlinedButton(onClick = onStop, enabled = !state.starting) {
-                                Text("Stop server")
+                            PremiumOutlinedButton(onClick = onStop, enabled = !state.starting) {
+                                Text("Disable Server Mode")
                             }
                         } else {
-                            Button(onClick = onStart) {
-                                Text("Start server")
+                            PremiumButton(onClick = onStart) {
+                                Text("Enable Server Mode")
                             }
                         }
                     }
@@ -201,7 +222,7 @@ fun ServerScreen(
                     )
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(onClick = {
+                        PremiumOutlinedButton(onClick = {
                             pinDraft = currentPin.orEmpty()
                             pinError = null
                             pinDialog = true
@@ -209,7 +230,7 @@ fun ServerScreen(
                             Text(if (currentPin != null) "Change PIN" else "Set PIN")
                         }
                         if (currentPin != null) {
-                            OutlinedButton(onClick = {
+                            PremiumOutlinedButton(onClick = {
                                 ServerPin.set(context, null)
                                 currentPin = null
                                 ServerService.configChanged(context)
@@ -245,7 +266,7 @@ fun ServerScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.weight(1f),
                             )
-                            IconButton(onClick = {
+                            PremiumIconButton(onClick = {
                                 folders = ServerFolders.remove(context, folder)
                                 folderError = null
                                 ServerService.configChanged(context)
@@ -259,19 +280,13 @@ fun ServerScreen(
                         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { folderPicker.launch(null) }) {
-                            Icon(Icons.Rounded.Add, contentDescription = null)
-                            Spacer(Modifier.size(6.dp))
-                            Text("Add folder")
-                        }
-                        OutlinedButton(onClick = {
-                            folders = ServerFolders.reset(context)
-                            folderError = null
-                            ServerService.configChanged(context)
-                        }) {
-                            Text("Use defaults")
-                        }
+                    PremiumButton(
+                        onClick = { folderPicker.launch(null) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = null)
+                        Spacer(Modifier.size(6.dp))
+                        Text("Add folder")
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -279,21 +294,29 @@ fun ServerScreen(
                         color = if (storageAllowed) Color(0xFF43D17A) else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = {
-                        storageAllowed = hasAllFilesAccess()
-                        if (!storageAllowed && Build.VERSION.SDK_INT >= 30) {
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    PremiumOutlinedButton(onClick = {
+                        val intent = if (Build.VERSION.SDK_INT >= 30) {
+                            try {
+                                Intent(
+                                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                    Uri.parse("package:${context.packageName}"),
+                                )
+                            } catch (_: Exception) {
+                                Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                            }
+                        } else {
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                 Uri.parse("package:${context.packageName}"),
                             )
-                            try {
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                            }
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                         }
                     }) {
-                        Text(if (storageAllowed) "Check again" else "Allow access to files")
+                        Text(if (storageAllowed) "Revoke access" else "Allow access to files")
                     }
                 }
             }
@@ -335,7 +358,7 @@ fun ServerScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                PremiumTextButton(onClick = {
                     if (!ServerPin.isValid(pinDraft)) {
                         pinError = "The PIN must be 4 to 8 digits."
                     } else {
@@ -350,7 +373,7 @@ fun ServerScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pinDialog = false }) {
+                PremiumTextButton(onClick = { pinDialog = false }) {
                     Text("Cancel")
                 }
             },

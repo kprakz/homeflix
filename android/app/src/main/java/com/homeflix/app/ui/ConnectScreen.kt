@@ -2,15 +2,16 @@ package com.homeflix.app.ui
 
 import android.content.pm.PackageManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,13 +24,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.QrCodeScanner
-import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material.icons.rounded.Tv
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.homeflix.app.discovery.QrScannerDialog
@@ -58,6 +58,7 @@ import com.homeflix.app.ui.theme.Panel
 @Composable
 fun ConnectScreen(
     state: AppUiState,
+    isServerRunning: Boolean = false,
     onConnect: (String) -> Unit,
     onDiscover: () -> Unit,
     onServerMode: () -> Unit,
@@ -83,7 +84,7 @@ fun ConnectScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 40.dp),
+                .padding(start = 24.dp, end = 24.dp, top = 32.dp, bottom = 64.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(32.dp))
@@ -143,7 +144,7 @@ fun ConnectScreen(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(enabled = !state.connecting) { onConnect(server.url) },
+                                .bounceClickable(enabled = !state.connecting) { onConnect(server.url) },
                             color = Panel,
                             shape = RoundedCornerShape(16.dp),
                         ) {
@@ -206,7 +207,7 @@ fun ConnectScreen(
                     shape = RoundedCornerShape(14.dp),
                 )
 
-                Button(
+                PremiumButton(
                     onClick = { onConnect(address) },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -228,7 +229,7 @@ fun ConnectScreen(
                 }
 
                 if (hasCamera) {
-                    OutlinedButton(
+                    PremiumOutlinedButton(
                         onClick = { scanning = true },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -243,17 +244,55 @@ fun ConnectScreen(
                 }
 
                 Spacer(Modifier.height(10.dp))
-                OutlinedButton(
+                PremiumOutlinedButton(
                     onClick = onServerMode,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
+                        .heightIn(min = 52.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                     enabled = !state.connecting,
                     shape = RoundedCornerShape(14.dp),
                 ) {
-                    Icon(Icons.Rounded.WifiTethering, contentDescription = null)
-                    Spacer(Modifier.width(10.dp))
-                    Text("Share this phone's videos")
+                    Icon(
+                        Icons.Rounded.WifiTethering,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Share phone's videos (Server Mode)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (isServerRunning) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            color = Color(0xFF43D17A).copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(50),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(Color(0xFF43D17A), RoundedCornerShape(50)),
+                                )
+                                Text(
+                                    text = "ON",
+                                    color = Color(0xFF43D17A),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                        }
+                    }
                 }
 
                 state.connectError?.let { error ->
@@ -273,6 +312,7 @@ fun ConnectScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(24.dp))
             }
         }
     }

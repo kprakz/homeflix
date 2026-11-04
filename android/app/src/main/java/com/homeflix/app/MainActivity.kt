@@ -113,11 +113,11 @@ private fun HomeflixRoot() {
 
             state.connection == null -> ConnectScreen(
                 state = state,
+                isServerRunning = serverState.running,
                 onConnect = appVm::connect,
                 onDiscover = appVm::refreshDiscovery,
                 onServerMode = {
                     serverMode = true
-                    ServerService.start(context)
                 },
             )
 
