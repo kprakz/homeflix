@@ -148,18 +148,13 @@ fun QrScannerDialog(onResult: (String) -> Unit, onDismiss: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(32.dp),
+                        .padding(start = 32.dp, end = 32.dp, bottom = 80.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
                         "Point the camera at the QR code in HOMEFLIX",
                         color = Color.White,
                         textAlign = TextAlign.Center,
-                    )
-                    Text(
-                        "Settings → Connect a device",
-                        color = Color.White.copy(alpha = 0.65f),
-                        style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(20.dp))
                     OutlinedButton(

@@ -2,7 +2,6 @@ package com.homeflix.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -30,20 +29,16 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tv
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -151,7 +146,7 @@ fun LibraryScreen(
                         contentDescription = "Refresh library",
                         onClick = onRefresh,
                     )
-                    IconButton(onClick = onDisconnect) {
+                    PremiumIconButton(onClick = onDisconnect) {
                         Icon(Icons.Rounded.Tv, contentDescription = "Change computer")
                     }
                 },
@@ -173,7 +168,7 @@ fun LibraryScreen(
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) {
+                        PremiumIconButton(onClick = { query = "" }) {
                             Icon(Icons.Rounded.Clear, contentDescription = "Clear search")
                         }
                     }
@@ -201,7 +196,7 @@ fun LibraryScreen(
                             modifier = Modifier.padding(32.dp),
                         ) {
                             Text(state.libraryError, color = MaterialTheme.colorScheme.error)
-                            Button(onClick = onRefresh) { Text("Try again") }
+                            PremiumButton(onClick = onRefresh) { Text("Try again") }
                         }
                     }
                 }
@@ -360,7 +355,7 @@ private fun LibraryCard(
                 color = if (focused) HomeflixRed else Color.Transparent,
                 shape = shape,
             )
-            .clickable(onClick = onClick)
+            .bounceClickable(onClick = onClick)
             .padding(2.dp),
     ) {
         Box(
@@ -480,7 +475,7 @@ private fun ContinueCard(
                 color = if (focused) HomeflixRed else Color.Transparent,
                 shape = shape,
             )
-            .clickable(onClick = onClick)
+            .bounceClickable(onClick = onClick)
             .padding(2.dp),
     ) {
         Box(
@@ -565,7 +560,7 @@ private fun ShowCard(
                 color = if (focused) HomeflixRed else Color.Transparent,
                 shape = shape,
             )
-            .clickable(onClick = onClick)
+            .bounceClickable(onClick = onClick)
             .padding(2.dp),
     ) {
         Box(
@@ -669,7 +664,7 @@ private fun ShowDetailSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onEpisode(episode) }
+                        .bounceClickable { onEpisode(episode) }
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -724,7 +719,7 @@ private fun ShowDetailSheet(
                     }
                 }
             }
-            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+            PremiumTextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                 Text("Close")
             }
         }
@@ -805,7 +800,7 @@ private fun ItemDetailSheet(
                 } else if (ResumeRules.finished(resume)) {
                     Text("Watched", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Button(
+                PremiumButton(
                     onClick = { onPlay(false) },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -817,7 +812,7 @@ private fun ItemDetailSheet(
                     Text(if (resumeAt != null) "Resume" else "Play", fontWeight = FontWeight.SemiBold)
                 }
                 if (resumeAt != null) {
-                    OutlinedButton(
+                    PremiumOutlinedButton(
                         onClick = { onPlay(true) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -827,7 +822,7 @@ private fun ItemDetailSheet(
                         Text("Start over")
                     }
                 }
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                PremiumTextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Close")
                 }
             }

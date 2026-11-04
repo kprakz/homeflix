@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -22,7 +21,7 @@ fun RefreshIconButton(pulse: Long, contentDescription: String, onClick: () -> Un
             angle.animateTo(360f, animationSpec = tween(durationMillis = 900, easing = LinearEasing))
         }
     }
-    IconButton(onClick = onClick) {
+    PremiumIconButton(onClick = onClick) {
         Icon(
             Icons.Rounded.Refresh,
             contentDescription = contentDescription,
