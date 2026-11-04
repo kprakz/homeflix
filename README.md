@@ -6,32 +6,47 @@ Watch the movies on your Windows PC, Mac or Linux computer from your iPad, iPhon
 
 > **This fork** adds a native Android app. The Windows, macOS and Linux installers are still published by the upstream project; Android builds and release files come from [this fork](https://github.com/VigneshVijayK/homeflix).
 
-<p align="center">
-  <img src="docs/screenshots/android-library.png" alt="HOMEFLIX Android app showing a library of movies and TV shows" width="360">
-</p>
-<p align="center"><em>The native Android app, with a sample library.</em></p>
+## Two ways to use HOMEFLIX
 
-## What's new in Android 1.4.4
+HOMEFLIX has two sides: the **computer** that holds your movies, and the **screen** that plays them.
+Most people use the computer as the server and watch from a phone, tablet or TV. The Android app can
+also work the other way around and share the phone's own videos.
 
-Android 1.4.4 makes it easier to find your computer and connect to it.
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/android-library.png" alt="HOMEFLIX client mode showing a movie and TV show library" width="300"><br>
+      <strong>Client mode</strong><br>
+      Browse and watch the movies stored on your computer.
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/android-server.png" alt="HOMEFLIX server mode sharing this phone's videos" width="300"><br>
+      <strong>Server mode</strong><br>
+      Share this phone's videos with other HOMEFLIX devices.
+    </td>
+  </tr>
+</table>
 
-- **Find more computers.** If your computer does not announce itself on the network, HOMEFLIX now
-  scans your Wi-Fi and finds it by its address.
-- **Fewer missed connections.** Discovery retries busy networks instead of giving up after one try.
-- **Refresh buttons that show they are working.** The search and library refresh buttons spin while
-  they reload.
-- **Import a QR code from the gallery.** Besides the camera, you can now pick a screenshot or photo
-  of the QR code.
-- **Better QR decoding.** Large photos and light-on-dark QR codes are handled more reliably.
+### Client mode: watch your computer's movies
 
-Download the signed APK or app bundle from the
-[Android 1.4.4 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v1.4.4).
+Install HOMEFLIX on the computer that has your movies and choose your movie folder. Then open the
+Android app or the address shown in the HOMEFLIX window on your phone, tablet or TV. The app finds
+the computer automatically; on iPhone, iPad and smart TVs, open the address in a browser.
+
+This is the normal setup. Your movies stay on the computer, and every screen plays them over your
+home Wi-Fi. Resume positions, series, auto-play next episode, audio tracks, subtitles and HEVC
+fallback all work in this mode.
+
+### Server mode: share this phone's videos
+
+The Android app can also serve videos stored on the phone. Open **Share this phone's videos**, choose
+the folders to share, and give other devices the address and PIN shown on the screen. Other HOMEFLIX
+devices connect exactly as they connect to a computer.
+
+This is useful when the computer is off, when you are travelling, or when the videos are already
+downloaded on the phone.
 
 ## Start here
-
-HOMEFLIX has two parts: the **computer** that stores your movies, and the **screen** you watch on.
-Install it on the computer first, then connect from your phone, tablet or TV. Both need to be on the
-same home Wi-Fi, and nothing is uploaded to the internet.
 
 | Your device | What to do |
 | --- | --- |
@@ -49,6 +64,23 @@ same home Wi-Fi, and nothing is uploaded to the internet.
 
 **What you need:** a computer (Windows 10/11, macOS 12 or newer, or Linux), your movie files, and a
 phone, tablet or TV on the same home Wi-Fi. No account, subscription or internet upload is needed.
+
+## What's new in Android 1.4.4
+
+Android 1.4.4 makes it easier to find your computer and connect to it. The screenshots above show the
+client and server modes.
+
+- **Find more computers.** If your computer does not announce itself on the network, HOMEFLIX now
+  scans your Wi-Fi and finds it by its address.
+- **Fewer missed connections.** Discovery retries busy networks instead of giving up after one try.
+- **Refresh buttons that show they are working.** The search and library refresh buttons spin while
+  they reload.
+- **Import a QR code from the gallery.** Besides the camera, you can now pick a screenshot or photo
+  of the QR code.
+- **Better QR decoding.** Large photos and light-on-dark QR codes are handled more reliably.
+
+Download the signed APK or app bundle from the
+[Android 1.4.4 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v1.4.4).
 
 ---
 
@@ -199,11 +231,11 @@ networks, scans the local network when a computer does not announce itself, and 
 arrive. The refresh buttons spin while they work, and the QR scanner can now import an image from the
 gallery as well as use the camera.
 
-The phone can also act as the server: tap **Share this phone's videos** on the connect screen and
-other HOMEFLIX devices on the same Wi-Fi can watch it. You choose the shared folders with the system
-folder picker, and the PIN can be changed (4 to 8 digits) or turned off, just like the desktop app.
-The embedded server is the same `server.js` as the desktop app; see
-[`android/README.md`](android/README.md#server-mode-on-the-phone) for details.
+The phone can also act as the server; see [Server mode](#server-mode-share-this-phones-videos) above.
+Tap **Share this phone's videos** on the connect screen and other HOMEFLIX devices on the same Wi-Fi
+can watch it. You choose the shared folders with the system folder picker, and the PIN can be changed
+(4 to 8 digits) or turned off, just like the desktop app. The embedded server is the same `server.js`
+as the desktop app; see [`android/README.md`](android/README.md#server-mode-on-the-phone) for details.
 
 ### Install the APK
 
