@@ -36,6 +36,10 @@ class HomeflixStore(private val context: Context) {
         .map { prefs -> prefs.toConnection() }
         .distinctUntilChanged()
 
+    val resume: Flow<Map<String, Resume>> = context.homeflixDataStore.data
+        .map { prefs -> prefs.toResumeMap() }
+        .distinctUntilChanged()
+
     suspend fun connectionOnce(): Connection? = connection.first()
 
     suspend fun saveServer(url: String, name: String?, key: String?) {
@@ -59,17 +63,7 @@ class HomeflixStore(private val context: Context) {
         }
     }
 
-    suspend fun resumeMap(): Map<String, Resume> {
-        val prefs = context.homeflixDataStore.data.first()
-        return buildMap {
-            for ((key, value) in prefs.asMap()) {
-                val name = key.name
-                if (!name.startsWith("pos_") || value !is String) continue
-                val resume = runCatching { json.decodeFromString<Resume>(value) }.getOrNull() ?: continue
-                put(name.removePrefix("pos_"), resume)
-            }
-        }
-    }
+    suspend fun resumeMap(): Map<String, Resume> = resume.first()
 
     suspend fun resume(id: String): Resume? {
         val prefs = context.homeflixDataStore.data.first()
@@ -125,6 +119,15 @@ class HomeflixStore(private val context: Context) {
 
     suspend fun setTvMode(tv: Boolean) {
         context.homeflixDataStore.edit { it[Keys.TV_MODE] = tv }
+    }
+
+    private fun Preferences.toResumeMap(): Map<String, Resume> = buildMap {
+        for ((key, value) in asMap()) {
+            val name = key.name
+            if (!name.startsWith("pos_") || value !is String) continue
+            val resume = runCatching { json.decodeFromString<Resume>(value) }.getOrNull() ?: continue
+            put(name.removePrefix("pos_"), resume)
+        }
     }
 
     private fun Preferences.toConnection(): Connection? {

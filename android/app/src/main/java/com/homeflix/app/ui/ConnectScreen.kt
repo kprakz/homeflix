@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.Button
@@ -61,6 +62,7 @@ fun ConnectScreen(
     state: AppUiState,
     onConnect: (String) -> Unit,
     onDiscover: () -> Unit,
+    onServerMode: () -> Unit,
 ) {
     val context = LocalContext.current
     val hasCamera = remember(context) {
@@ -233,6 +235,20 @@ fun ConnectScreen(
                         Spacer(Modifier.width(10.dp))
                         Text("Scan QR code")
                     }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onServerMode,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    enabled = !state.connecting,
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Icon(Icons.Rounded.WifiTethering, contentDescription = null)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Share this phone's videos")
                 }
 
                 state.connectError?.let { error ->

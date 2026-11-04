@@ -10,13 +10,21 @@ class HomeflixRepository(
     private val store: HomeflixStore,
 ) {
     val connection: Flow<Connection?> = store.connection
+    val resume: Flow<Map<String, Resume>> = store.resume
 
     suspend fun connectionOnce(): Connection? = store.connectionOnce()
 
     suspend fun connect(rawAddress: String): Connection {
         val url = normalizeAddress(rawAddress)
         val previous = store.connectionOnce()
-        val hello = api.hello(Connection(url))
+        // Older servers do not expose /api/hello yet. Ask /api/auth instead so they stay usable.
+        val hello = try {
+            api.hello(Connection(url))
+        } catch (err: ApiException) {
+            if (err.statusCode != 404) throw err
+            val auth = api.auth(Connection(url))
+            Hello(version = auth.version, api = auth.api, pin = auth.pin)
+        }
         val keepKey = previous?.key?.takeIf { previous.url == url }
         store.saveServer(url, hello.name, keepKey)
         return Connection(url = url, name = hello.name, key = keepKey)

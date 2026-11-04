@@ -150,6 +150,12 @@ talks to the same HOMEFLIX computer as the browser and has the same features: re
 start over, series and auto-play next episode, audio languages, subtitles, remembered volume boost,
 and HEVC fallback.
 
+The phone can also act as the server: tap **Share this phone's videos** on the connect screen and
+other HOMEFLIX devices on the same Wi-Fi can watch it. You choose the shared folders with the system
+folder picker, and the PIN can be changed (4 to 8 digits) or turned off, just like the desktop app.
+The embedded server is the same `server.js` as the desktop app; see
+[`android/README.md`](android/README.md#server-mode-on-the-phone) for details.
+
 ### Install the APK
 
 1. Download **`HOMEFLIX-<version>.apk`** from [this fork's latest release](https://github.com/VigneshVijayK/homeflix/releases/latest)
@@ -166,9 +172,13 @@ and it appears under your apps. If no release is available yet, build it from so
 
 ### Build from source
 
-Requirements: JDK 17 or newer and Android SDK 36 (`platforms;android-36` and
-`build-tools;36.0.0`). Point `ANDROID_HOME` at the SDK, or create `android/local.properties` with
-`sdk.dir=/path/to/android-sdk` (that file is gitignored).
+Requirements: JDK 17 or newer, Android SDK 36 (`platforms;android-36` and
+`build-tools;36.0.0`), NDK `28.0.13004108` and CMake `3.22.1`. Point `ANDROID_HOME` at the SDK, or
+create `android/local.properties` with `sdk.dir=/path/to/android-sdk` (that file is gitignored).
+
+Server mode also needs the Node.js and FFmpeg Android binaries, which are not committed. Copy them in
+once with `android/scripts/prepare-native.sh` (paths and layout are in
+[`android/README.md`](android/README.md#build)).
 
 ```bash
 cd android

@@ -28,4 +28,4 @@ fun formatRuntime(seconds: Double): String {
     return if (hours > 0) "${hours}h ${rest}m" else "${rest}m"
 }
 
-fun isNew(mtime: Long): Boolean = mtime > 0 && System.currentTimeMillis() - mtime < 7L * 24 * 60 * 60 * 1000
+fun isNew(mtime: Double): Boolean = mtime > 0 && System.currentTimeMillis() - mtime < 7.0 * 24 * 60 * 60 * 1000

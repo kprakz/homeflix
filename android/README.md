@@ -3,6 +3,10 @@
 The native Android app for the HOMEFLIX computer. It is a Kotlin + Jetpack Compose app that talks to
 the same `server.js` as the web player, so the laptop/desktop app does not need a separate mode.
 
+The same app can also run that `server.js` on the phone: choose **Share this phone's videos** on the
+connect screen. The embedded Node.js runtime and bundled FFmpeg serve the phone's own movie folders to
+other HOMEFLIX devices on the same Wi-Fi, using the normal client to watch locally.
+
 - Android 7.0 (API 24) and newer, phones, tablets and Android TV / Google TV / Fire TV
 - Finds the computer with mDNS, a QR code, or a typed address
 - Resume positions, start over, series grouping, auto-play next episode, audio tracks, subtitles,
@@ -10,13 +14,29 @@ the same `server.js` as the web player, so the laptop/desktop app does not need 
 - Direct play, one-time remux, and live HLS conversion when the device cannot play the file
 - HEVC fallback: if the phone has no decoder (or shows sound but no picture), it asks the computer
   for the H.264 stream and remembers that for next time
+- Optional on-device server mode with the same API as the desktop app
 
 ## Build
 
-Requirements: JDK 17 or newer and Android SDK 36 (`platforms;android-36`, `build-tools;36.0.0`).
+Requirements: JDK 17 or newer, Android SDK 36 (`platforms;android-36`, `build-tools;36.0.0`),
+NDK `28.0.13004108` and CMake `3.22.1`.
+
+Server mode links the Node.js runtime from
+[nodejs-mobile](https://github.com/gmaclennan/nodejs-mobile) and the GPL Android FFmpeg builds. These
+large binaries are build inputs and are not committed. Extract them somewhere and copy them in:
 
 ```bash
 cd android
+export NODEJS_MOBILE_DIR=/path/to/nodejs-mobile
+export FFMPEG_ANDROID_DIR=/path/to/ffmpeg
+./scripts/prepare-native.sh
+```
+
+`NODEJS_MOBILE_DIR` must contain `bin/x86_64/libnode.so`, `bin/arm64-v8a/libnode.so` and `include/`.
+`FFMPEG_ANDROID_DIR` must contain `ffmpeg_android_x86_64_gpl/` and `ffmpeg_android_aarch64_gpl/`
+with `bin/ffmpeg` and `bin/ffprobe`.
+
+```bash
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -29,6 +49,29 @@ Useful checks:
 ```bash
 ./gradlew :app:testDebugUnitTest :app:lintDebug
 ```
+
+## Server mode on the phone
+
+Tap **Share this phone's videos** on the connect screen, then **Allow access to files** and grant
+all-files access. The server starts automatically and shows the LAN address and PIN. Other devices
+connect to it exactly like they connect to the desktop app.
+
+You choose what is shared: the default list is `Movies`, `Download` and the app's own external
+`Movies` folder, but **Add folder** opens the system folder picker (internal storage or SD card) and
+each folder can be removed again. Subfolders are scanned. Changes apply immediately while the server
+is running. The PIN works like the desktop app: **Change PIN** accepts 4 to 8 digits and **Turn off
+PIN** disables it. Changing or turning off the PIN makes every device enter the new state again.
+
+The canonical `server.js` and `public/` are copied into the APK at build time, so there is only one
+server implementation. `libnode.so`, `libffmpeg_exec.so` and `libffprobe_exec.so` are packaged for
+`x86_64` and `arm64-v8a`.
+
+The server runs in a `dataSync` foreground service with a multicast lock, so mDNS discovery, video
+streaming and thumbnails keep working while the screen is off. Android may stop it after long
+background periods. **Stop server** stops sharing but leaves the embedded Node runtime loaded, so
+**Start server** works again immediately without restarting the app; force stop HOMEFLIX to unload
+the runtime. The release APK grows by roughly 130 MB because it includes Node and FFmpeg for two
+ABIs.
 
 ## Release signing
 
@@ -101,7 +144,9 @@ from non-private addresses, and the app never sends the library anywhere else.
 - `ui/` – connect, PIN, library, continue watching, TV show grouping and detail sheets
 - `player/` – Media3/ExoPlayer screen, source selection, audio/subtitles, volume boost, fallback,
   auto-next and start-over
+- `server/` – on-device Node service, JNI bridge, foreground notification and server screen
 - `util/` – series grouping, resume rules, format helpers
+- `scripts/prepare-native.sh` – copies Node/FFmpeg binaries and headers into the app module
 
-The API version is `1`. The app checks `/api/hello` before connecting; older servers without it do not
-work, so update HOMEFLIX on the computer.
+The API version is `1`. The app checks `/api/hello` before connecting. Older servers without
+`/api/hello` are still supported through `/api/auth` and the PIN/no-PIN `/api/unlock` flow.

@@ -46,6 +46,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+            repository.resume.collect { resume ->
+                _state.update { it.copy(resume = resume) }
+            }
+        }
+        viewModelScope.launch {
             val saved = repository.connectionOnce()
             _state.update { it.copy(initializing = false, connection = saved) }
             if (saved != null) {

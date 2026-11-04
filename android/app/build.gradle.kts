@@ -30,9 +30,20 @@ fun secret(name: String, property: String): String? =
 val storeFileValue = secret("ANDROID_KEYSTORE_PATH", "storeFile")
 val hasReleaseKeystore = storeFileValue != null && file(storeFileValue).exists()
 
+
+val generatedServerAssets = layout.buildDirectory.dir("generated/serverAssets")
+val syncServerAssets = tasks.register<Copy>("syncServerAssets") {
+    from(rootProject.file("../server.js"))
+    from(rootProject.file("../package.json"))
+    from(rootProject.file("../public")) { into("public") }
+    from(file("src/main/server/android-server.js"))
+    into(generatedServerAssets.map { it.dir("server") })
+}
+
 android {
     namespace = "com.homeflix.app"
     compileSdk = 36
+    ndkVersion = "28.0.13004108"
 
     defaultConfig {
         applicationId = "com.homeflix.app"
@@ -42,6 +53,8 @@ android {
         versionName = homeflixVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        ndk { abiFilters += listOf("x86_64", "arm64-v8a") }
+        externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_shared" } }
     }
 
     signingConfigs {
@@ -73,6 +86,15 @@ android {
         buildConfig = true
     }
 
+    sourceSets.getByName("main").assets.srcDir(generatedServerAssets)
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -89,6 +111,10 @@ android {
             "/META-INF/LICENSE*",
             "/META-INF/NOTICE*",
         )
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols += listOf("**/libffmpeg_exec.so", "**/libffprobe_exec.so")
+        }
     }
 
     lint {
@@ -142,4 +168,8 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(syncServerAssets)
 }

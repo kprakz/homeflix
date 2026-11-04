@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,6 +31,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.homeflix.app.player.PlayerScreen
+import com.homeflix.app.server.ServerService
+import com.homeflix.app.ui.ServerScreen
 import com.homeflix.app.player.PlayerViewModel
 import com.homeflix.app.ui.AppViewModel
 import com.homeflix.app.ui.ConnectScreen
@@ -57,6 +60,9 @@ private fun HomeflixRoot() {
     val state by appVm.state.collectAsStateWithLifecycle()
     var playingId by rememberSaveable { mutableStateOf<String?>(null) }
     var startOverFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var serverMode by rememberSaveable { mutableStateOf(false) }
+    val serverState by ServerService.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     val playingItem = remember(state.library, playingId) {
         playingId?.let { id -> state.library.firstOrNull { it.id == id } }
@@ -72,11 +78,22 @@ private fun HomeflixRoot() {
         appVm.refreshResume()
     }
 
+    BackHandler(enabled = playingId == null && serverMode) {
+        serverMode = false
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
         when {
+            serverMode -> ServerScreen(
+                state = serverState,
+                onStart = { ServerService.start(context) },
+                onStop = { ServerService.stop(context) },
+                onBack = { serverMode = false },
+            )
+
             state.initializing -> Splash()
 
             playingItem != null -> PlayerScreen(
@@ -98,6 +115,10 @@ private fun HomeflixRoot() {
                 state = state,
                 onConnect = appVm::connect,
                 onDiscover = appVm::startDiscovery,
+                onServerMode = {
+                    serverMode = true
+                    ServerService.start(context)
+                },
             )
 
             state.needsPin -> PinScreen(
