@@ -41,6 +41,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache Node.js and FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/homeflix-native
+          key: homeflix-native-node-24.18.0-0-ffmpeg-8.1.3-r1
+
+      - name: Fetch Node.js and FFmpeg
+        run: |
+          chmod +x android/scripts/fetch-native.sh android/scripts/prepare-native.sh
+          ./android/scripts/fetch-native.sh
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:

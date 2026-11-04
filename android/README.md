@@ -23,14 +23,15 @@ NDK `28.0.13004108` and CMake `3.22.1`.
 
 Server mode links the Node.js runtime from
 [nodejs-mobile](https://github.com/gmaclennan/nodejs-mobile) and the GPL Android FFmpeg builds. These
-large binaries are build inputs and are not committed. Extract them somewhere and copy them in:
+large binaries are build inputs and are not committed. Download the pinned versions and copy them in:
 
 ```bash
 cd android
-export NODEJS_MOBILE_DIR=/path/to/nodejs-mobile
-export FFMPEG_ANDROID_DIR=/path/to/ffmpeg
-./scripts/prepare-native.sh
+./scripts/fetch-native.sh
 ```
+
+To use local builds instead, set `NODEJS_MOBILE_DIR` and `FFMPEG_ANDROID_DIR` and run
+`./scripts/prepare-native.sh`.
 
 `NODEJS_MOBILE_DIR` must contain `bin/x86_64/libnode.so`, `bin/arm64-v8a/libnode.so` and `include/`.
 `FFMPEG_ANDROID_DIR` must contain `ffmpeg_android_x86_64_gpl/` and `ffmpeg_android_aarch64_gpl/`
@@ -42,7 +43,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The version name and code come from the root `package.json`, so one version bump covers the desktop
-app and Android. `versionCode` is `major * 10000 + minor * 100 + patch` (1.4.1 → 10401).
+app and Android. `versionCode` is `major * 10000 + minor * 100 + patch` (1.4.2 → 10402).
 
 Useful checks:
 
@@ -146,6 +147,7 @@ from non-private addresses, and the app never sends the library anywhere else.
   auto-next and start-over
 - `server/` – on-device Node service, JNI bridge, foreground notification and server screen
 - `util/` – series grouping, resume rules, format helpers
+- `scripts/fetch-native.sh` – downloads pinned Node/FFmpeg builds and runs `prepare-native.sh`
 - `scripts/prepare-native.sh` – copies Node/FFmpeg binaries and headers into the app module
 
 The API version is `1`. The app checks `/api/hello` before connecting. Older servers without

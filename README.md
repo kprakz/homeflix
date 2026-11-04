@@ -176,8 +176,8 @@ Requirements: JDK 17 or newer, Android SDK 36 (`platforms;android-36` and
 `build-tools;36.0.0`), NDK `28.0.13004108` and CMake `3.22.1`. Point `ANDROID_HOME` at the SDK, or
 create `android/local.properties` with `sdk.dir=/path/to/android-sdk` (that file is gitignored).
 
-Server mode also needs the Node.js and FFmpeg Android binaries, which are not committed. Copy them in
-once with `android/scripts/prepare-native.sh` (paths and layout are in
+Server mode also needs the Node.js and FFmpeg Android binaries, which are not committed. Download and
+copy them in once with `android/scripts/fetch-native.sh` (paths and layout are in
 [`android/README.md`](android/README.md#build)).
 
 ```bash
