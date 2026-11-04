@@ -65,22 +65,23 @@ downloaded on the phone.
 **What you need:** a computer (Windows 10/11, macOS 12 or newer, or Linux), your movie files, and a
 phone, tablet or TV on the same home Wi-Fi. No account, subscription or internet upload is needed.
 
-## What's new in Android 1.4.4
+## What's new in Android 1.4.5
 
-Android 1.4.4 makes it easier to find your computer and connect to it. The screenshots above show the
-client and server modes.
+Android 1.4.5 refreshes the app's look and makes server mode clearer.
 
-- **Find more computers.** If your computer does not announce itself on the network, HOMEFLIX now
-  scans your Wi-Fi and finds it by its address.
-- **Fewer missed connections.** Discovery retries busy networks instead of giving up after one try.
-- **Refresh buttons that show they are working.** The search and library refresh buttons spin while
-  they reload.
-- **Import a QR code from the gallery.** Besides the camera, you can now pick a screenshot or photo
-  of the QR code.
-- **Better QR decoding.** Large photos and light-on-dark QR codes are handled more reliably.
+- **Smoother, more tactile controls.** Buttons, cards and player controls now bounce subtly when
+  pressed.
+- **Clearer server mode.** The connect screen has a dedicated **Share phone's videos (Server Mode)**
+  button with a green **ON** badge while the server is running.
+- **Better server screen.** Server Mode shows its status at a glance, only starts when you enable it,
+  keeps folder controls simple, and refreshes file access when you return to the app.
+- **Polished screens.** The player, library, PIN, and QR scanner screens share the same buttons and
+  tap feedback.
+- **Layout fixes.** The QR scanner stays clear of system navigation, and long connect-screen labels
+  no longer clip.
 
 Download the signed APK or app bundle from the
-[Android 1.4.4 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v1.4.4).
+[Android 1.4.5 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v1.4.5).
 
 ---
 
@@ -226,10 +227,9 @@ connects to the same HOMEFLIX computer as the browser and has the same features:
 start over, series and auto-play next episode, audio languages, subtitles, remembered volume boost,
 and HEVC fallback.
 
-The 1.4.4 app is better at finding computers that older versions missed. It retries discovery on busy
-networks, scans the local network when a computer does not announce itself, and shows results as they
-arrive. The refresh buttons spin while they work, and the QR scanner can now import an image from the
-gallery as well as use the camera.
+The 1.4.5 app refreshes the interface with responsive buttons and cards, a clearer connect screen,
+and a Server Mode screen that shows whether the phone is sharing and only starts when you ask it to.
+The QR scanner also stays clear of the system navigation bar, and long labels no longer clip.
 
 The phone can also act as the server; see [Server mode](#server-mode-share-this-phones-videos) above.
 Tap **Share this phone's videos** on the connect screen and other HOMEFLIX devices on the same Wi-Fi
@@ -289,7 +289,7 @@ Useful checks:
 ./gradlew :app:testDebugUnitTest :app:lintDebug
 ```
 
-The app version and `versionCode` come from the root `package.json` (`1.4.4` → `10404`), so bumping
+The app version and `versionCode` come from the root `package.json` (`1.4.5` → `10405`), so bumping
 the desktop version also bumps Android. See [`android/README.md`](android/README.md) for the project
 layout and Play publishing steps.
 
