@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HOMEFLIX's server runs on the user's own computer and only speaks plain HTTP on the home LAN.
+     The app only ever connects to private/local addresses; the server also refuses public ones. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
