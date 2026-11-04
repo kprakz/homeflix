@@ -5,6 +5,7 @@ import android.content.Context
 import com.homeflix.app.data.ApiClient
 import com.homeflix.app.data.HomeflixRepository
 import com.homeflix.app.data.HomeflixStore
+import com.homeflix.app.discovery.LanScanner
 import com.homeflix.app.discovery.NsdDiscovery
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -32,4 +33,5 @@ class AppContainer(context: Context) {
     val store = HomeflixStore(appContext)
     val repository = HomeflixRepository(api, store)
     val discovery = NsdDiscovery(appContext)
+    val lanScanner = LanScanner(appContext)
 }

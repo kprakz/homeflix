@@ -5,17 +5,18 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import com.homeflix.app.data.DiscoveredServer
+import java.io.IOException
 import java.net.Inet6Address
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Finds HOMEFLIX computers on the same Wi-Fi via mDNS (`_homeflix._tcp`), exactly like the
@@ -27,7 +28,8 @@ class NsdDiscovery(context: Context) {
     fun discover(): Flow<List<DiscoveredServer>> = callbackFlow {
         val nsd = appContext.getSystemService(Context.NSD_SERVICE) as? NsdManager
         if (nsd == null) {
-            close()
+            close(IOException("Network discovery isn't available on this device."))
+            awaitClose { }
             return@callbackFlow
         }
 
@@ -39,11 +41,26 @@ class NsdDiscovery(context: Context) {
 
         val found = LinkedHashMap<String, DiscoveredServer>()
         val queue = Channel<NsdServiceInfo>(Channel.UNLIMITED)
+        fun snapshot(): List<DiscoveredServer> = synchronized(found) { found.values.toList() }
+
         val worker = launch(Dispatchers.IO) {
             for (info in queue) {
-                val resolved = withTimeoutOrNull(4_000) { resolve(nsd, info) } ?: continue
-                found[resolved.serviceName] = resolved.server
-                trySend(found.values.toList())
+                var resolved: Resolved? = null
+                var attempt = 0
+                while (attempt < 3 && resolved == null) {
+                    resolved = resolve(nsd, info)
+                    if (resolved == null) {
+                        attempt++
+                        delay(400L * attempt)
+                    }
+                }
+                if (resolved != null) {
+                    synchronized(found) { found[resolved.serviceName] = resolved.server }
+                    trySend(snapshot())
+                }
+                // NsdManager allows only one resolve at a time. Let the previous one clear
+                // before asking about the next service, or the next call fails immediately.
+                delay(150)
             }
         }
 
@@ -55,14 +72,14 @@ class NsdDiscovery(context: Context) {
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                found.remove(serviceInfo.serviceName)
-                trySend(found.values.toList())
+                synchronized(found) { found.remove(serviceInfo.serviceName) }
+                trySend(snapshot())
             }
 
             override fun onDiscoveryStopped(serviceType: String) = Unit
 
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                close()
+                close(DiscoveryException(errorCode))
             }
 
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
@@ -71,7 +88,7 @@ class NsdDiscovery(context: Context) {
         try {
             nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener)
         } catch (err: Exception) {
-            close()
+            close(err)
         }
 
         awaitClose {
@@ -130,3 +147,13 @@ class NsdDiscovery(context: Context) {
         const val SERVICE_TYPE = "_homeflix._tcp."
     }
 }
+
+/** A discovery failure from [NsdManager], with a message that is safe to show in the UI. */
+class DiscoveryException(errorCode: Int) : IOException(
+    when (errorCode) {
+        NsdManager.FAILURE_ALREADY_ACTIVE -> "A search is already running. Try again in a moment."
+        NsdManager.FAILURE_MAX_LIMIT -> "Too many searches are running. Try again in a moment."
+        NsdManager.FAILURE_BAD_PARAMETERS -> "Couldn't start the search. Try again."
+        else -> "Couldn't search this Wi-Fi for HOMEFLIX. Try again."
+    },
+)

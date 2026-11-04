@@ -28,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.Button
@@ -147,9 +146,11 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onRefresh) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = "Refresh library")
-                    }
+                    RefreshIconButton(
+                        pulse = state.libraryPulse,
+                        contentDescription = "Refresh library",
+                        onClick = onRefresh,
+                    )
                     IconButton(onClick = onDisconnect) {
                         Icon(Icons.Rounded.Tv, contentDescription = "Change computer")
                     }

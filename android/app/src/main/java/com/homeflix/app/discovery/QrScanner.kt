@@ -1,9 +1,14 @@
 package com.homeflix.app.discovery
 
 import android.Manifest
+import android.content.ContentResolver
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -11,21 +16,28 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,12 +70,17 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 
 /** Scan the QR code shown by HOMEFLIX on the computer. */
 @Composable
 fun QrScannerDialog(onResult: (String) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var galleryError by remember { mutableStateOf<String?>(null) }
     var granted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -72,6 +90,22 @@ fun QrScannerDialog(onResult: (String) -> Unit, onDismiss: () -> Unit) {
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted = it }
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        galleryError = null
+        scope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching { decodeQrImage(context.contentResolver, uri) }.getOrNull()
+            }
+            if (text != null) {
+                onResult(text)
+            } else {
+                galleryError = "No QR code found in that image."
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (!granted) launcher.launch(Manifest.permission.CAMERA)
@@ -127,6 +161,31 @@ fun QrScannerDialog(onResult: (String) -> Unit, onDismiss: () -> Unit) {
                         color = Color.White.copy(alpha = 0.65f),
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedButton(
+                        onClick = {
+                            galleryError = null
+                            imagePicker.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                ),
+                            )
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
+                    ) {
+                        Icon(Icons.Rounded.PhotoLibrary, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Import from gallery")
+                    }
+                    galleryError?.let { message ->
+                        Text(
+                            message,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
 
                 IconButton(
@@ -151,16 +210,7 @@ private fun CameraPreview(onText: (String) -> Unit) {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
     val executor = remember { Executors.newSingleThreadExecutor() }
-    val reader = remember {
-        MultiFormatReader().apply {
-            setHints(
-                mapOf(
-                    DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
-                    DecodeHintType.TRY_HARDER to true,
-                ),
-            )
-        }
-    }
+    val reader = remember { MultiFormatReader().apply { setHints(qrHints()) } }
     val fired = remember { AtomicBoolean(false) }
     var provider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
 
@@ -199,21 +249,58 @@ private fun CameraPreview(onText: (String) -> Unit) {
 
 private fun analyze(image: ImageProxy, reader: MultiFormatReader, onText: (String) -> Unit) {
     try {
-        val bitmap = image.toBitmap()
+        decodeQr(image.toBitmap(), reader)?.let(onText)
+    } catch (_: Exception) {
+        // Bad frame; try the next one.
+    } finally {
+        image.close()
+    }
+}
+
+private fun qrHints(): Map<DecodeHintType, Any> = mapOf(
+    DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
+    DecodeHintType.TRY_HARDER to true,
+    DecodeHintType.ALSO_INVERTED to true,
+)
+
+private fun decodeQrImage(resolver: ContentResolver, uri: Uri): String? {
+    val bitmap = loadBitmap(resolver, uri) ?: return null
+    return try {
+        decodeQr(bitmap, MultiFormatReader().apply { setHints(qrHints()) })
+    } finally {
+        bitmap.recycle()
+    }
+}
+
+private fun decodeQr(bitmap: Bitmap, reader: MultiFormatReader): String? {
+    return try {
         val pixels = IntArray(bitmap.width * bitmap.height)
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
         val source = RGBLuminanceSource(bitmap.width, bitmap.height, pixels)
         val result = reader.decodeWithState(BinaryBitmap(HybridBinarizer(source)))
-        result.text?.trim()?.takeIf { it.isNotEmpty() }?.let(onText)
+        result.text?.trim()?.takeIf { it.isNotEmpty() }
     } catch (_: NotFoundException) {
-        // No QR in this frame.
+        null
     } catch (_: Exception) {
-        // Bad frame; try the next one.
+        null
     } finally {
         reader.reset()
-        image.close()
     }
 }
+
+private fun loadBitmap(resolver: ContentResolver, uri: Uri): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (bounds.outWidth / sample > MAX_IMAGE_SIDE || bounds.outHeight / sample > MAX_IMAGE_SIDE) {
+        sample *= 2
+    }
+    val options = BitmapFactory.Options().apply { inSampleSize = sample }
+    return resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+}
+
+private const val MAX_IMAGE_SIDE = 2_048
 
 private suspend fun Context.awaitCameraProvider(): ProcessCameraProvider =
     suspendCancellableCoroutine { cont ->

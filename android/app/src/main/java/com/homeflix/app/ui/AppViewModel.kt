@@ -11,7 +11,10 @@ import com.homeflix.app.data.InvalidAddressException
 import com.homeflix.app.data.LibraryItem
 import com.homeflix.app.data.PinRequiredException
 import com.homeflix.app.data.Resume
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,10 +27,14 @@ data class AppUiState(
     val connecting: Boolean = false,
     val connectError: String? = null,
     val discovered: List<DiscoveredServer> = emptyList(),
+    val discovering: Boolean = false,
+    val discoveryError: String? = null,
+    val scanPulse: Long = 0,
     val library: List<LibraryItem> = emptyList(),
     val resume: Map<String, Resume> = emptyMap(),
     val loadingLibrary: Boolean = false,
     val libraryError: String? = null,
+    val libraryPulse: Long = 0,
     val needsPin: Boolean = false,
     val pinSubmitting: Boolean = false,
     val pinError: String? = null,
@@ -37,11 +44,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val container = (application as HomeflixApp).container
     private val repository = container.repository
     private val discovery = container.discovery
+    private val lanScanner = container.lanScanner
 
     private val _state = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = _state.asStateFlow()
 
     private var discoveryJob: Job? = null
+    private var discoveryGeneration = 0
     private var refreshing = false
 
     init {
@@ -62,11 +71,67 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startDiscovery() {
-        if (discoveryJob?.isActive == true) return
+        launchDiscovery(restart = false)
+    }
+
+    /** Stops the current mDNS browse and starts a fresh one. */
+    fun refreshDiscovery() {
+        launchDiscovery(restart = true)
+    }
+
+    private fun launchDiscovery(restart: Boolean) {
+        if (restart) {
+            discoveryJob?.cancel()
+            discoveryJob = null
+        } else if (discoveryJob?.isActive == true) {
+            return
+        }
+        val generation = ++discoveryGeneration
+        _state.update {
+            it.copy(
+                discovered = if (restart) emptyList() else it.discovered,
+                discovering = true,
+                discoveryError = null,
+                scanPulse = it.scanPulse + 1,
+            )
+        }
         discoveryJob = viewModelScope.launch {
-            runCatching {
-                discovery.discover().collect { servers ->
-                    _state.update { it.copy(discovered = servers) }
+            val mdns = LinkedHashMap<String, DiscoveredServer>()
+            val lan = LinkedHashMap<String, DiscoveredServer>()
+            fun key(server: DiscoveredServer) = server.url.trimEnd('/').lowercase()
+            fun publish() {
+                if (generation != discoveryGeneration) return
+                val merged = LinkedHashMap<String, DiscoveredServer>()
+                mdns.values.forEach { merged[key(it)] = it }
+                lan.values.forEach { merged.putIfAbsent(key(it), it) }
+                _state.update { it.copy(discovered = merged.values.toList(), discoveryError = null) }
+            }
+            try {
+                if (restart) delay(500)
+                coroutineScope {
+                    launch {
+                        lanScanner.scan().collect { server ->
+                            lan[key(server)] = server
+                            publish()
+                        }
+                    }
+                    discovery.discover().collect { servers ->
+                        mdns.clear()
+                        servers.forEach { mdns[key(it)] = it }
+                        publish()
+                    }
+                }
+            } catch (err: CancellationException) {
+                throw err
+            } catch (err: Exception) {
+                if (generation == discoveryGeneration) {
+                    _state.update {
+                        if (it.discovered.isEmpty()) it.copy(discoveryError = err.userMessage()) else it
+                    }
+                }
+            } finally {
+                if (generation == discoveryGeneration) {
+                    _state.update { it.copy(discovering = false) }
                 }
             }
         }
@@ -77,6 +142,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _state.update { it.copy(connecting = true, connectError = null, pinError = null) }
             try {
                 val connection = repository.connect(address)
+                discoveryGeneration++
                 discoveryJob?.cancel()
                 discoveryJob = null
                 _state.update {
@@ -84,6 +150,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         connecting = false,
                         connection = connection,
                         discovered = emptyList(),
+                        discovering = false,
+                        discoveryError = null,
                         needsPin = false,
                         connectError = null,
                     )
@@ -96,9 +164,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshLibrary() {
-        if (refreshing) return
+        if (refreshing) {
+            _state.update { it.copy(libraryPulse = it.libraryPulse + 1) }
+            return
+        }
         val connection = _state.value.connection ?: return
         refreshing = true
+        _state.update {
+            it.copy(loadingLibrary = true, libraryError = null, libraryPulse = it.libraryPulse + 1)
+        }
         viewModelScope.launch {
             try {
                 val items = repository.library()
@@ -127,7 +201,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 refreshing = false
             }
         }
-        _state.update { it.copy(loadingLibrary = true, libraryError = null) }
     }
 
     fun unlock(pin: String) {
@@ -162,11 +235,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun disconnect() {
         viewModelScope.launch {
-            discoveryJob?.cancel()
-            discoveryJob = null
             repository.disconnect()
             _state.value = AppUiState(initializing = false)
-            startDiscovery()
+            launchDiscovery(restart = true)
         }
     }
 

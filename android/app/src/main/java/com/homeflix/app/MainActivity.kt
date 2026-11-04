@@ -114,7 +114,7 @@ private fun HomeflixRoot() {
             state.connection == null -> ConnectScreen(
                 state = state,
                 onConnect = appVm::connect,
-                onDiscover = appVm::startDiscovery,
+                onDiscover = appVm::refreshDiscovery,
                 onServerMode = {
                     serverMode = true
                     ServerService.start(context)

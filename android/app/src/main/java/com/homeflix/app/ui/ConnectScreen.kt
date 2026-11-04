@@ -24,12 +24,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.WifiTethering
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -116,21 +114,28 @@ fun ConnectScreen(
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f),
                     )
-                    if (state.discovered.isEmpty()) {
+                    if (state.discovered.isEmpty() && state.discovering) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
                             strokeWidth = 2.dp,
                         )
                     }
-                    IconButton(onClick = onDiscover) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = "Search again")
-                    }
+                    RefreshIconButton(
+                        pulse = state.scanPulse,
+                        contentDescription = "Search again",
+                        onClick = onDiscover,
+                    )
                 }
 
                 if (state.discovered.isEmpty()) {
                     Text(
-                        text = "Looking for HOMEFLIX. Make sure the computer and this device are on the same network.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = state.discoveryError
+                            ?: "Looking for HOMEFLIX. Make sure the computer and this device are on the same network.",
+                        color = if (state.discoveryError != null) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         style = MaterialTheme.typography.bodySmall,
                     )
                 } else {
@@ -282,3 +287,4 @@ fun ConnectScreen(
         )
     }
 }
+
