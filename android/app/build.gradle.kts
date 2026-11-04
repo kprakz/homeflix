@@ -123,6 +123,11 @@ android {
     }
 }
 
+tasks.named("preBuild") { dependsOn(syncServerAssets) }
+tasks.matching { it.name.contains("Lint", ignoreCase = true) }.configureEach {
+    dependsOn(syncServerAssets)
+}
+
 dependencies {
     val compose = platform("androidx.compose:compose-bom:2025.05.01")
     implementation(compose)
