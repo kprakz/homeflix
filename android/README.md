@@ -8,7 +8,8 @@ connect screen. The embedded Node.js runtime and bundled FFmpeg serve the phone'
 other HOMEFLIX devices on the same Wi-Fi, using the normal client to watch locally.
 
 - Android 7.0 (API 24) and newer, phones, tablets and Android TV / Google TV / Fire TV
-- Finds the computer with mDNS, a QR code, or a typed address
+- Finds the computer with mDNS, a local network scan, a QR code (camera or gallery), or a typed address
+- Animated refresh buttons for discovery and library reloads
 - Resume positions, start over, series grouping, auto-play next episode, audio tracks, subtitles,
   remembered volume boost
 - Direct play, one-time remux, and live HLS conversion when the device cannot play the file
