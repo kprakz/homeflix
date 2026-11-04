@@ -4,6 +4,82 @@ Watch the movies on your Windows PC, Mac or Linux computer from your iPad, iPhon
 
 **Website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
 
+## Two ways to use HOMEFLIX
+
+HOMEFLIX has two sides: the **computer** that holds your movies, and the **screen** that plays them.
+Most people use the computer as the server and watch from a phone, tablet or TV. The Android app can
+also work the other way around and share the phone's own videos.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/android-client-mode.png" alt="HOMEFLIX client mode showing a movie and TV show library" width="300"><br>
+      <strong>Client mode</strong><br>
+      Browse and watch the movies stored on your computer.
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/android-server.png" alt="HOMEFLIX server mode sharing this phone's videos" width="300"><br>
+      <strong>Server mode</strong><br>
+      Share this phone's videos with other HOMEFLIX devices.
+    </td>
+  </tr>
+</table>
+
+### Client mode: watch your computer's movies
+
+Install HOMEFLIX on the computer that has your movies and choose your movie folder. Then open the
+Android app or the address shown in the HOMEFLIX window on your phone, tablet or TV. The app finds
+the computer automatically; on iPhone, iPad and smart TVs, open the address in a browser.
+
+This is the normal setup. Your movies stay on the computer, and every screen plays them over your
+home Wi-Fi. Resume positions, series, auto-play next episode, audio tracks, subtitles and HEVC
+fallback all work in this mode.
+
+### Server mode: share this phone's videos
+
+The Android app can also serve videos stored on the phone. Open **Share this phone's videos**, choose
+the folders to share, and give other devices the address and PIN shown on the screen. Other HOMEFLIX
+devices connect exactly as they connect to a computer.
+
+This is useful when the computer is off, when you are travelling, or when the videos are already
+downloaded on the phone.
+
+## Start here
+
+| Your device | What to do |
+| --- | --- |
+| Windows PC | [Install on Windows](#install-on-windows-5-minutes-one-time) |
+| Mac | [Install on a Mac](#install-on-a-mac) |
+| Linux computer | [Install on Linux](#install-on-linux) |
+| Android phone, tablet or TV | [Install the Android app](#install-on-android) |
+| iPhone, iPad or smart TV | Nothing to install: [open the address in a browser](#watch) |
+
+**Three steps for most people:**
+
+1. Install HOMEFLIX on the computer that has your movies.
+2. Choose the folder where your movies are.
+3. Open the address shown in HOMEFLIX on your phone or TV, or let the Android app find the computer.
+
+**What you need:** a computer (Windows 10/11, macOS 12 or newer, or Linux), your movie files, and a
+phone, tablet or TV on the same home Wi-Fi. No account, subscription or internet upload is needed.
+
+## What's new in Android 1.4.4
+
+Android 1.4.4 makes it easier to find your computer and connect to it. The screenshots above show the
+client and server modes.
+
+- **Find more computers.** If your computer does not announce itself on the network, HOMEFLIX now
+  scans your Wi-Fi and finds it by its address.
+- **Fewer missed connections.** Discovery retries busy networks instead of giving up after one try.
+- **Refresh buttons that show they are working.** The search and library refresh buttons spin while
+  they reload.
+- **Import a QR code from the gallery.** Besides the camera, you can now pick a screenshot or photo
+  of the QR code.
+- **Better QR decoding.** Large photos and light-on-dark QR codes are handled more reliably.
+
+Download the signed APK or app bundle from the
+[latest release](https://github.com/kprakz/homeflix/releases/latest) once the Android build is published.
+
 ---
 
 ## Install on a Mac
@@ -141,6 +217,101 @@ HOMEFLIX checks Windows Firewall and shows a box at the top of its window if som
 
 ---
 
+## Install on Android
+
+HOMEFLIX includes a native Android app for phones, tablets, Android TV, Google TV and Fire TV. It
+connects to the same HOMEFLIX computer as the browser and has the same features: resume positions and
+start over, series and auto-play next episode, audio languages, subtitles, remembered volume boost,
+and HEVC fallback.
+
+The 1.4.4 app is better at finding computers that older versions missed. It retries discovery on busy
+networks, scans the local network when a computer does not announce itself, and shows results as they
+arrive. The refresh buttons spin while they work, and the QR scanner can now import an image from the
+gallery as well as use the camera.
+
+The phone can also act as the server; see [Server mode](#server-mode-share-this-phones-videos) above.
+Tap **Share this phone's videos** on the connect screen and other HOMEFLIX devices on the same Wi-Fi
+can watch it. You choose the shared folders with the system folder picker, and the PIN can be changed
+(4 to 8 digits) or turned off, just like the desktop app. The embedded server is the same `server.js`
+as the desktop app; see [`android/README.md`](android/README.md#server-mode-on-the-phone) for details.
+
+### Install the APK
+
+1. Download **`HOMEFLIX-<version>.apk`** from the [latest release](https://github.com/kprakz/homeflix/releases/latest)
+   and open it. Android asks once whether to allow installing apps from this source; allow it, then
+   tap **Install**.
+2. Open **HOMEFLIX**. It looks for your computer on the same Wi-Fi and lists computers as it finds
+   them. If yours does not appear, wait for the scan to finish or tap the refresh button. Older
+   computers that do not announce themselves are found by the local network scan.
+3. Choose your computer. You can also tap **Scan QR code** to use the camera, tap **Import from
+   gallery** to pick a screenshot or photo of the QR code, or type the address shown (for example
+   `192.168.1.57:8080`).
+4. If the computer has a PIN, enter it once. The app remembers the computer and the PIN.
+5. To reload the movie list later, tap the refresh button at the top of the library. It spins while
+   it reads the library again.
+
+If the app still cannot find the computer, make sure both are on the same Wi-Fi and type the
+computer's address by hand. A firewall on the computer can also block the connection; see
+[Troubleshooting](#troubleshooting).
+
+Requires **Android 7.0 or newer**. The same APK works on Android TV, Google TV and Fire TV; sideload it
+and it appears under your apps. If no release is available yet, build it from source below or run the
+**Android build** GitHub Actions workflow and download the `HOMEFLIX-android` artifact.
+
+### Build from source
+
+Requirements: JDK 17 or newer, Android SDK 36 (`platforms;android-36` and
+`build-tools;36.0.0`), NDK `28.0.13004108` and CMake `3.22.1`. Point `ANDROID_HOME` at the SDK, or
+create `android/local.properties` with `sdk.dir=/path/to/android-sdk` (that file is gitignored).
+
+Server mode also needs the Node.js and FFmpeg Android binaries, which are not committed. Download and
+copy them in once with `android/scripts/fetch-native.sh` (paths and layout are in
+[`android/README.md`](android/README.md#build)).
+
+```bash
+cd android
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+For Android TV / Google TV / Fire TV over ADB:
+
+```bash
+adb connect <tv-ip>:5555
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Useful checks:
+
+```bash
+./gradlew :app:testDebugUnitTest :app:lintDebug
+```
+
+The app version and `versionCode` come from the root `package.json` (`1.4.4` → `10404`), so bumping
+the desktop version also bumps Android. See [`android/README.md`](android/README.md) for the project
+layout and Play publishing steps.
+
+### Signed releases and GitHub Actions
+
+Create a keystore once and set the `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` environment variables (or use
+`keystore.properties` inside `android/`). Then build:
+
+```bash
+cd android
+./gradlew :app:assembleRelease :app:bundleRelease
+```
+
+Outputs:
+
+- `app/build/outputs/apk/release/app-release.apk` for GitHub Releases
+- `app/build/outputs/bundle/release/app-release.aab` for Google Play
+
+`.github/workflows/android.yml` builds and tests the app on pushes and pull requests, attaches a
+signed APK/AAB to published GitHub releases, and optionally uploads the AAB to Google Play's internal
+track. Without keystore secrets it uploads a debug APK instead. Configuration details are in
+[`android/README.md`](android/README.md).
+
 ## Watch
 
 1. Connect your iPhone, iPad, Android phone or TV to the **same Wi-Fi** as the laptop.
@@ -207,6 +378,9 @@ Settings → Apps → Installed apps → **HOMEFLIX** → Uninstall. This also r
 
 | Problem | Fix |
 |---|---|
+| Android app can't find my computer | Make sure both are on the same home Wi-Fi. Tap the refresh button and wait for the local network scan. If it still does not appear, type the computer's address shown in the HOMEFLIX window under **OR CONNECT BY HAND**. |
+| Android app finds the computer but can't connect | Check that the computer's firewall allows HOMEFLIX on private/home networks and that the address and port are correct. |
+| QR code won't scan or import | Use a clear, square screenshot of the QR code, or point the camera at the code in the HOMEFLIX window. You can also type the address instead. |
 | The page won't open on my phone | Same Wi-Fi? Then follow the box at the top of the HOMEFLIX window. To check by hand: Windows Security → Firewall & network protection → Allow an app through firewall → Change settings → **homeflix.exe** should have **Private** ticked, and your home Wi-Fi should be set to Private. |
 | It only works when my Wi-Fi is Public | HOMEFLIX was allowed on Public networks only. Click **Allow on home networks** in HOMEFLIX (or tick **Private** for homeflix.exe as above), then set your Wi-Fi to Private. |
 | The address changed | Your router gave the laptop a new address. Scan the new QR code in the HOMEFLIX window. |

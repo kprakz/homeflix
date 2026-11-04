@@ -7,9 +7,12 @@ const fsp = fs.promises;
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const dgram = require('dgram');
 const { spawn } = require('child_process');
 
 const ROOT = __dirname;
+const APP_VERSION = (() => { try { return require('./package.json').version; } catch { return '0.0.0'; } })();
+const API_VERSION = 1;
 let CONFIG = { port: 8080, folders: [], minSizeMB: 5, cacheDir: 'cache', ffmpeg: 'ffmpeg', ffprobe: 'ffprobe' };
 let CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.avi', '.webm', '.wmv', '.flv', '.ts', '.m2ts', '.mpg', '.mpeg', '.3gp']);
@@ -93,6 +96,14 @@ function scanLibrary() {
   return scanning;
 }
 
+// "Show S01E05" -> { show: "Show", season: 1, ep: 5 }. Shared by the web and Android clients so both
+// group episodes the same way.
+const SERIES_RE = /^(.*?)[\s-]*S(\d{1,2})\s*E(\d{1,3})\b/i;
+function seriesInfo(title) {
+  const m = String(title || '').match(SERIES_RE);
+  return m ? { show: m[1].trim(), season: Number(m[2]), ep: Number(m[3]) } : {};
+}
+
 async function buildLibrary() {
   const files = [];
   for (const folder of CONFIG.folders) await walk(path.resolve(folder), 0, files);
@@ -109,7 +120,11 @@ async function buildLibrary() {
     const folder = CONFIG.folders.find((f) => file.toLowerCase().startsWith(path.resolve(f).toLowerCase())) || '';
     // A file written to in the last 2 minutes is most likely still downloading (e.g. from Telegram).
     const downloading = Date.now() - stat.mtimeMs < 2 * 60 * 1000;
-    next.set(id, { id, path: file, ...prettyName(file), size: stat.size, mtime: stat.mtimeMs, folder: path.basename(folder), downloading });
+    const { title, year } = prettyName(file);
+    next.set(id, {
+      id, path: file, title, year, ...seriesInfo(title),
+      size: stat.size, mtime: stat.mtimeMs, folder: path.basename(folder), downloading,
+    });
   }
   library = next;
   return [...library.values()].sort((a, b) => b.mtime - a.mtime);
@@ -669,7 +684,9 @@ function deviceKey() {
 }
 function keyFrom(req, url) {
   const cookie = /(?:^|;\s*)homeflix_key=([0-9a-f]+)/.exec(req.headers.cookie || '');
-  return url.searchParams.get('k') || (cookie && cookie[1]) || '';
+  // Apps that aren't browsers send the key as a header instead of a cookie/query string.
+  const header = String(req.headers['x-homeflix-key'] || '').toLowerCase();
+  return /^[0-9a-f]{16,64}$/.test(header) ? header : url.searchParams.get('k') || (cookie && cookie[1]) || '';
 }
 function hasKey(req, url) {
   const want = deviceKey();
@@ -737,8 +754,16 @@ async function gate(req, res, url, parts) {
     res.end(JSON.stringify({ ok: true, key }));
     return false;
   }
+  // Public, read-only description of this server: used by the Android app's connect screen and by
+  // anything that wants to check the version before talking to the rest of the API.
+  if (parts[0] === 'api' && parts[1] === 'hello') {
+    return send(res, 200, {
+      app: 'homeflix', name: 'HOMEFLIX', version: APP_VERSION, api: API_VERSION,
+      pin: !!CONFIG.pin, port: CONFIG.port,
+    }), false;
+  }
   const ok = hasKey(req, url);
-  if (parts[0] === 'api' && parts[1] === 'auth') return send(res, 200, { pin: !!CONFIG.pin, ok }), false;
+  if (parts[0] === 'api' && parts[1] === 'auth') return send(res, 200, { pin: !!CONFIG.pin, ok, version: APP_VERSION, api: API_VERSION }), false;
   // A valid ?k= (from the desktop app's "Watch on this laptop", or AirPlay) also signs this browser in.
   if (ok && CONFIG.pin && url.searchParams.has('k') && !/homeflix_key=/.test(req.headers.cookie || '')) res.setHeader('Set-Cookie', keyCookie(deviceKey()));
   // The page itself, its icons and scripts load without the PIN so it can ask for it; movies don't.
@@ -865,6 +890,215 @@ function cacheSize() {
   return dirSize(CACHE_DIR);
 }
 
+// ---------- mDNS: let the Android app find this computer ----------
+// Advertises _homeflix._tcp.local on the LAN. Implemented here with Node's dgram (no dependency) so the
+// server keeps its "standard library only" promise. If anything goes wrong (another mDNS daemon holds
+// port 5353, multicast unavailable) discovery is simply unavailable; the address/QR still work.
+const MDNS_ADDR = '224.0.0.251';
+const MDNS_PORT = 5353;
+let mdnsSocket = null;
+let mdnsChild = null;
+
+function mdnsHost() {
+  const raw = String(os.hostname() || 'homeflix').split('.')[0] || 'homeflix';
+  return raw.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || 'homeflix';
+}
+
+function dnsName(name) {
+  const parts = [];
+  for (const label of String(name).split('.').filter(Boolean)) {
+    const bytes = Buffer.from(label, 'utf8');
+    parts.push(Buffer.from([Math.min(bytes.length, 63)]), bytes.subarray(0, 63));
+  }
+  parts.push(Buffer.from([0]));
+  return Buffer.concat(parts);
+}
+
+function mdnsRecords(ttl = null) {
+  const host = mdnsHost();
+  const service = '_homeflix._tcp.local';
+  const instance = `HOMEFLIX ${host}._homeflix._tcp.local`;
+  const target = `${host}.local`;
+  const records = [];
+  const record = (name, type, recordTtl, rdata, unique) => {
+    const head = Buffer.alloc(10);
+    head.writeUInt16BE(type, 0);
+    head.writeUInt16BE(unique ? 0x8001 : 0x0001, 2);
+    head.writeUInt32BE(Math.max(0, ttl == null ? recordTtl : ttl), 4);
+    head.writeUInt16BE(rdata.length, 8);
+    records.push(Buffer.concat([dnsName(name), head, rdata]));
+  };
+  record(service, 12, 4500, dnsName(instance), false);
+  const srv = Buffer.alloc(6);
+  srv.writeUInt16BE(0, 0); // priority
+  srv.writeUInt16BE(0, 2); // weight
+  srv.writeUInt16BE(Number(CONFIG.port) || 8080, 4);
+  record(instance, 33, 120, Buffer.concat([srv, dnsName(target)]), true);
+  const txt = [`name=${os.hostname()}`, `version=${APP_VERSION}`, `api=${API_VERSION}`, 'path=/']
+    .map((s) => { const b = Buffer.from(s, 'utf8'); return Buffer.concat([Buffer.from([b.length]), b]); });
+  record(instance, 16, 4500, Buffer.concat(txt), true);
+  for (const ip of lanAddresses()) {
+    const bytes = ip.split('.').map(Number);
+    if (bytes.length === 4 && bytes.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+      record(target, 1, 120, Buffer.from(bytes), true);
+    }
+  }
+  return { records, target, service };
+}
+
+function mdnsPacket(ttl = null) {
+  const { records } = mdnsRecords(ttl);
+  const header = Buffer.alloc(12);
+  header.writeUInt16BE(0, 0); // id
+  header.writeUInt16BE(0x8400, 2); // response + authoritative
+  header.writeUInt16BE(0, 4); // questions
+  header.writeUInt16BE(records.length, 6); // answers
+  return Buffer.concat([header, ...records]);
+}
+
+function readDnsName(buf, offset) {
+  const labels = [];
+  let next = offset;
+  let jumped = false;
+  for (let guard = 0; guard < 128 && offset < buf.length; guard++) {
+    const len = buf[offset];
+    if (len === 0) {
+      if (!jumped) next = offset + 1;
+      break;
+    }
+    if ((len & 0xc0) === 0xc0) {
+      if (offset + 1 >= buf.length) break;
+      const pointer = ((len & 0x3f) << 8) | buf[offset + 1];
+      if (!jumped) next = offset + 2;
+      jumped = true;
+      offset = pointer;
+      continue;
+    }
+    offset++;
+    labels.push(buf.toString('utf8', offset, offset + len));
+    offset += len;
+    if (!jumped) next = offset;
+  }
+  return { name: labels.join('.').toLowerCase(), next };
+}
+
+function onMdnsMessage(msg, rinfo) {
+  if (!mdnsSocket || msg.length < 12) return;
+  const questions = msg.readUInt16BE(4);
+  const { target, service } = mdnsRecords();
+  const host = `${mdnsHost()}.local`;
+  let offset = 12;
+  let asked = false;
+  let unicast = false;
+  for (let i = 0; i < questions && offset < msg.length; i++) {
+    const parsed = readDnsName(msg, offset);
+    offset = parsed.next;
+    if (offset + 4 > msg.length) break;
+    const qclass = msg.readUInt16BE(offset + 2);
+    offset += 4;
+    const name = parsed.name;
+    if (name === service || name.endsWith(`.${service}`) || name === target || name === host ||
+        name === '_services._dns-sd._udp.local') {
+      asked = true;
+      if (qclass & 0x8000) unicast = true; // QU: reply directly to the asker
+    }
+  }
+  if (!asked) return;
+  const packet = mdnsPacket();
+  if (unicast) mdnsSocket.send(packet, 0, packet.length, rinfo.port, rinfo.address, () => {});
+  else mdnsSocket.send(packet, 0, packet.length, MDNS_PORT, MDNS_ADDR, () => {});
+}
+
+// macOS keeps port 5353 for mDNSResponder, so ask it to publish the service instead of fighting for
+// the socket. Linux/Windows use the built-in responder; if the port is taken (Avahi) the helper below
+// takes over.
+function startMdnsHelper() {
+  if (mdnsChild) return;
+  const instance = `HOMEFLIX ${mdnsHost()}`;
+  const txt = [`name=${os.hostname()}`, `version=${APP_VERSION}`, `api=${API_VERSION}`, 'path=/'];
+  const candidates = process.platform === 'darwin'
+    ? [{ cmd: 'dns-sd', args: ['-R', instance, '_homeflix._tcp', '.', String(CONFIG.port), ...txt] }]
+    : process.platform === 'linux'
+      ? [{ cmd: 'avahi-publish-service', args: [instance, '_homeflix._tcp', String(CONFIG.port), ...txt] }]
+      : [{ cmd: 'dns-sd', args: ['-R', instance, '_homeflix._tcp', '.', String(CONFIG.port), ...txt] }];
+  const next = () => {
+    const option = candidates.shift();
+    if (!option || mdnsChild) return;
+    let child;
+    try {
+      child = spawn(option.cmd, option.args, { stdio: 'ignore', windowsHide: true });
+    } catch {
+      next();
+      return;
+    }
+    mdnsChild = child;
+    child.on('error', () => {
+      if (mdnsChild === child) mdnsChild = null;
+      next();
+    });
+    child.on('exit', () => {
+      if (mdnsChild === child) mdnsChild = null;
+    });
+  };
+  next();
+}
+
+function startMdns() {
+  if (mdnsSocket || mdnsChild) return;
+  if (process.platform === 'darwin') {
+    startMdnsHelper();
+    return;
+  }
+  let sock;
+  try {
+    sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  } catch (err) {
+    console.error(`mDNS discovery unavailable: ${err.message}`);
+    return;
+  }
+  sock.on('error', (err) => {
+    console.error(`mDNS discovery unavailable: ${err.message}`);
+    if (mdnsSocket === sock) mdnsSocket = null;
+    try { sock.close(); } catch {}
+    startMdnsHelper();
+  });
+  sock.on('message', (msg, rinfo) => { try { onMdnsMessage(msg, rinfo); } catch {} });
+  sock.bind(MDNS_PORT, () => {
+    if (mdnsSocket !== sock) return;
+    try {
+      sock.addMembership(MDNS_ADDR);
+      sock.setMulticastTTL(255);
+      sock.setMulticastLoopback(true);
+    } catch (err) {
+      console.error(`mDNS discovery unavailable: ${err.message}`);
+    }
+    const announce = () => {
+      if (mdnsSocket !== sock) return;
+      const packet = mdnsPacket();
+      sock.send(packet, 0, packet.length, MDNS_PORT, MDNS_ADDR, () => {});
+    };
+    announce();
+    setTimeout(announce, 1000);
+    setTimeout(announce, 3000);
+  });
+  mdnsSocket = sock;
+}
+
+function stopMdns() {
+  if (mdnsChild) {
+    try { mdnsChild.kill(); } catch {}
+    mdnsChild = null;
+  }
+  const sock = mdnsSocket;
+  if (!sock) return;
+  mdnsSocket = null;
+  try {
+    const packet = mdnsPacket(0); // goodbye: TTL 0
+    sock.send(packet, 0, packet.length, MDNS_PORT, MDNS_ADDR, () => {});
+  } catch {}
+  try { sock.close(); } catch {}
+}
+
 let server = null;
 
 function start() {
@@ -879,6 +1113,8 @@ function start() {
     server.once('error', reject);
     server.listen(CONFIG.port, '0.0.0.0', () => {
       server.off('error', reject);
+      CONFIG.port = server.address().port;
+      startMdns();
       resolve(server.address().port);
     });
   });
@@ -886,6 +1122,7 @@ function start() {
 
 function stop() {
   return new Promise((resolve) => {
+    stopMdns();
     for (const st of hls.values()) stopHls(st);
     if (!server) return resolve();
     server.closeAllConnections();
