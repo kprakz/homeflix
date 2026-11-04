@@ -199,7 +199,7 @@ Useful checks:
 ./gradlew :app:testDebugUnitTest :app:lintDebug
 ```
 
-The app version and `versionCode` come from the root `package.json` (`1.4.2` → `10402`), so bumping
+The app version and `versionCode` come from the root `package.json` (`1.4.3` → `10403`), so bumping
 the desktop version also bumps Android. See [`android/README.md`](android/README.md) for the project
 layout and Play publishing steps.
 
