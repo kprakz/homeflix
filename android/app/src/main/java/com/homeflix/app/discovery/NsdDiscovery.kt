@@ -119,16 +119,23 @@ class NsdDiscovery(context: Context) {
                     }
                     val address = if (host is Inet6Address) "[${rawAddress.substringBefore('%')}]" else rawAddress
                     val attributes = serviceInfo.attributes
-                    val name = attributes?.get("name")?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() }
+                    // The server puts its network name in the TXT record — lean on that, since IPs
+                    // rotate while the name stays put.
+                    val hostname = attributes?.get("name")?.toString(Charsets.UTF_8)
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() && !it.equals("localhost", ignoreCase = true) }
                         ?: serviceInfo.serviceName.substringBefore('.')
+                            .removePrefix("HOMEFLIX").trim()
+                            .takeIf { it.isNotBlank() && !it.equals("localhost", ignoreCase = true) }
                     val version = attributes?.get("version")?.toString(Charsets.UTF_8)
                     cont.resume(
                         Resolved(
                             serviceName = serviceInfo.serviceName,
                             server = DiscoveredServer(
-                                name = name,
+                                name = hostname?.let { "HOMEFLIX — $it" } ?: "HOMEFLIX at $address",
                                 url = "http://$address:${serviceInfo.port}",
                                 version = version,
+                                hostname = hostname,
                             ),
                         ),
                     )

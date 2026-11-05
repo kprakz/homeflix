@@ -30,12 +30,15 @@ function configure(options) {
   if (!CONFIG.secret) CONFIG.secret = crypto.randomBytes(16).toString('hex');
   CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
   fs.mkdirSync(CACHE_DIR, { recursive: true });
+  loadDevices();
 }
 
 function loadConfig() {
   const defaults = {
     port: 8080,
-    folders: [path.join(os.homedir(), 'Videos'), path.join(os.homedir(), 'Downloads')],
+    // Nothing is shared until the owner names folders in config.json (or picks them in the app):
+    // pre-selecting Videos/Downloads would serve files they never agreed to share.
+    folders: [],
     minSizeMB: 5,
     cacheDir: 'cache',
     ffmpeg: 'ffmpeg',
@@ -758,12 +761,12 @@ async function gate(req, res, url, parts) {
   // anything that wants to check the version before talking to the rest of the API.
   if (parts[0] === 'api' && parts[1] === 'hello') {
     return send(res, 200, {
-      app: 'homeflix', name: 'HOMEFLIX', version: APP_VERSION, api: API_VERSION,
+      app: 'homeflix', name: 'HOMEFLIX', hostname: deviceHostname(), version: APP_VERSION, api: API_VERSION,
       pin: !!CONFIG.pin, port: CONFIG.port,
     }), false;
   }
   const ok = hasKey(req, url);
-  if (parts[0] === 'api' && parts[1] === 'auth') return send(res, 200, { pin: !!CONFIG.pin, ok, version: APP_VERSION, api: API_VERSION }), false;
+  if (parts[0] === 'api' && parts[1] === 'auth') return send(res, 200, { pin: !!CONFIG.pin, ok, hostname: deviceHostname(), version: APP_VERSION, api: API_VERSION }), false;
   // A valid ?k= (from the desktop app's "Watch on this laptop", or AirPlay) also signs this browser in.
   if (ok && CONFIG.pin && url.searchParams.has('k') && !/homeflix_key=/.test(req.headers.cookie || '')) res.setHeader('Set-Cookie', keyCookie(deviceKey()));
   // The page itself, its icons and scripts load without the PIN so it can ask for it; movies don't.
@@ -773,16 +776,455 @@ async function gate(req, res, url, parts) {
   return false;
 }
 
+// ---------- connected devices ----------
+// Server Mode shows who is connected, what they opened and how much they transferred. One record
+// per IP address (the same device reconnecting keeps its stats), usage is bucketed per day and the
+// buckets, totals and watch history survive restarts in devices.json next to the config. Nothing
+// ever leaves the network.
+const dns = require('dns');
+const ACTIVITY_ACTIVE_MS = 60_000;
+const ACTIVITY_KEEP_MS = 10 * 60_000;
+const STATS_KEEP_DAYS = 800;
+const HISTORY_KEEP = 200;     // remembered watches per device
+const HISTORY_REPORT = 10;    // watches sent to the app each poll
+const SESSION_GAP_MS = 30 * 60_000;   // same title inside half an hour counts as one watch
+const SESSION_MAX_MS = 6 * 3_600_000; // never let one watch stretch longer than this
+const SAVE_DEBOUNCE_MS = 30_000;
+const activity = new Map(); // ip -> record
+const openResponses = new Set(); // live responses, so usage shows while a movie is still playing
+let devicesLoaded = false;
+let devicesSaveTimer = null;
+
+function devicesFile() {
+  return path.resolve(CONFIG.dataDir || ROOT, 'devices.json');
+}
+
+function dateKey(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function bodyBytes(chunk) {
+  return typeof chunk === 'string' || Buffer.isBuffer(chunk) || ArrayBuffer.isView(chunk) ? Buffer.byteLength(chunk) : 0;
+}
+
+function deviceName(ua) {
+  const s = String(ua || '');
+  const os =
+    /iPhone/.test(s) ? 'iPhone' :
+    /iPad/.test(s) ? 'iPad' :
+    /Android/.test(s) ? 'Android' :
+    /Windows/.test(s) ? 'Windows' :
+    /Macintosh|Mac OS X/.test(s) ? 'Mac' :
+    /Linux/.test(s) ? 'Linux' :
+    /AppleTV/.test(s) ? 'Apple TV' :
+    /SMART-TV|SmartTV|Tizen|Web0S|WebOS/i.test(s) ? 'Smart TV' : '';
+  const app =
+    /ExoPlayerLib/i.test(s) ? 'HOMEFLIX app' :
+    /okhttp/i.test(s) ? 'HOMEFLIX app' :
+    /Edg\//.test(s) ? 'Edge' :
+    /OPR\//.test(s) ? 'Opera' :
+    /Chrome\//.test(s) ? 'Chrome' :
+    /Firefox\//.test(s) ? 'Firefox' :
+    /Safari\//.test(s) ? 'Safari' : 'Browser';
+  return os ? `${app} on ${os}` : app;
+}
+
+// So devices stay recognisable even when the router hands out changing addresses: one record per
+// IP, plus the network name for that address found with a reverse DNS lookup when there is one.
+function isLanIp(ip) {
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+}
+
+function lookupHostname(rec) {
+  if (rec.hostLooked || !isLanIp(rec.ip)) return;
+  rec.hostLooked = true;
+  dns.reverse(rec.ip).then((names) => {
+    const host = (names || []).find((n) => n && !n.includes('.in-addr.arpa'));
+    if (host) {
+      rec.host = host.replace(/\.local\.?$/, '').split('.')[0];
+      rec.name = rec.host;
+      scheduleSave();
+    }
+  }).catch(() => {});
+}
+
+function freshRecord(ip, now) {
+  return {
+    ip, uas: {}, host: null, client: null, name: null, firstSeen: now, lastSeen: now,
+    total: { bytes: 0, seconds: 0, requests: 0 },
+    days: {}, history: [],
+    open: 0, watchingOpen: 0, mode: 'idle', title: null, session: null,
+  };
+}
+
+function recordFor(ip, ua) {
+  const now = Date.now();
+  let rec = activity.get(ip);
+  if (!rec) {
+    rec = freshRecord(ip, now);
+    activity.set(ip, rec);
+    lookupHostname(rec);
+  }
+  if (ua) {
+    rec.uas[ua] = (rec.uas[ua] || 0) + 1;
+    // Prefer a name that actually describes the device ("Chrome on Windows") over the generic
+    // fallback ("Browser") that one-off probes and unknown clients produce, then break ties by
+    // how often that user agent has been seen.
+    let best = null;
+    let bestScore = -1;
+    for (const [agent, count] of Object.entries(rec.uas)) {
+      const label = deviceName(agent);
+      const score = (label === 'Browser' ? 0 : 1) * 1e9 + count;
+      if (score > bestScore || (score === bestScore && agent === ua)) { best = label; bestScore = score; }
+    }
+    rec.client = best;
+    if (!rec.host) rec.name = rec.client;
+  }
+  return rec;
+}
+
+function loadDevices() {
+  if (devicesLoaded) return;
+  devicesLoaded = true;
+  let array = [];
+  try {
+    array = JSON.parse(fs.readFileSync(devicesFile(), 'utf8'));
+  } catch {}
+  if (!Array.isArray(array)) return;
+  for (const item of array) {
+    if (!item || typeof item.ip !== 'string' || !item.ip) continue;
+    const now = Date.now();
+    const rec = Object.assign(freshRecord(item.ip, now), {
+      uas: item.uas && typeof item.uas === 'object' ? item.uas : {},
+      host: typeof item.host === 'string' ? item.host : null,
+      name: typeof item.name === 'string' ? item.name : null,
+      firstSeen: Number(item.firstSeen) || now,
+      lastSeen: Number(item.lastSeen) || now,
+      total: item.total && typeof item.total === 'object' ? item.total : freshRecord(item.ip, now).total,
+      days: item.days && typeof item.days === 'object' ? item.days : {},
+      history: Array.isArray(item.history) ? item.history : [],
+    });
+    if (rec.host) rec.hostLooked = true;
+    trimRecord(rec);
+    activity.set(rec.ip, rec);
+  }
+}
+
+function dayBucket(rec, key) {
+  return rec.days[key] || (rec.days[key] = { bytes: 0, seconds: 0, requests: 0 });
+}
+
+// Inclusive sum over the daily buckets whose date key falls in [from, to] (YYYY-MM-DD strings).
+function rangeTotals(rec, from, to) {
+  const out = { bytes: 0, seconds: 0, requests: 0 };
+  for (const [key, bucket] of Object.entries(rec.days)) {
+    if (key >= from && key <= to) {
+      out.bytes += bucket.bytes || 0;
+      out.seconds += bucket.seconds || 0;
+      out.requests += bucket.requests || 0;
+    }
+  }
+  return out;
+}
+
+function trimRecord(rec) {
+  const keys = Object.keys(rec.days).sort();
+  if (keys.length > STATS_KEEP_DAYS) {
+    for (const key of keys.slice(0, keys.length - STATS_KEEP_DAYS)) delete rec.days[key];
+  }
+  if (rec.history.length > HISTORY_KEEP) rec.history.length = HISTORY_KEEP;
+}
+
+function saveDevices() {
+  devicesSaveTimer = null;
+  loadDevices();
+  for (const rec of activity.values()) {
+    flushSession(rec);
+    trimRecord(rec);
+  }
+  const array = [...activity.values()]
+    .sort((a, b) => b.lastSeen - a.lastSeen)
+    .map((rec) => ({
+      ip: rec.ip, uas: rec.uas, host: rec.host, name: rec.name,
+      firstSeen: rec.firstSeen, lastSeen: rec.lastSeen,
+      total: rec.total, days: rec.days, history: rec.history,
+    }));
+  const file = devicesFile();
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temp = `${file}.tmp`;
+    fs.writeFileSync(temp, JSON.stringify(array));
+    fs.renameSync(temp, file);
+  } catch (err) {
+    console.error(`devices.json: ${err.message}`);
+  }
+}
+
+function scheduleSave() {
+  if (!devicesSaveTimer && devicesLoaded) {
+    devicesSaveTimer = setTimeout(saveDevices, SAVE_DEBOUNCE_MS);
+    devicesSaveTimer.unref?.();
+  }
+}
+
+// A "watch" starts when a device opens a title and keeps growing while the player keeps fetching
+// from it; half an hour without the device touching that title ends the entry.
+function flushSession(rec) {
+  const session = rec.session;
+  if (!session) return;
+  rec.session = null;
+  const seconds = Math.min(SESSION_MAX_MS, Math.max(0, session.lastAt - session.startedAt));
+  if (seconds >= 2000 || session.bytes >= 512 * 1024) {
+    rec.history.unshift({
+      ts: session.startedAt, id: session.id, title: session.title,
+      seconds: Math.round(seconds / 1000), bytes: session.bytes,
+    });
+    if (rec.history.length > HISTORY_KEEP) rec.history.length = HISTORY_KEEP;
+    scheduleSave();
+  }
+}
+
+function watchItem(rec, item) {
+  if (!item) return;
+  const now = Date.now();
+  if (rec.session) {
+    if (rec.session.id === item.id) {
+      if (now - rec.session.startedAt > SESSION_MAX_MS || now - rec.session.lastAt > SESSION_GAP_MS) flushSession(rec);
+      else {
+        rec.session.lastAt = now;
+        return;
+      }
+    } else {
+      flushSession(rec);
+    }
+  }
+  rec.session = { id: item.id, title: watchTitle(item) || item.id, startedAt: now, lastAt: now, bytes: 0 };
+}
+
+function reachItem(rec, item) {
+  if (!item) return;
+  if (rec.session && rec.session.id === item.id) rec.session.lastAt = Date.now();
+}
+
+function beginActivity(req, res) {
+  const ip = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  const ua = String(req.headers['user-agent'] || '');
+  const rec = recordFor(ip, ua || null);
+  const now = Date.now();
+  rec.lastSeen = now;
+  rec.total.requests++;
+  dayBucket(rec, dateKey(now)).requests++;
+  rec.open++;
+
+  const state = { client: rec, itemId: null, itemBytes: 0, startedAt: now, isWatch: false, isDirect: false, isSegment: false, touchedUsage: false };
+  openResponses.add(state);
+  let touch = now;
+  const write = res.write;
+  const end = res.end;
+  res.write = function (chunk, ...args) {
+    const n = bodyBytes(chunk);
+    if (n) {
+      rec.total.bytes += n;
+      dayBucket(rec, dateKey(Date.now())).bytes += n;
+      state.itemBytes += n;
+      state.touchedUsage = true;
+      const t = Date.now();
+      if (t - touch > 1000) {
+        rec.lastSeen = t;
+        touch = t;
+      }
+    }
+    return write.call(this, chunk, ...args);
+  };
+  res.end = function (chunk, ...args) {
+    const n = bodyBytes(chunk);
+    if (n) {
+      rec.total.bytes += n;
+      dayBucket(rec, dateKey(Date.now())).bytes += n;
+      state.itemBytes += n;
+      state.touchedUsage = true;
+    }
+    return end.call(this, chunk, ...args);
+  };
+
+  let closed = false;
+  const done = () => {
+    if (closed) return;
+    closed = true;
+    openResponses.delete(state);
+    const t = Date.now();
+    if (state.isWatch) rec.watchingOpen = Math.max(0, rec.watchingOpen - 1);
+    if (state.isDirect) {
+      const secs = Math.max(0, Math.round((t - state.startedAt) / 1000));
+      if (secs) {
+        rec.total.seconds += secs;
+        dayBucket(rec, dateKey(t)).seconds += secs;
+        state.touchedUsage = true;
+      }
+    } else if (state.isSegment && res.statusCode < 400) {
+      rec.total.seconds += SEG;
+      dayBucket(rec, dateKey(t)).seconds += SEG;
+    }
+    if (rec.session && state.itemId && rec.session.id === state.itemId) {
+      rec.session.bytes += state.itemBytes;
+      rec.session.lastAt = t;
+    }
+    rec.open = Math.max(0, rec.open - 1);
+    rec.lastSeen = t;
+    if (state.touchedUsage) scheduleSave();
+  };
+  res.once('finish', done);
+  res.once('close', done);
+  return state;
+}
+
+function watchTitle(item) {
+  if (!item) return null;
+  return item.show ? `${item.show}${item.epLabel ? ` ${item.epLabel}` : ''}` : item.title;
+}
+
+function noteAccess(state, parts, item) {
+  if (!state) return;
+  const rec = state.client;
+  const route = parts[0] || '';
+  const last = parts[parts.length - 1] || '';
+  if (route === 'video' || route === 'hls') {
+    rec.mode = 'watching';
+    rec.title = watchTitle(item);
+    rec.watchingOpen++;
+    state.isWatch = true;
+    if (route === 'video') {
+      state.isDirect = true;
+      if (item) {
+        state.itemId = item.id;
+        watchItem(rec, item);
+      }
+    } else if (/\.m3u8$/.test(last)) {
+      if (item) {
+        state.itemId = item.id;
+        watchItem(rec, item);
+      }
+    } else if (item) {
+      state.itemId = item.id;
+      reachItem(rec, item);
+      state.isSegment = /^\d+\.ts$/.test(last);
+    }
+  } else if (route === 'subs' && item) {
+    rec.mode = 'watching';
+    rec.title = watchTitle(item);
+    state.itemId = item.id;
+    reachItem(rec, item);
+  } else if (route === 'api' && (parts[1] === 'info' || parts[1] === 'prepare' || parts[1] === 'hls')) {
+    rec.mode = 'opening';
+    rec.title = watchTitle(item);
+    if (item) {
+      state.itemId = item.id;
+      reachItem(rec, item);
+    }
+  } else if (route === 'api' && parts[1] === 'library') {
+    rec.mode = 'browsing';
+    rec.title = null;
+  } else if (route === 'thumb' || route === '' || route === 'watch') {
+    if (rec.watchingOpen === 0) {
+      rec.mode = 'browsing';
+      rec.title = null;
+    }
+  }
+  rec.lastSeen = Date.now();
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const rec of activity.values()) {
+    if (rec.session && now - rec.session.lastAt > SESSION_GAP_MS) flushSession(rec);
+  }
+}, 60_000).unref();
+
+// Current and recent devices, newest activity first. `active` stays true while a response is open
+// (a movie being streamed) or while the device has talked to the server in the last minute.
+function activitySnapshot(range) {
+  const now = Date.now();
+  const todayKey = dateKey(now);
+  const monthStart = `${todayKey.slice(0, 7)}-01`;
+  const yearStart = `${todayKey.slice(0, 4)}-01-01`;
+  for (const [ip, rec] of activity) {
+    if (rec.session && now - rec.session.lastAt > SESSION_GAP_MS) flushSession(rec);
+    if (rec.open === 0 && now - rec.lastSeen > ACTIVITY_KEEP_MS && !rec.total.bytes && !rec.history.length) activity.delete(ip);
+  }
+  return [...activity.values()]
+    .map((rec) => {
+      // A movie that is still streaming has not "finished", so add its elapsed time to the usage
+      // shown now instead of waiting for the response to close (which could be hours).
+      let liveSeconds = 0;
+      for (const st of openResponses) {
+        if (st.client === rec && st.isDirect) liveSeconds += Math.max(0, now - st.startedAt);
+      }
+      liveSeconds = Math.round(liveSeconds / 1000);
+      const today = rangeTotals(rec, todayKey, todayKey);
+      const month = rangeTotals(rec, monthStart, todayKey);
+      const year = rangeTotals(rec, yearStart, todayKey);
+      today.seconds += liveSeconds;
+      month.seconds += liveSeconds;
+      year.seconds += liveSeconds;
+      const out = {
+        id: rec.ip,
+        name: rec.host || rec.client || rec.name || rec.ip,
+        host: rec.host || null,
+        client: rec.client || null,
+        address: rec.ip,
+        firstSeen: rec.firstSeen,
+        active: rec.open > 0 || now - rec.lastSeen <= ACTIVITY_ACTIVE_MS,
+        activity: rec.mode,
+        title: rec.title,
+        bytes: rec.total.bytes,
+        seconds: rec.total.seconds + liveSeconds,
+        requests: rec.total.requests,
+        today,
+        thisMonth: month,
+        thisYear: year,
+        lastSeen: Math.max(0, Math.round((now - rec.lastSeen) / 1000)),
+        history: rec.history.slice(0, HISTORY_REPORT),
+      };
+      if (range) {
+        out.range = rangeTotals(rec, range.from, range.to);
+        if (todayKey >= range.from && todayKey <= range.to) out.range.seconds += liveSeconds;
+      }
+      return out;
+    })
+    .sort((a, b) => Number(b.active) - Number(a.active) || a.lastSeen - b.lastSeen);
+}
+
+// Exposed through the embedded control server, which is only reachable from this device.
+// `query` may carry "from=YYYY-MM-DD&to=YYYY-MM-DD" for a custom usage range.
+function activityForControl(query) {
+  let range = null;
+  try {
+    const params = new URLSearchParams(query || '');
+    const from = params.get('from');
+    const to = params.get('to');
+    if (from && to && /^\d{4}-\d{2}-\d{2}/.test(from) && /^\d{4}-\d{2}-\d{2}/.test(to)) {
+      range = from <= to ? { from, to } : { from: to, to: from };
+    }
+  } catch {}
+  return activitySnapshot(range);
+}
+
+
+
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x');
   const parts = url.pathname.split('/').filter(Boolean);
   if (!(await gate(req, res, url, parts))) return;
+  const request = beginActivity(req, res);
   // /api/<action>/<id>  or  /video|thumb|subs|hls/<id>/...
   const id = parts[0] === 'api' ? parts[2] : parts[1];
   // Unknown movie (just added, or a device resuming right after a restart): look again before giving up.
   const movieRoute = ['api', 'video', 'thumb', 'subs', 'hls'].includes(parts[0]) && parts[1] !== 'library';
   if (movieRoute && id && !library.has(id)) await scanLibrary();
   const item = library.get(id) || null;
+  noteAccess(request, parts, item);
+
 
   if (url.pathname === '/vendor/hls.min.js') {
     res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'max-age=86400' });
@@ -899,8 +1341,15 @@ const MDNS_PORT = 5353;
 let mdnsSocket = null;
 let mdnsChild = null;
 
+// The name clients show for this server. Android's embedded Node reports "localhost", which is
+// useless to a phone trying to tell servers apart, so treat it (and blanks) as "no name".
+function deviceHostname() {
+  const raw = String(os.hostname() || '').split('.')[0].trim();
+  return raw && !/^localhost$/i.test(raw) ? raw : null;
+}
+
 function mdnsHost() {
-  const raw = String(os.hostname() || 'homeflix').split('.')[0] || 'homeflix';
+  const raw = String(deviceHostname() || 'homeflix').split('.')[0] || 'homeflix';
   return raw.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || 'homeflix';
 }
 
@@ -916,8 +1365,9 @@ function dnsName(name) {
 
 function mdnsRecords(ttl = null) {
   const host = mdnsHost();
+  const label = deviceHostname();
   const service = '_homeflix._tcp.local';
-  const instance = `HOMEFLIX ${host}._homeflix._tcp.local`;
+  const instance = `${label ? `HOMEFLIX ${host}` : 'HOMEFLIX'}._homeflix._tcp.local`;
   const target = `${host}.local`;
   const records = [];
   const record = (name, type, recordTtl, rdata, unique) => {
@@ -934,7 +1384,9 @@ function mdnsRecords(ttl = null) {
   srv.writeUInt16BE(0, 2); // weight
   srv.writeUInt16BE(Number(CONFIG.port) || 8080, 4);
   record(instance, 33, 120, Buffer.concat([srv, dnsName(target)]), true);
-  const txt = [`name=${os.hostname()}`, `version=${APP_VERSION}`, `api=${API_VERSION}`, 'path=/']
+  const txtParts = [`version=${APP_VERSION}`, `api=${API_VERSION}`, 'path=/'];
+  if (label) txtParts.unshift(`name=${label}`);
+  const txt = txtParts
     .map((s) => { const b = Buffer.from(s, 'utf8'); return Buffer.concat([Buffer.from([b.length]), b]); });
   record(instance, 16, 4500, Buffer.concat(txt), true);
   for (const ip of lanAddresses()) {
@@ -1014,8 +1466,10 @@ function onMdnsMessage(msg, rinfo) {
 // takes over.
 function startMdnsHelper() {
   if (mdnsChild) return;
-  const instance = `HOMEFLIX ${mdnsHost()}`;
-  const txt = [`name=${os.hostname()}`, `version=${APP_VERSION}`, `api=${API_VERSION}`, 'path=/'];
+  const label = deviceHostname();
+  const instance = label ? `HOMEFLIX ${mdnsHost()}` : 'HOMEFLIX';
+  const txt = [`version=${APP_VERSION}`, `api=${API_VERSION}`, 'path=/'];
+  if (label) txt.unshift(`name=${label}`);
   const candidates = process.platform === 'darwin'
     ? [{ cmd: 'dns-sd', args: ['-R', instance, '_homeflix._tcp', '.', String(CONFIG.port), ...txt] }]
     : process.platform === 'linux'
@@ -1121,6 +1575,10 @@ function start() {
 }
 
 function stop() {
+  try {
+    for (const rec of activity.values()) flushSession(rec);
+    saveDevices();
+  } catch {}
   return new Promise((resolve) => {
     stopMdns();
     for (const st of hls.values()) stopHls(st);
@@ -1131,7 +1589,7 @@ function stop() {
   });
 }
 
-module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT };
+module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT, activityForControl };
 
 if (require.main === module) {
   configure(loadConfig());

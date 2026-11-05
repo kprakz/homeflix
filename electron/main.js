@@ -65,6 +65,7 @@ function applyConfig() {
     pin: settings.pin,
     secret: settings.secret,
     cacheDir: CACHE_DIR,
+    dataDir: app.getPath('userData'),
     ffmpeg: path.join(FFMPEG_DIR, 'ffmpeg' + EXE),
     ffprobe: path.join(FFMPEG_DIR, 'ffprobe' + EXE),
   });
@@ -243,6 +244,7 @@ async function state() {
     folders: settings.folders.map((f) => ({ path: f, count: movies.filter((m) => m.path.toLowerCase().startsWith(path.join(f, path.sep).toLowerCase())).length })),
     movieCount: movies.length,
     openAtLogin: settings.openAtLogin,
+    devices: homeflix.activityForControl ? homeflix.activityForControl() : [],
     cacheBytes: await homeflix.cacheSize(),
     network: await networkStatus(),
     ffmpegFound: fs.existsSync(path.join(FFMPEG_DIR, 'ffmpeg' + EXE)),

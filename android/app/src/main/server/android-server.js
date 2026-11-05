@@ -88,6 +88,11 @@ const control = http.createServer((req, res) => {
     status(res);
     return;
   }
+  if (req.method === 'GET' && req.url.startsWith('/activity')) {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(server.activityForControl ? server.activityForControl(req.url.slice('/activity'.length)) : []));
+    return;
+  }
   res.statusCode = 404;
   res.end('not found');
 });

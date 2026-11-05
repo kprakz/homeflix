@@ -1,13 +1,18 @@
 package com.homeflix.app.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,90 +57,98 @@ fun PinScreen(
         focus.requestFocus()
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center,
+            .safeDrawingPadding(),
     ) {
-        Surface(
-            color = Panel,
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.widthIn(max = 400.dp),
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .padding(24.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Column(
-                modifier = Modifier.padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+            Surface(
+                color = Panel,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.widthIn(max = 400.dp),
             ) {
-                Surface(color = HomeflixRed, shape = RoundedCornerShape(50)) {
-                    Icon(
-                        Icons.Rounded.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(14.dp),
-                    )
-                }
-                Text(
-                    text = state.connection?.name ?: "HOMEFLIX",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    text = "This computer is protected by a PIN.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { value ->
-                        pin = value.filter(Char::isDigit).take(12)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focus),
-                    label = { Text("PIN") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.NumberPassword,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { if (pin.isNotBlank()) onUnlock(pin) },
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                )
-
-                state.pinError?.let { error ->
+                Column(
+                    modifier = Modifier.padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Surface(color = HomeflixRed, shape = RoundedCornerShape(50)) {
+                        Icon(
+                            Icons.Rounded.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(14.dp),
+                        )
+                    }
                     Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.error,
+                        text = state.connection?.name ?: "HOMEFLIX",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = "This computer is protected by a PIN.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
-                }
 
-                PremiumButton(
-                    onClick = { onUnlock(pin) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    enabled = pin.isNotBlank() && !state.pinSubmitting,
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    if (state.pinSubmitting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { value ->
+                            pin = value.filter(Char::isDigit).take(12)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focus),
+                        label = { Text("PIN") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.NumberPassword,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { if (pin.isNotBlank()) onUnlock(pin) },
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                    )
+
+                    state.pinError?.let { error ->
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
                         )
-                    } else {
-                        Text("Unlock")
                     }
-                }
 
-                Spacer(Modifier.height(4.dp))
-                PremiumTextButton(onClick = onDisconnect) {
-                    Text("Use a different computer")
+                    PremiumButton(
+                        onClick = { onUnlock(pin) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        enabled = pin.isNotBlank() && !state.pinSubmitting,
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        if (state.pinSubmitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text("Unlock")
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+                    PremiumTextButton(onClick = onDisconnect) {
+                        Text("Use a different computer")
+                    }
                 }
             }
         }

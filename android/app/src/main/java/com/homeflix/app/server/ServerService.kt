@@ -27,6 +27,39 @@ import java.net.NetworkInterface
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 
+data class ServerUsage(
+    val bytes: Long = 0,
+    val seconds: Long = 0,
+)
+
+data class WatchEntry(
+    val ts: Long = 0,
+    val title: String = "",
+    val seconds: Long = 0,
+    val bytes: Long = 0,
+)
+
+data class ServerClient(
+    val id: String = "",
+    val name: String = "",
+    val host: String? = null,
+    val client: String? = null,
+    val address: String = "",
+    val firstSeen: Long = 0,
+    val active: Boolean = false,
+    val activity: String = "idle",
+    val title: String? = null,
+    val bytes: Long = 0,
+    val seconds: Long = 0,
+    val lastSeen: Long = 0,
+    val requests: Int = 0,
+    val today: ServerUsage = ServerUsage(),
+    val thisMonth: ServerUsage = ServerUsage(),
+    val thisYear: ServerUsage = ServerUsage(),
+    val range: ServerUsage? = null,
+    val history: List<WatchEntry> = emptyList(),
+)
+
 data class ServerState(
     val running: Boolean = false,
     val starting: Boolean = false,
@@ -35,6 +68,7 @@ data class ServerState(
     val pin: String? = null,
     val message: String? = null,
     val error: String? = null,
+    val clients: List<ServerClient> = emptyList(),
 )
 
 class ServerService : Service() {
@@ -50,6 +84,10 @@ class ServerService : Service() {
 
         @Volatile
         private var nodeStarted = false
+
+        // Optional custom usage range as a query string, e.g. "?from=2026-01-01&to=2026-12-31".
+        @Volatile
+        var activityRangeQuery: String? = null
 
         @Volatile
         private var instance: ServerService? = null
@@ -73,6 +111,7 @@ class ServerService : Service() {
     private val stopping = AtomicBoolean(false)
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var activityThread: Thread? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -124,6 +163,7 @@ class ServerService : Service() {
                                         starting = false,
                                         running = false,
                                         error = "The embedded runtime stopped unexpectedly (Node exit $code).",
+                                        clients = emptyList(),
                                     )
                                 }
                             }
@@ -147,6 +187,7 @@ class ServerService : Service() {
                                 starting = false,
                                 running = false,
                                 error = "The embedded runtime did not start. Check the logcat tag HOMEFLIX_NODE.",
+                                clients = emptyList(),
                             )
                         }
                     }
@@ -191,6 +232,7 @@ class ServerService : Service() {
                     pin = ServerPin.get(this),
                 )
                 updateNotification("Serving your library at ${lan ?: "127.0.0.1"}:$PORT")
+                startActivityPolling()
                 return
             }
             Thread.sleep(500)
@@ -201,6 +243,7 @@ class ServerService : Service() {
                     starting = false,
                     running = false,
                     error = "The server did not answer on port $PORT. Check the logcat tag HOMEFLIX_NODE.",
+                    clients = emptyList(),
                 )
             }
         }
@@ -236,6 +279,91 @@ class ServerService : Service() {
         false
     }
 
+    private fun startActivityPolling() {
+        if (activityThread?.isAlive == true) return
+        activityThread = Thread({
+            while (!stopping.get() && _state.value.running) {
+                val clients = fetchActivity()
+                if (clients != null && !stopping.get() && _state.value.running) {
+                    _state.update { it.copy(clients = clients) }
+                }
+                try {
+                    Thread.sleep(2000)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+            }
+        }, "homeflix-server-activity").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    private fun fetchActivity(): List<ServerClient>? = try {
+        val query = activityRangeQuery?.orEmpty() ?: ""
+        val connection = URL("http://127.0.0.1:18081/activity$query").openConnection() as HttpURLConnection
+        connection.connectTimeout = 700
+        connection.readTimeout = 1500
+        connection.requestMethod = "GET"
+        if (connection.responseCode != 200) {
+            connection.disconnect()
+            null
+        } else {
+            val text = connection.inputStream.bufferedReader().use { it.readText() }
+            connection.disconnect()
+            val array = JSONArray(text)
+            buildList {
+                for (i in 0 until array.length()) {
+                    val item = array.optJSONObject(i) ?: continue
+                    add(parseClient(item))
+                }
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun parseClient(item: JSONObject): ServerClient {
+        fun usage(obj: JSONObject?) = obj?.let { ServerUsage(it.optLong("bytes"), it.optLong("seconds")) } ?: ServerUsage()
+        fun optionalText(key: String) = item.optString(key).takeIf { it.isNotBlank() && !item.isNull(key) }
+        val history = item.optJSONArray("history")?.let { entries ->
+            buildList {
+                for (j in 0 until entries.length()) {
+                    val entry = entries.optJSONObject(j) ?: continue
+                    if (entry.isNull("title") && entry.isNull("id")) continue
+                    add(
+                        WatchEntry(
+                            ts = entry.optLong("ts"),
+                            title = entry.optString("title").ifBlank { "?" },
+                            seconds = entry.optLong("seconds"),
+                            bytes = entry.optLong("bytes"),
+                        ),
+                    )
+                }
+            }
+        } ?: emptyList()
+        return ServerClient(
+            id = item.optString("id"),
+            name = item.optString("name").ifBlank { item.optString("address") },
+            host = optionalText("host"),
+            client = optionalText("client"),
+            address = item.optString("address"),
+            firstSeen = item.optLong("firstSeen"),
+            active = item.optBoolean("active"),
+            activity = item.optString("activity", "idle"),
+            title = optionalText("title"),
+            bytes = item.optLong("bytes"),
+            seconds = item.optLong("seconds"),
+            lastSeen = item.optLong("lastSeen"),
+            requests = item.optInt("requests"),
+            today = usage(item.optJSONObject("today")),
+            thisMonth = usage(item.optJSONObject("thisMonth")),
+            thisYear = usage(item.optJSONObject("thisYear")),
+            range = item.optJSONObject("range")?.let { usage(it) },
+            history = history,
+        )
+    }
+
     private fun prepareProject(workDir: File, ffmpeg: String, ffprobe: String) {
         workDir.mkdirs()
         copyAsset("server", workDir)
@@ -260,7 +388,7 @@ class ServerService : Service() {
                 Thread.sleep(200)
             }
             if (!_state.value.running || stopping.get()) return@Thread
-            _state.update { it.copy(running = false, starting = true, message = "Updating server settings…") }
+            _state.update { it.copy(running = false, starting = true, message = "Updating server settings…", clients = emptyList()) }
             val workDir = File(filesDir, "nodejs-project")
             val nativeDir = applicationInfo.nativeLibraryDir
             val ffmpeg = File(nativeDir, "libffmpeg_exec.so").absolutePath
@@ -283,6 +411,7 @@ class ServerService : Service() {
                         starting = false,
                         running = false,
                         error = err.message ?: err.javaClass.simpleName,
+                        clients = emptyList(),
                     )
                 }
             }
@@ -302,7 +431,7 @@ class ServerService : Service() {
 
     private fun shutdown() {
         if (!stopping.compareAndSet(false, true)) return
-        _state.update { it.copy(starting = false, running = false, message = "Stopping…") }
+        _state.update { it.copy(starting = false, running = false, message = "Stopping…", clients = emptyList()) }
         Thread({
             val stopped = postControl("/shutdown")
             if (stopped) {

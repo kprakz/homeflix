@@ -4,3 +4,5 @@ cache/
 vendor/
 config.json
 .claude/
+DEVLOG.md
+devices.json

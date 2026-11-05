@@ -72,7 +72,17 @@ class LanScanner(context: Context) {
                 val json = runCatching { Json.parseToJsonElement(body) as? JsonObject }.getOrNull()
                     ?: return null
                 if (json["ok"] == null || json["pin"] == null) return null
-                DiscoveredServer(name = "HOMEFLIX at $ip", url = "http://$ip:$PORT")
+                // Show the computer's name, not just its address — IPs change on the network.
+                val hostname = json["hostname"]?.takeIf { it !is kotlinx.serialization.json.JsonNull }
+                    ?.toString()
+                    ?.removeSurrounding("\"")
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() && !it.equals("localhost", ignoreCase = true) }
+                DiscoveredServer(
+                    name = hostname?.let { "HOMEFLIX — $it" } ?: "HOMEFLIX at $ip",
+                    url = "http://$ip:$PORT",
+                    hostname = hostname,
+                )
             }
         } catch (_: Exception) {
             null

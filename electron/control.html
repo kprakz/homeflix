@@ -62,6 +62,13 @@
   .folders { list-style: none; margin: 0 0 16px; padding: 0; }
   .folders li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .folders li:first-child { border-top: 1px solid var(--line); }
+  .devices { margin-bottom: 0; }
+  .live-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .live-dot.on { background: #43d17a; box-shadow: 0 0 6px #43d17a99; }
+  .muted { color: var(--muted); font-weight: normal; }
+  .device-history { font-size: 13px; color: var(--muted); }
+  .device-history ul { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px dashed var(--line); }
+  .device-history li { padding: 3px 0; }
   .folder-icon { flex: none; width: 36px; height: 36px; border-radius: 6px; background: var(--panel-2); display: grid; place-items: center; }
   .folder-icon svg { width: 20px; height: 20px; }
   .folder-text { min-width: 0; flex: 1; }
@@ -112,6 +119,17 @@ let pinEditing = false; // the PIN form is open: don't redraw under the user's t
 
 function esc(v) { return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 function fmtBytes(b) { return b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b >= 1e6 ? Math.round(b / 1e6) + ' MB' : b > 0 ? '< 1 MB' : 'nothing'; }
+function fmtWatch(secs) {
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+  return h > 0 ? (m > 0 ? `${h} h ${m} m` : `${h} h`) : m > 0 ? (secs % 60 > 0 ? `${m} m ${Math.floor(secs % 60)} s` : `${m} m`) : `${Math.floor(secs)} s`.replace('0 s', 'just now');
+}
+function timeAgo(secs) { return secs < 60 ? 'just now' : secs < 3600 ? `${Math.round(secs / 60)} m ago` : secs < 86400 ? `${Math.round(secs / 3600)} h ago` : `${Math.round(secs / 86400)} d ago`; }
+function whatWatches(d) {
+  if (d.activity === 'watching') return d.title ? `Watching ${d.title}` : 'Watching';
+  if (d.activity === 'opening') return d.title ? `Opening ${d.title}…` : 'Opening something…';
+  if (d.activity === 'browsing') return 'Browsing the library';
+  return 'Idle';
+}
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1800); }
 
 // What Windows Firewall lets through decides whether phones can connect. HOMEFLIX should be allowed on
@@ -212,6 +230,21 @@ function render() {
     </section>
 
     <section class="card">
+      <h2>Who’s watching</h2>
+      <p class="lead">Devices on your Wi-Fi open this address. Usage and watch history are kept per network name, so reconnects don’t lose track.</p>
+      ${s.devices.length ? `<ul class="folders devices">${s.devices.map((d) => `<li>
+        <span class="live-dot ${d.active ? 'on' : ''}"></span>
+        <div class="folder-text">
+          <div class="folder-path">${esc(d.name)} · <span class="muted">${esc(whatWatches(d))}</span></div>
+          <div class="folder-count">${esc(d.address)} · In use ${fmtWatch(d.today.seconds)} today · ${fmtBytes(d.bytes)} total${d.host ? ` · ${esc(d.host)}` : ''} · last seen ${timeAgo(d.lastSeen)}</div>
+        </div>
+        <button class="btn-ghost btn" data-act="device-history" data-device="${esc(d.id)}">${d.history.length ? 'History' : 'No views yet'}</button>
+      </li>`).join('')}</ul>`
+        : '<p class="lead" style="margin:0">No devices yet. Open the address above on a phone, tablet or TV while it watches. When someone starts watching, their device turns up here.</p>'}
+      <div id="deviceHistory" class="device-history"></div>
+    </section>
+
+    <section class="card">
       <h2>Settings</h2>
       <div class="setting" style="margin-top:14px"><div><b>Require a PIN</b><span>${s.pinOn ? 'On. Phones, tablets and TVs must enter your PIN once before they can watch.' : 'Off. Anyone on your Wi-Fi can watch. Turn on to make each device enter a PIN first.'}</span></div>
         ${s.pinOn ? '<button class="btn" data-act="pin-change">Change PIN</button>' : ''}
@@ -304,6 +337,15 @@ document.addEventListener('click', async (e) => {
     toast(r.result === 'ok' ? 'HOMEFLIX is allowed on home networks' : r.result === 'cancelled' ? 'Nothing changed: Windows permission was declined' : 'Couldn’t change the firewall setting');
   }
   if (act === 'copy') { await homeflix.copy(s.url); toast('Address copied'); }
+  if (act === 'device-history') {
+    const box = $('deviceHistory');
+    const d = (s.devices || []).find((x) => x.id === b.dataset.device);
+    if (!d || !d.history.length) return;
+    if (box.dataset.device === b.dataset.device) { box.innerHTML = ''; delete box.dataset.device; return; }
+    box.dataset.device = b.dataset.device;
+    const now = Date.now();
+    box.innerHTML = `<ul>${d.history.slice(0, 10).map((h) => `<li>${esc(timeAgo((now - h.ts) / 1000))} · ${esc(h.title)} · ${fmtWatch(h.seconds)} · ${fmtBytes(h.bytes)}</li>`).join('')}</ul>`;
+  }
   if (act === 'pin-change') openPinForm();
   if (act === 'pin-cancel') closePinForm();
   if (act === 'pin-save') {

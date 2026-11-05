@@ -14,6 +14,7 @@ data class DiscoveredServer(
     val name: String,
     val url: String,
     val version: String? = null,
+    val hostname: String? = null,
 )
 
 @Serializable

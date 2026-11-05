@@ -1,29 +1,23 @@
 package com.homeflix.app.server
 
 import android.content.Context
-import android.os.Environment
 import org.json.JSONArray
 import java.io.File
 
-/** The folders shared by the on-device server. Defaults can be replaced by the user. */
+/**
+ * The folders shared by the on-device server. Nothing is shared until the owner explicitly picks
+ * folders: pre-selecting Movies/Download would expose files they never agreed to serve.
+ */
 object ServerFolders {
     private const val PREFS = "homeflix_server"
     private const val KEY = "folders"
 
-    fun defaults(context: Context): List<String> {
-        val appMovies = context.getExternalFilesDir(null)?.let { File(it, "Movies") }
-        return listOfNotNull(
-            File(Environment.getExternalStorageDirectory(), "Movies"),
-            File(Environment.getExternalStorageDirectory(), "Download"),
-            appMovies,
-        ).distinctBy { it.absolutePath.lowercase() }
-            .map { it.absolutePath }
-    }
+    fun defaults(): List<String> = emptyList()
 
     fun list(context: Context): List<String> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.contains(KEY)) return defaults(context)
-        val raw = prefs.getString(KEY, null) ?: return defaults(context)
+        if (!prefs.contains(KEY)) return defaults()
+        val raw = prefs.getString(KEY, null) ?: return defaults()
         return try {
             val array = JSONArray(raw)
             buildList {
@@ -33,7 +27,7 @@ object ServerFolders {
                 }
             }.distinctBy { it.lowercase() }
         } catch (_: Exception) {
-            defaults(context)
+            defaults()
         }
     }
 
@@ -52,7 +46,7 @@ object ServerFolders {
 
     fun reset(context: Context): List<String> {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).apply()
-        return defaults(context)
+        return defaults()
     }
 
     private fun save(context: Context, folders: List<String>) {

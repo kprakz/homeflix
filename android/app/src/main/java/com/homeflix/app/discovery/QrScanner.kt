@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -123,6 +124,7 @@ fun QrScannerDialog(onResult: (String) -> Unit, onDismiss: () -> Unit) {
                     Column(
                         modifier = Modifier
                             .align(Alignment.Center)
+                            .safeDrawingPadding()
                             .padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -140,57 +142,63 @@ fun QrScannerDialog(onResult: (String) -> Unit, onDismiss: () -> Unit) {
 
                 Box(
                     modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(240.dp)
-                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(20.dp)),
-                )
-
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(start = 32.dp, end = 32.dp, bottom = 80.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .fillMaxSize()
+                        .safeDrawingPadding(),
                 ) {
-                    Text(
-                        "Point the camera at the QR code in HOMEFLIX",
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(240.dp)
+                            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(20.dp)),
                     )
-                    Spacer(Modifier.height(20.dp))
-                    OutlinedButton(
-                        onClick = {
-                            galleryError = null
-                            imagePicker.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                ),
-                            )
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
-                    ) {
-                        Icon(Icons.Rounded.PhotoLibrary, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Import from gallery")
-                    }
-                    galleryError?.let { message ->
-                        Text(
-                            message,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
 
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50)),
-                ) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            "Point the camera at the QR code in HOMEFLIX",
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        OutlinedButton(
+                            onClick = {
+                                galleryError = null
+                                imagePicker.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                    ),
+                                )
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
+                        ) {
+                            Icon(Icons.Rounded.PhotoLibrary, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Import from gallery")
+                        }
+                        galleryError?.let { message ->
+                            Text(
+                                message,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50)),
+                    ) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
+                    }
                 }
             }
         }
