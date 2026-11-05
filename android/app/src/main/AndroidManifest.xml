@@ -63,6 +63,20 @@
             android:name=".server.ServerService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name=".server.ServerTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_server_tile"
+            android:label="@string/server_tile_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
     </application>
 
 </manifest>

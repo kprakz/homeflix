@@ -1,5 +1,7 @@
 package com.homeflix.app.ui
 
+import android.app.StatusBarManager
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -59,11 +61,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.homeflix.app.R
 import com.homeflix.app.server.ServerClient
 import com.homeflix.app.server.ServerFolders
 import com.homeflix.app.server.ServerPin
 import com.homeflix.app.server.ServerService
 import com.homeflix.app.server.ServerState
+import com.homeflix.app.server.ServerTileService
 import com.homeflix.app.server.ServerUsage
 import com.homeflix.app.ui.theme.HomeflixRed
 import com.homeflix.app.ui.theme.Ink
@@ -80,12 +84,15 @@ fun ServerScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    var tileAdded by remember { mutableStateOf(ServerTileService.isAdded(context)) }
+    var tileRemoveHelp by remember { mutableStateOf(false) }
     var storageAllowed by remember { mutableStateOf(hasAllFilesAccess()) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 storageAllowed = hasAllFilesAccess()
+                tileAdded = ServerTileService.isAdded(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -218,6 +225,67 @@ fun ServerScreen(
                         }
                     }
                 }
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Surface(shape = RoundedCornerShape(18.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp)) {
+                    Text("Status bar shortcut", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Add the HOMEFLIX Server tile to Quick Settings to start or stop sharing without opening the app.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        PremiumOutlinedButton(
+                            onClick = {
+                                val statusBar = context.getSystemService(StatusBarManager::class.java)
+                                statusBar?.requestAddTileService(
+                                    ComponentName(context, ServerTileService::class.java),
+                                    context.getString(R.string.server_tile_name),
+                                    android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_server_tile),
+                                    context.mainExecutor,
+                                ) { result ->
+                                    val added = result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ||
+                                        result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED
+                                    tileAdded = added
+                                    if (added) ServerTileService.setAdded(context, true)
+                                }
+                            },
+                            enabled = !tileAdded,
+                        ) {
+                            Text(if (tileAdded) "Added to Quick Settings" else "Add Quick Settings tile")
+                        }
+                        if (tileAdded) {
+                            PremiumTextButton(onClick = { tileRemoveHelp = true }) {
+                                Text("Remove from Quick Settings")
+                            }
+                        }
+                    } else {
+                        Text(
+                            "Open Quick Settings, tap Edit, then drag in HOMEFLIX Server.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            if (tileRemoveHelp) {
+                AlertDialog(
+                    onDismissRequest = { tileRemoveHelp = false },
+                    title = { Text("Remove status bar shortcut?") },
+                    text = {
+                        Text(
+                            "Android removes Quick Settings tiles from the panel itself. Open Quick Settings, tap the pencil icon, then drag HOMEFLIX Server out. Removing the tile does not stop Server Mode.",
+                        )
+                    },
+                    confirmButton = {
+                        PremiumTextButton(onClick = { tileRemoveHelp = false }) {
+                            Text("Got it")
+                        }
+                    },
+                )
             }
 
             if (state.running) {

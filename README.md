@@ -44,7 +44,9 @@ the folders to share, and give other devices the address and PIN shown on the sc
 devices connect exactly as they connect to a computer.
 
 This is useful when the computer is off, when you are travelling, or when the videos are already
-downloaded on the phone.
+downloaded on the phone. For one-tap control, add the **HOMEFLIX Server** tile to Quick Settings
+(Server Mode → **Status bar shortcut**) and start or stop sharing from the status bar. Remove it the
+same way: open Quick Settings, tap the pencil, and drag the tile out.
 
 ## Start here
 
