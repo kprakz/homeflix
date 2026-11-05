@@ -29,7 +29,7 @@ also work the other way around and share the phone's own videos.
 
 ### Client mode: watch your computer's movies
 
-Install HOMEFLIX on the computer that has your movies and choose your movie folder. Then open the
+Install HOMEFLIX on the computer that has your videos and add your movie or TV series folders. Then open the
 Android app or the address shown in the HOMEFLIX window on your phone, tablet or TV. The app finds
 the computer automatically; on iPhone, iPad and smart TVs, open the address in a browser.
 
@@ -61,7 +61,7 @@ same way: open Quick Settings, tap the pencil, and drag the tile out.
 **Three steps for most people:**
 
 1. Install HOMEFLIX on the computer that has your movies.
-2. Choose the folder where your movies are.
+2. Add the folders where your movies or TV series are.
 3. Open the address shown in HOMEFLIX on your phone or TV, or let the Android app find the computer.
 
 **What you need:** a computer (Windows 10/11, macOS 12 or newer, or Linux), your movie files, and a
@@ -86,7 +86,7 @@ Download the signed APK or app bundle from the
 1. **[Download HOMEFLIX for Mac](https://kprakz.github.io/homeflix/#download)**. Choose **Apple Silicon** for Macs with an M1–M4 chip, or **Intel**. (Apple menu → About This Mac shows which you have.) Requires macOS 12 or later.
 2. Open the downloaded `.dmg` and drag **HOMEFLIX** onto **Applications**.
 3. Open HOMEFLIX from Applications. The first time, macOS says it can't verify the app. Click **Done**, open System Settings → **Privacy & Security**, scroll down and click **Open Anyway**. You only do this once. (HOMEFLIX isn't notarized by Apple, which needs a paid developer account.)
-4. Click **Choose your movies folder**.
+4. Click **Choose movies folder** for films, or **Choose TV series folder** for a show.
 5. When macOS asks whether HOMEFLIX may **accept incoming network connections**, click **Allow**. Your phone and TV can't connect otherwise.
 
 HOMEFLIX then lives in the menu bar at the top right of the screen. Everything else below works the same as on Windows.
@@ -131,7 +131,7 @@ Or right-click it → Properties → **Allow executing as program**, then double
 ### Start HOMEFLIX
 
 - Open **HOMEFLIX** from your apps menu, or type `homeflix &` in a terminal (.deb).
-- Click **Choose your movies folder** and pick the folder with your films. Sub-folders are included.
+- Click **Choose movies folder** or **Choose TV series folder** and pick the folder with your videos. Sub-folders are included.
 - **Don't run it with `sudo`.** It doesn't need admin rights.
 - HOMEFLIX keeps running in the system tray when you close the window. On GNOME (Ubuntu's default desktop), you may need the *AppIndicator* extension to see the icon. To quit, use the tray icon or run `pkill homeflix`.
 
@@ -204,8 +204,10 @@ Requires Windows 10 or 11 (64-bit).
 
 Follow the installer. It puts HOMEFLIX on your Desktop and in the Start menu, and opens it when it finishes. No admin password is needed.
 
-### 2. Choose your movies folder
-Click **Choose your movies folder** and pick the folder where your movies are, for example `Downloads` or `Videos`. Sub-folders are included, and you can add more folders any time.
+### 2. Add your movie and TV series folders
+Click **Choose movies folder** for films, or **Choose TV series folder** for a show. Pick a folder such as `Downloads` or `Videos`; sub-folders are included, and you can add more folders any time.
+
+A **TV series folder is one show**: its name becomes the show name, and every video inside becomes an episode. You don't need to rename files to `S01E02`; HOMEFLIX uses episode numbers when present and otherwise follows the file order. Optional `Season 1` or `S01` sub-folders set the season. Movies stay as individual titles.
 
 ### 3. Let your phone through Windows Firewall (if HOMEFLIX asks)
 HOMEFLIX checks Windows Firewall and shows a box at the top of its window if something needs doing:
@@ -351,7 +353,7 @@ Subtitles inside the movie, or a `.srt` / `.vtt` file next to it with the same n
 **Tips**
 - Each device remembers where you stopped and shows those movies under **Continue Watching**. To watch from the beginning instead, choose **Start over**: next to **Resume** on the home screen and in **More Info**, at the top of the player, or in the TV controls.
 - **Too quiet?** Many films are mixed quietly for cinemas, and phones and TVs can't go above 100% the way VLC can. Turn on **Volume boost** in the player (top right; on a TV, press Up). It makes the sound about twice as loud on that device without distorting it, and the device remembers it. Turn it off for the original sound.
-- TV shows named like `Show S01E05` are grouped into series, and the next episode plays automatically.
+- TV series folders are grouped into shows, and the next episode plays automatically. You don't need to rename episodes like `Show S01E05`.
 
 ## Good to know
 
@@ -409,7 +411,9 @@ npm start           # run the desktop app
 npm run dist        # Windows: build dist/HOMEFLIX-Setup-<version>.exe
 ```
 
-With `npm run serve`, set a PIN by adding `"pin": "1234"` to `config.json`.
+With `npm run serve`, set a PIN by adding `"pin": "1234"` to `config.json`. Folder entries in
+`config.json` are `{ "path": "...", "type": "movies" }` or `"type": "series"`; older plain string
+paths still work as movie folders.
 
 **Website and download map.** The site in `docs/` is served by GitHub Pages and by a Vercel project ([homeflix-rho.vercel.app](https://homeflix-rho.vercel.app)), which also runs the download counter in `api/`:
 - `api/download.js` counts a download for the visitor's country (Vercel's `x-vercel-ip-country` header; no IP addresses or personal data are stored), once per browser, then redirects to the installer on GitHub. It only redirects to HOMEFLIX's own release files.

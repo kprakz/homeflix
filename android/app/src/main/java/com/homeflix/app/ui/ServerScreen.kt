@@ -101,6 +101,7 @@ fun ServerScreen(
         }
     }
     var folders by remember { mutableStateOf(ServerFolders.list(context)) }
+    var pickingType by remember { mutableStateOf(ServerFolders.MOVIES) }
     var folderError by remember { mutableStateOf<String?>(null) }
     var currentPin by remember { mutableStateOf<String?>(ServerPin.get(context)) }
     var pinDialog by remember { mutableStateOf(false) }
@@ -117,7 +118,7 @@ fun ServerScreen(
             folderError = "HOMEFLIX can't read that folder yet. Allow access to files, then add it again."
             return@rememberLauncherForActivityResult
         }
-        folders = ServerFolders.add(context, path)
+        folders = ServerFolders.add(context, path, pickingType)
         folderError = null
         ServerService.configChanged(context)
     }
@@ -230,346 +231,64 @@ fun ServerScreen(
             Spacer(Modifier.height(18.dp))
             Surface(shape = RoundedCornerShape(18.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp)) {
-                    Text("Status bar shortcut", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("Shared folders", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Add the HOMEFLIX Server tile to Quick Settings to start or stop sharing without opening the app.",
+                        "Choose the folders this phone shares. Movies and TV series are kept separate. Each TV series folder is one show; its videos become episodes. Tap a folder's type to switch it. Subfolders are included.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(10.dp))
-                    if (Build.VERSION.SDK_INT >= 33) {
-                        PremiumOutlinedButton(
-                            onClick = {
-                                val statusBar = context.getSystemService(StatusBarManager::class.java)
-                                statusBar?.requestAddTileService(
-                                    ComponentName(context, ServerTileService::class.java),
-                                    context.getString(R.string.server_tile_name),
-                                    android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_server_tile),
-                                    context.mainExecutor,
-                                ) { result ->
-                                    val added = result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ||
-                                        result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED
-                                    tileAdded = added
-                                    if (added) ServerTileService.setAdded(context, true)
-                                }
-                            },
-                            enabled = !tileAdded,
-                        ) {
-                            Text(if (tileAdded) "Added to Quick Settings" else "Add Quick Settings tile")
-                        }
-                        if (tileAdded) {
-                            PremiumTextButton(onClick = { tileRemoveHelp = true }) {
-                                Text("Remove from Quick Settings")
-                            }
-                        }
-                    } else {
-                        Text(
-                            "Open Quick Settings, tap Edit, then drag in HOMEFLIX Server.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
-            if (tileRemoveHelp) {
-                AlertDialog(
-                    onDismissRequest = { tileRemoveHelp = false },
-                    title = { Text("Remove status bar shortcut?") },
-                    text = {
-                        Text(
-                            "Android removes Quick Settings tiles from the panel itself. Open Quick Settings, tap the pencil icon, then drag HOMEFLIX Server out. Removing the tile does not stop Server Mode.",
-                        )
-                    },
-                    confirmButton = {
-                        PremiumTextButton(onClick = { tileRemoveHelp = false }) {
-                            Text("Got it")
-                        }
-                    },
-                )
-            }
-
-            if (state.running) {
-                var usagePeriod by remember { mutableStateOf("today") }
-                var customOpen by remember { mutableStateOf(false) }
-                var expandedDevice by remember { mutableStateOf<String?>(null) }
-
-                Spacer(Modifier.height(18.dp))
-                Surface(shape = RoundedCornerShape(18.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text(
-                            if (state.clients.size == 1) "Connected device" else "Connected devices",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        if (state.clients.isEmpty()) {
-                            Text(
-                                "No devices yet. Open the address above on a phone, tablet or TV and it appears here while it watches. Usage and watch history survive reconnects.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        } else {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            ) {
-                                UsageChip("Today", usagePeriod == "today") {
-                                    ServerService.activityRangeQuery = null
-                                    usagePeriod = "today"
-                                }
-                                UsageChip("Month", usagePeriod == "month") {
-                                    ServerService.activityRangeQuery = null
-                                    usagePeriod = "month"
-                                }
-                                UsageChip("Year", usagePeriod == "year") {
-                                    ServerService.activityRangeQuery = null
-                                    usagePeriod = "year"
-                                }
-                                UsageChip("All time", usagePeriod == "all") {
-                                    ServerService.activityRangeQuery = null
-                                    usagePeriod = "all"
-                                }
-                                UsageChip("Custom…", usagePeriod == "custom") { customOpen = true }
-                            }
-                            Spacer(Modifier.height(14.dp))
-                            state.clients.forEachIndexed { index, client ->
-                                if (index > 0) Spacer(Modifier.height(14.dp))
-                                val usage = when (usagePeriod) {
-                                    "month" -> client.thisMonth
-                                    "year" -> client.thisYear
-                                    "all" -> ServerUsage(bytes = client.bytes, seconds = client.seconds)
-                                    "custom" -> client.range ?: ServerUsage()
-                                    else -> client.today
-                                }
-                                val expanded = expandedDevice == client.id
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { expandedDevice = if (expanded) null else client.id },
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            Modifier
-                                                .align(Alignment.Top)
-                                                .padding(top = 5.dp)
-                                                .size(9.dp)
-                                                .background(
-                                                    if (client.active) Color(0xFF43D17A) else Color(0xFF9AA0A6),
-                                                    RoundedCornerShape(50),
-                                                ),
-                                        )
-                                        Spacer(Modifier.size(10.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                client.name,
-                                                color = Color.White,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                            )
-                                            Text(
-                                                activityLabel(client),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        }
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                formatBytes(usage.bytes),
-                                                color = Color.White,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                            )
-                                            Text(
-                                                "${usagePeriodLabel(usagePeriod)} ${formatSeconds(usage.seconds)}",
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                style = MaterialTheme.typography.bodySmall,
-                                            )
-                                        }
-                                    }
-                                    if (expanded) {
-                                        Spacer(Modifier.height(10.dp))
-                                        if (client.client != null || client.host != null) {
-                                            Text(
-                                                listOfNotNull(
-                                                    client.host?.let { "This network: $it" },
-                                                    client.client,
-                                                    "IP ${client.address}",
-                                                ).joinToString("  ·  "),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                style = MaterialTheme.typography.bodySmall,
-                                            )
-                                            Spacer(Modifier.height(8.dp))
-                                        }
-                                        if (client.history.isEmpty()) {
-                                            Text(
-                                                "No watches recorded yet.",
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                style = MaterialTheme.typography.bodySmall,
-                                            )
-                                        } else {
-                                            client.history.take(8).forEach { entry ->
-                                                Text(
-                                                    "${timeAgo(entry.ts)}  ·  ${entry.title}  ·  " +
-                                                        "${formatSeconds(entry.seconds)} / ${formatBytes(entry.bytes)}",
-                                                    color = Color.White,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.padding(vertical = 2.dp),
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (customOpen) {
-                    var customFrom by remember { mutableStateOf("") }
-                    var customTo by remember { mutableStateOf("") }
-                    var customError by remember { mutableStateOf<String?>(null) }
-                    AlertDialog(
-                        onDismissRequest = { customOpen = false },
-                        title = { Text("Custom range") },
-                        text = {
-                            Column {
-                                Text("Measure this device's usage between two dates, like 2026-01-31.")
-                                Spacer(Modifier.height(10.dp))
-                                OutlinedTextField(
-                                    value = customFrom,
-                                    onValueChange = { value ->
-                                        customFrom = value.take(10)
-                                        customError = null
-                                    },
-                                    singleLine = true,
-                                    label = { Text("From (2026-01-31)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = customTo,
-                                    onValueChange = { value ->
-                                        customTo = value.take(10)
-                                        customError = null
-                                    },
-                                    singleLine = true,
-                                    label = { Text("To (2026-12-31)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                customError?.let {
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
+                    Spacer(Modifier.height(14.dp))
+                    FolderSection(
+                        title = "Movie folders",
+                        lead = "Every video appears as its own movie.",
+                        folders = folders.filterNot { it.isSeries },
+                        addLabel = "Add movie folder",
+                        onAdd = {
+                            pickingType = ServerFolders.MOVIES
+                            folderPicker.launch(null)
                         },
-                        confirmButton = {
-                            PremiumTextButton(onClick = {
-                                val from = customFrom.trim()
-                                val to = customTo.trim()
-                                val rule = Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
-                                if (!rule.matches(from) || !rule.matches(to)) {
-                                    customError = "Both dates must look like 2026-01-31."
-                                } else {
-                                    ServerService.activityRangeQuery = if (from <= to) "?from=$from&to=$to" else "?from=$to&to=$from"
-                                    usagePeriod = "custom"
-                                    customOpen = false
-                                }
-                            }) {
-                                Text("Show")
-                            }
+                        onRemove = { folder ->
+                            folders = ServerFolders.remove(context, folder.path)
+                            folderError = null
+                            ServerService.configChanged(context)
                         },
-                        dismissButton = {
-                            PremiumTextButton(onClick = { customOpen = false }) {
-                                Text("Cancel")
-                            }
+                        onSwitchType = { folder ->
+                            folders = ServerFolders.setType(context, folder.path, ServerFolders.SERIES)
+                            folderError = null
+                            ServerService.configChanged(context)
                         },
                     )
-                }
-            }
-
-            Spacer(Modifier.height(18.dp))
-            Surface(shape = RoundedCornerShape(18.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp)) {
-                    Text("PIN", color = Color.White, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        if (currentPin != null) {
-                            "Devices must enter this PIN once before they can watch. Current PIN: $currentPin"
-                        } else {
-                            "PIN is off. Anyone on this Wi-Fi can watch without entering a PIN."
+                    Spacer(Modifier.height(18.dp))
+                    FolderSection(
+                        title = "TV series folders",
+                        lead = "Each folder is one show. Season subfolders and episode numbers are optional.",
+                        folders = folders.filter { it.isSeries },
+                        addLabel = "Add TV series folder",
+                        onAdd = {
+                            pickingType = ServerFolders.SERIES
+                            folderPicker.launch(null)
                         },
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onRemove = { folder ->
+                            folders = ServerFolders.remove(context, folder.path)
+                            folderError = null
+                            ServerService.configChanged(context)
+                        },
+                        onSwitchType = { folder ->
+                            folders = ServerFolders.setType(context, folder.path, ServerFolders.MOVIES)
+                            folderError = null
+                            ServerService.configChanged(context)
+                        },
                     )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PremiumOutlinedButton(onClick = {
-                            pinDraft = currentPin.orEmpty()
-                            pinError = null
-                            pinDialog = true
-                        }) {
-                            Text(if (currentPin != null) "Change PIN" else "Set PIN")
-                        }
-                        if (currentPin != null) {
-                            PremiumOutlinedButton(onClick = {
-                                ServerPin.set(context, null)
-                                currentPin = null
-                                ServerService.configChanged(context)
-                            }) {
-                                Text("Turn off PIN")
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(18.dp))
-            Surface(shape = RoundedCornerShape(18.dp), color = Panel, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp)) {
-                    Text("Movie folders", color = Color.White, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Choose the folders this phone shares. Subfolders are included.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(10.dp))
                     if (folders.isEmpty()) {
+                        Spacer(Modifier.height(12.dp))
                         Text(
                             "No folders selected. Add at least one folder so other devices have something to play.",
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
-                    folders.forEach { folder ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = folder,
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.weight(1f),
-                            )
-                            PremiumIconButton(onClick = {
-                                folders = ServerFolders.remove(context, folder)
-                                folderError = null
-                                ServerService.configChanged(context)
-                            }) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Remove $folder", tint = Color.White)
-                            }
-                        }
-                    }
                     folderError?.let {
                         Spacer(Modifier.height(6.dp))
                         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    PremiumButton(
-                        onClick = { folderPicker.launch(null) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Rounded.Add, contentDescription = null)
-                        Spacer(Modifier.size(6.dp))
-                        Text("Add folder")
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -666,6 +385,61 @@ fun ServerScreen(
 
 private fun hasAllFilesAccess(): Boolean =
     if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager() else true
+
+@Composable
+private fun FolderSection(
+    title: String,
+    lead: String,
+    folders: List<ServerFolders.SharedFolder>,
+    addLabel: String,
+    onAdd: () -> Unit,
+    onRemove: (ServerFolders.SharedFolder) -> Unit,
+    onSwitchType: (ServerFolders.SharedFolder) -> Unit,
+) {
+    Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
+    Spacer(Modifier.height(4.dp))
+    Text(lead, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    Spacer(Modifier.height(8.dp))
+    if (folders.isEmpty()) {
+        Text("No folders yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    }
+    folders.forEach { folder ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = File(folder.path).name,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = folder.path,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            PremiumTextButton(onClick = { onSwitchType(folder) }) {
+                Text(
+                    text = if (folder.isSeries) "TV series" else "Movie",
+                    color = if (folder.isSeries) Color(0xFFF5B301) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            PremiumIconButton(onClick = { onRemove(folder) }) {
+                Icon(Icons.Rounded.Close, contentDescription = "Remove ${folder.path}", tint = Color.White)
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    PremiumOutlinedButton(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Rounded.Add, contentDescription = null)
+        Spacer(Modifier.size(6.dp))
+        Text(addLabel)
+    }
+}
 
 @Composable
 private fun UsageChip(label: String, selected: Boolean, onClick: () -> Unit) {

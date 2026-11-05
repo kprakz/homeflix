@@ -24,6 +24,11 @@ class SeriesTest {
     }
 
     @Test
+    fun `movie folders do not guess a series from the title`() {
+        assertNull(Series.of(LibraryItem(id = "1", title = "Show S01E05", folderType = "movies")))
+    }
+
+    @Test
     fun `episodes are ordered and next is found`() {
         val items = listOf(
             LibraryItem(id = "b", title = "Show S01E02", show = "Show", season = 1, ep = 2),

@@ -22,10 +22,25 @@ const DIRECT_CONTAINERS = new Set(['.mp4', '.m4v', '.mov']);
 const UNIVERSAL_AUDIO = new Set(['aac', 'mp3']);
 const TEXT_SUBS = new Set(['subrip', 'ass', 'ssa', 'mov_text', 'webvtt', 'text']);
 
+// Folder entries are { path, type } where type is "movies" or "series". Older configs stored
+// plain paths; those keep working as movie folders.
+function normalizeFolders(folders) {
+  const next = new Map();
+  for (const entry of Array.isArray(folders) ? folders : []) {
+    const raw = typeof entry === 'string' ? entry : entry && entry.path;
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+    const resolved = path.resolve(raw.trim());
+    const type = entry && typeof entry === 'object' && entry.type === 'series' ? 'series' : 'movies';
+    next.set(resolved.toLowerCase(), { path: resolved, type });
+  }
+  return [...next.values()];
+}
+
 // The desktop app calls this with its own settings; `node server.js` uses config.json.
 // (config.json may give "pin": "1234" in plain text; it's kept hashed.)
 function configure(options) {
   CONFIG = { ...CONFIG, ...options };
+  CONFIG.folders = normalizeFolders(CONFIG.folders);
   if (typeof CONFIG.pin === 'string' || typeof CONFIG.pin === 'number') CONFIG.pin = /^\d{4,8}$/.test(String(CONFIG.pin)) ? hashPin(CONFIG.pin) : null;
   if (!CONFIG.secret) CONFIG.secret = crypto.randomBytes(16).toString('hex');
   CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
@@ -99,35 +114,123 @@ function scanLibrary() {
   return scanning;
 }
 
-// "Show S01E05" -> { show: "Show", season: 1, ep: 5 }. Shared by the web and Android clients so both
-// group episodes the same way.
-const SERIES_RE = /^(.*?)[\s-]*S(\d{1,2})\s*E(\d{1,3})\b/i;
-function seriesInfo(title) {
-  const m = String(title || '').match(SERIES_RE);
-  return m ? { show: m[1].trim(), season: Number(m[2]), ep: Number(m[3]) } : {};
+
+function naturalCompare(a, b) {
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+// A series folder is one show. The folder name becomes the show name, and every video below it
+// becomes an episode. Season subfolders are optional; numbering can come from filenames or order.
+function showNameFor(root) {
+  return (prettyName(root).title || path.basename(root)).trim();
+}
+
+function seasonFromRelative(relative) {
+  const dirs = path.dirname(relative).split(path.sep).filter(Boolean);
+  for (let i = dirs.length - 1; i >= 0; i--) {
+    const m = dirs[i].match(/^(?:season|series)[\s._-]*(\d{1,2})$/i) || dirs[i].match(/^S(\d{1,2})$/i);
+    if (m) return Number(m[1]);
+  }
+  return null;
+}
+
+function episodeNumber(name) {
+  let m = name.match(/(?:^|[\s._-])S(\d{1,2})[\s._-]*E(\d{1,3})(?:\b|$)/i);
+  if (m) return { season: Number(m[1]), ep: Number(m[2]) };
+  m = name.match(/(?:^|[\s._-])(\d{1,2})x(\d{1,3})(?:\b|$)/i);
+  if (m) return { season: Number(m[1]), ep: Number(m[2]) };
+  m = name.match(/(?:^|[\s._-])Season[\s._-]*(\d{1,2})[\s._-]*(?:Episode|Ep|E)[\s._-]*(\d{1,3})(?:\b|$)/i);
+  if (m) return { season: Number(m[1]), ep: Number(m[2]) };
+  let season = null;
+  m = name.match(/(?:^|[\s._-])S(\d{1,2})(?:[\s._-]|$)/i);
+  if (m) season = Number(m[1]);
+  let ep = null;
+  m = name.match(/(?:^|[\s._-])(?:E|EP|Episode|Chapter)[\s._-]*(\d{1,3})(?:\b|$)/i);
+  if (m) ep = Number(m[1]);
+  if (ep == null) {
+    m = name.match(/(?:^|[\s._-])(\d{1,3})$/);
+    if (m) ep = Number(m[1]);
+  }
+  if (ep == null) {
+    m = name.match(/^(?:Ep?|Episode|Chapter)?[\s._-]*(\d{1,3})(?:[\s._-]|$)/i);
+    if (m) ep = Number(m[1]);
+  }
+  return { season, ep };
+}
+
+function episodeTitle(name, show, ep) {
+  let title = prettyName(name).title;
+  if (show) {
+    const escaped = show.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    title = title.replace(new RegExp(`^${escaped}[\\s._-]*(?:[-–—:]\\s*)?`, 'i'), '');
+  }
+  title = title
+    .replace(/\bS\d{1,2}[\s._-]*E\d{1,3}\b/ig, ' ')
+    .replace(/\b\d{1,2}x\d{1,3}\b/ig, ' ')
+    .replace(/\bSeason[\s._-]*\d{1,2}\b/ig, ' ')
+    .replace(/\b(?:Episode|Ep|Chapter)[\s._-]*\d{1,3}\b/ig, ' ')
+    .replace(/\bS\d{1,2}\b/ig, ' ')
+    .replace(/\bE\d{1,3}\b/ig, ' ')
+    .replace(/^\d{1,3}[\s._-]+/, '')
+    .replace(/^[\s._\-–—:]+|[\s._\-–—:]+$/g, '')
+    .replace(/[\s._-]+/g, ' ')
+    .trim();
+  return title || (ep != null ? `Episode ${ep}` : 'Episode');
 }
 
 async function buildLibrary() {
-  const files = [];
-  for (const folder of CONFIG.folders) await walk(path.resolve(folder), 0, files);
   const next = new Map();
-  for (const file of files) {
-    let stat;
-    try {
-      stat = await fsp.stat(file);
-    } catch {
-      continue;
+  for (const folder of CONFIG.folders) {
+    const root = path.resolve(folder.path);
+    const files = [];
+    await walk(root, 0, files);
+    const series = [];
+    for (const file of files) {
+      let stat;
+      try {
+        stat = await fsp.stat(file);
+      } catch {
+        continue;
+      }
+      if (stat.size < CONFIG.minSizeMB * 1024 * 1024) continue;
+      const id = idFor(file);
+      // A file written to in the last 2 minutes is most likely still downloading (e.g. from Telegram).
+      const downloading = Date.now() - stat.mtimeMs < 2 * 60 * 1000;
+      const folderName = path.basename(root);
+      if (folder.type === 'series') {
+        const relative = path.relative(root, file);
+        const name = path.basename(file, path.extname(file));
+        const show = showNameFor(root);
+        const numbered = episodeNumber(name);
+        series.push({ file, id, stat, downloading, relative, name, show, season: numbered.season, ep: numbered.ep });
+      } else {
+        const { title, year } = prettyName(file);
+        next.set(id, {
+          id, path: file, title, year,
+          size: stat.size, mtime: stat.mtimeMs, folder: folderName, folderType: folder.type, downloading,
+        });
+      }
     }
-    if (stat.size < CONFIG.minSizeMB * 1024 * 1024) continue;
-    const id = idFor(file);
-    const folder = CONFIG.folders.find((f) => file.toLowerCase().startsWith(path.resolve(f).toLowerCase())) || '';
-    // A file written to in the last 2 minutes is most likely still downloading (e.g. from Telegram).
-    const downloading = Date.now() - stat.mtimeMs < 2 * 60 * 1000;
-    const { title, year } = prettyName(file);
-    next.set(id, {
-      id, path: file, title, year, ...seriesInfo(title),
-      size: stat.size, mtime: stat.mtimeMs, folder: path.basename(folder), downloading,
-    });
+    const bySeason = new Map();
+    for (const entry of series) {
+      entry.season = entry.season || seasonFromRelative(entry.relative) || 1;
+      if (!bySeason.has(entry.season)) bySeason.set(entry.season, []);
+      bySeason.get(entry.season).push(entry);
+    }
+    for (const [season, entries] of bySeason) {
+      const numbered = entries.filter((entry) => entry.ep != null);
+      const missing = entries.filter((entry) => entry.ep == null).sort((a, b) => naturalCompare(a.relative, b.relative));
+      let nextEp = Math.max(0, ...numbered.map((entry) => entry.ep)) + 1;
+      for (const entry of missing) entry.ep = nextEp++;
+      for (const entry of entries) {
+        next.set(entry.id, {
+          id: entry.id, path: entry.file, title: episodeTitle(entry.name, entry.show, entry.ep),
+          show: entry.show, season, ep: entry.ep,
+          size: entry.stat.size, mtime: entry.stat.mtimeMs, folder: path.basename(root), folderType: folder.type,
+          downloading: entry.downloading,
+        });
+      }
+    }
   }
   library = next;
   return [...library.values()].sort((a, b) => b.mtime - a.mtime);
@@ -1589,7 +1692,7 @@ function stop() {
   });
 }
 
-module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT, activityForControl };
+module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT, activityForControl, normalizeFolders };
 
 if (require.main === module) {
   configure(loadConfig());
@@ -1597,7 +1700,7 @@ if (require.main === module) {
     .then(async (port) => {
       const movies = await scanLibrary();
       console.log('\n  HOMEFLIX is running.\n');
-      console.log(`  Library: ${movies.length} video(s) from ${CONFIG.folders.join(', ')}`);
+      console.log(`  Library: ${movies.length} video(s) from ${CONFIG.folders.map((f) => f.path).join(', ')}`);
       console.log('  On your iPad (same Wi-Fi), open Safari and go to:\n');
       for (const ip of lanAddresses()) console.log(`     http://${ip}:${port}`);
       console.log(`\n  On this laptop: http://localhost:${port}`);

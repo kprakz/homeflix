@@ -2,7 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('homeflix', {
   state: () => ipcRenderer.invoke('state'),
-  addFolder: () => ipcRenderer.invoke('add-folder'),
+  addFolder: (type) => ipcRenderer.invoke('add-folder', type),
+  setFolderType: (folder, type) => ipcRenderer.invoke('set-folder-type', folder, type),
   removeFolder: (folder) => ipcRenderer.invoke('remove-folder', folder),
   openFolder: (folder) => ipcRenderer.invoke('open-folder', folder),
   openBrowser: () => ipcRenderer.invoke('open-browser'),

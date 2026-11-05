@@ -33,6 +33,7 @@
   .welcome p { color: var(--muted); font-size: 17px; max-width: 520px; margin: 0 auto 28px; }
   .welcome .btn-red { font-size: 18px; padding: 14px 30px; }
   .welcome small { display: block; color: var(--dim); margin-top: 16px; }
+  .welcome-btns { justify-content: center; margin-bottom: 10px; }
 
   .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
   @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
@@ -74,6 +75,16 @@
   .folder-text { min-width: 0; flex: 1; }
   .folder-path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
   .folder-count { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .folder-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; }
+  @media (max-width: 860px) { .folder-sections { grid-template-columns: 1fr; } }
+  .folder-section h3 { margin: 0 0 4px; font-size: 15px; }
+  .folder-section .lead { margin-bottom: 12px; }
+  .folder-section .folders { margin-bottom: 14px; }
+  .folder-empty { border: 1px dashed var(--line); border-radius: 8px; padding: 16px; color: var(--dim); font-size: 14px; margin-bottom: 14px; }
+  .type-badge { flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--muted); background: transparent; cursor: pointer; }
+  .type-badge:hover { color: #fff; border-color: #777; }
+  .type-badge.series { color: #f5b301; border-color: rgba(245,179,1,.4); }
 
   .setting { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
   .setting:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -169,6 +180,22 @@ function splitPath(p) {
   return { name: parts.pop() || p, parent: (p.startsWith(sep) ? sep : '') + parts.join(sep) || p };
 }
 
+function folderSection(title, lead, type, folders, addLabel) {
+  const rows = folders.map((f) => `<li>
+    <div class="folder-icon">${FOLDER_SVG}</div>
+    <div class="folder-text"><div class="folder-path" title="${esc(f.path)}">${esc(splitPath(f.path).name)}</div><div class="folder-count" title="${esc(f.path)}">${f.count} video${f.count === 1 ? '' : 's'} · ${esc(splitPath(f.path).parent)}</div></div>
+    <button class="type-badge ${f.type}" data-act="type" data-folder="${esc(f.path)}" title="Switch to ${f.type === 'series' ? 'Movies' : 'TV series'}">${f.type === 'series' ? 'TV series' : 'Movies'}</button>
+    <button class="btn-ghost btn" data-act="open" data-folder="${esc(f.path)}">Open</button>
+    <button class="btn-ghost btn" data-act="remove" data-folder="${esc(f.path)}">Remove</button>
+  </li>`).join('');
+  return `<div class="folder-section">
+    <h3>${title}</h3>
+    <p class="lead">${lead}</p>
+    ${rows ? `<ul class="folders">${rows}</ul>` : '<div class="folder-empty">No folders yet.</div>'}
+    <button class="btn btn-red" data-act="add" data-type="${type}">+ ${addLabel}</button>
+  </div>`;
+}
+
 function render() {
   const mac = s.platform === 'darwin';
   const linux = s.platform === 'linux';
@@ -190,9 +217,12 @@ function render() {
   if (!s.folders.length) {
     $('app').innerHTML = html + `<section class="welcome">
       <h1>Welcome to HOMEFLIX</h1>
-      <p>Watch the movies on this ${pc} from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. Start by telling HOMEFLIX where your movies are.</p>
-      <button class="btn btn-red" data-act="add">${FOLDER_SVG.replace('#e50914', '#fff')}Choose your movies folder</button>
-      <small>You can add more folders later. Sub-folders are included.</small>
+      <p>Watch your movies and TV series on this ${pc} from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. Start by telling HOMEFLIX where your videos are.</p>
+      <div class="row-btns welcome-btns">
+        <button class="btn btn-red" data-act="add" data-type="movies">${FOLDER_SVG.replace('#e50914', '#fff')}Choose movies folder</button>
+        <button class="btn" data-act="add" data-type="series">${FOLDER_SVG}Choose TV series folder</button>
+      </div>
+      <small>Each TV series folder is one show. You can add more folders later; sub-folders are included.</small>
     </section>`;
     return;
   }
@@ -218,15 +248,12 @@ function render() {
     </section>
 
     <section class="card">
-      <h2>Your movie folders</h2>
-      <p class="lead">HOMEFLIX shows every video in these folders and their sub-folders.</p>
-      <ul class="folders">${s.folders.map((f) => `<li>
-        <div class="folder-icon">${FOLDER_SVG}</div>
-        <div class="folder-text"><div class="folder-path" title="${esc(f.path)}">${esc(splitPath(f.path).name)}</div><div class="folder-count" title="${esc(f.path)}">${f.count} video${f.count === 1 ? '' : 's'} · ${esc(splitPath(f.path).parent)}</div></div>
-        <button class="btn-ghost btn" data-act="open" data-folder="${esc(f.path)}">Open</button>
-        <button class="btn-ghost btn" data-act="remove" data-folder="${esc(f.path)}">Remove</button>
-      </li>`).join('')}</ul>
-      <button class="btn btn-red" data-act="add">+ Add folder</button>
+      <h2>Your folders</h2>
+      <p class="lead">Movies and TV series are kept separate. A TV series folder is one show; its videos become episodes. Click a folder’s type to switch it.</p>
+      <div class="folder-sections">
+        ${folderSection('Movie folders', 'Every video appears as its own movie.', 'movies', s.folders.filter((f) => f.type !== 'series'), 'Add movie folder')}
+        ${folderSection('TV series folders', 'Each folder is a show. Season subfolders and episode numbers are optional.', 'series', s.folders.filter((f) => f.type === 'series'), 'Add TV series folder')}
+      </div>
     </section>
 
     <section class="card">
@@ -323,7 +350,8 @@ document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act;
-  if (act === 'add') { s = await homeflix.addFolder(); render(); }
+  if (act === 'add') { s = await homeflix.addFolder(b.dataset.type); render(); }
+  if (act === 'type') { s = await homeflix.setFolderType(b.dataset.folder, b.classList.contains('series') ? 'movies' : 'series'); render(); }
   if (act === 'remove') { s = await homeflix.removeFolder(b.dataset.folder); render(); }
   if (act === 'open') homeflix.openFolder(b.dataset.folder);
   if (act === 'browser') homeflix.openBrowser();

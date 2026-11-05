@@ -4,7 +4,7 @@ The native Android app for the HOMEFLIX computer. It is a Kotlin + Jetpack Compo
 the same `server.js` as the web player, so the laptop/desktop app does not need a separate mode.
 
 The same app can also run that `server.js` on the phone: choose **Share this phone's videos** on the
-connect screen. The embedded Node.js runtime and bundled FFmpeg serve the phone's own movie folders to
+connect screen. The embedded Node.js runtime and bundled FFmpeg serve the phone's own video folders to
 other HOMEFLIX devices on the same Wi-Fi, using the normal client to watch locally.
 
 - Android 7.0 (API 24) and newer, phones, tablets and Android TV / Google TV / Fire TV
@@ -58,9 +58,10 @@ Tap **Share this phone's videos** on the connect screen, then **Allow access to 
 all-files access. The server starts automatically and shows the LAN address and PIN. Other devices
 connect to it exactly like they connect to the desktop app.
 
-You choose what is shared: the default list is `Movies`, `Download` and the app's own external
-`Movies` folder, but **Add folder** opens the system folder picker (internal storage or SD card) and
-each folder can be removed again. Subfolders are scanned. Changes apply immediately while the server
+You choose what is shared. Nothing is shared until you add folders: **Add movie folder** and
+**Add TV series folder** open the system folder picker (internal storage or SD card), and each folder
+can be removed again. A TV series folder is one show; its videos become episodes, with optional
+`Season 1` / `S01` subfolders. Subfolders are scanned. Changes apply immediately while the server
 is running. The PIN works like the desktop app: **Change PIN** accepts 4 to 8 digits and **Turn off
 PIN** disables it. Changing or turning off the PIN makes every device enter the new state again.
 

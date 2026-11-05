@@ -306,7 +306,12 @@ async function info(id) {
 
 function parse(m) {
   const x = m.title.match(SERIES_RE);
-  if (x) Object.assign(m, { show: x[1].trim(), season: +x[2], ep: +x[3], epLabel: `S${+x[2]}:E${+x[3]}` });
+  if (x && !m.show && m.folderType === undefined) Object.assign(m, { show: x[1].trim(), season: +x[2], ep: +x[3] });
+  if (m.show) {
+    const season = +(m.season || 1);
+    const ep = +(m.ep || 0);
+    Object.assign(m, { season, ep, epLabel: `S${season}:E${ep}` });
+  }
   return m;
 }
 
@@ -362,7 +367,7 @@ function renderHome() {
   html += showNames.length ? row('row-shows', 'TV Shows', showNames.map(showCard)) : '';
   for (const name of showNames) html += row('row-show-' + name.replace(/\W+/g, '-'), name, shows.get(name).map(movieCard));
   html += row('row-movies', 'Movies', films.map(movieCard));
-  $('rows').innerHTML = movies.length ? html : '<div class="empty">No movies yet. On your laptop, open the HOMEFLIX app and choose the folder where your movies are.</div>';
+  $('rows').innerHTML = movies.length ? html : '<div class="empty">No videos yet. On your laptop, open the HOMEFLIX app and add a movie or TV series folder.</div>';
   renderHero(continuing[0] || movies.find((m) => !m.downloading));
 }
 

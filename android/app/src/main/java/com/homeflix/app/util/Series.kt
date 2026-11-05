@@ -7,7 +7,7 @@ data class SeriesInfo(val name: String, val season: Int, val episode: Int)
 object Series {
     private val pattern = Regex("""^(.*?)[\s-]*S(\d{1,2})\s*E(\d{1,3})\b""", RegexOption.IGNORE_CASE)
 
-    /** The server now sends show/season/ep; keep a fallback for older HOMEFLIX versions. */
+    /** The server sends show/season/ep for TV series folders; keep a title fallback for older versions. */
     fun of(item: LibraryItem): SeriesInfo? {
         val show = item.show
         val season = item.season
@@ -15,6 +15,7 @@ object Series {
         if (!show.isNullOrBlank() && season != null && episode != null) {
             return SeriesInfo(show, season, episode)
         }
+        if (item.folderType != null) return null
         val match = pattern.find(item.title) ?: return null
         val name = match.groupValues[1].trim().ifBlank { return null }
         return SeriesInfo(

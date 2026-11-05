@@ -368,7 +368,9 @@ class ServerService : Service() {
         workDir.mkdirs()
         copyAsset("server", workDir)
         val folders = JSONArray()
-        ServerFolders.list(this).forEach { folders.put(it) }
+        ServerFolders.list(this).forEach {
+            folders.put(JSONObject().put("path", it.path).put("type", it.type))
+        }
         val config = JSONObject()
             .put("port", PORT)
             .put("pin", ServerPin.get(this) ?: JSONObject.NULL)
