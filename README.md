@@ -67,17 +67,19 @@ same way: open Quick Settings, tap the pencil, and drag the tile out.
 **What you need:** a computer (Windows 10/11, macOS 12 or newer, or Linux), your movie files, and a
 phone, tablet or TV on the same home Wi-Fi. No account, subscription or internet upload is needed.
 
-## What's new in Android 1.5.1
+## What's new in Android 1.6.0
 
-Android 1.5.1 puts Server Mode in your Quick Settings panel.
+Android 1.6.0 adds separate movie and TV series folders.
 
-- **Quick Settings tile.** Add the **HOMEFLIX Server** tile from Server Mode, then start or stop
-  sharing from the status bar. The tile shows whether sharing is on and the address other devices use.
-- **Easy removal.** Server Mode explains how to remove the tile, and removing it does not stop
-  sharing.
+- **Movie folders** keep every video as its own title.
+- **TV series folders** treat each folder as one show. Its videos become episodes, and the next
+  episode plays automatically. `Season 1` / `S01` subfolders and `S01E02`-style numbers are optional:
+  HOMEFLIX uses them when present and otherwise follows the file order.
+- **Easy switching.** Existing folders stay movie folders. Tap a folder's type in Server Mode to
+  switch it to TV series, or back again. The desktop app has the same two sections.
 
 Download the signed APK or app bundle from the
-[Android 1.5.1 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v1.5.1).
+[Android 1.6.0 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v1.6.0).
 
 ---
 
@@ -225,11 +227,13 @@ connects to the same HOMEFLIX computer as the browser and has the same features:
 start over, series and auto-play next episode, audio languages, subtitles, remembered volume boost,
 and HEVC fallback.
 
-The 1.5.1 app adds a **HOMEFLIX Server** Quick Settings tile, so Server Mode can be started or
-stopped from the status bar. It also includes the live **Connected devices** card from 1.5.0: see
-who is watching, what they are playing, watch time and data used, then open a device for daily,
-monthly or yearly history. For privacy, a fresh install shares no folders until you add them.
-Android devices also advertise their real hostname, so they are easier to recognise on other devices.
+The 1.6.0 app adds separate **Movie folders** and **TV series folders** in Server Mode and the
+desktop app. Each TV series folder is one show; its videos become episodes, with optional season
+subfolders and episode numbering. It also keeps the 1.5.1 **HOMEFLIX Server** Quick Settings tile and
+the live **Connected devices** card from 1.5.0: see who is watching, what they are playing, watch
+time and data used, then open a device for daily, monthly or yearly history. For privacy, a fresh
+install shares no folders until you add them. Android devices also advertise their real hostname, so
+they are easier to recognise on other devices.
 
 The phone can also act as the server; see [Server mode](#server-mode-share-this-phones-videos) above.
 Tap **Share this phone's videos** on the connect screen and other HOMEFLIX devices on the same Wi-Fi
@@ -289,7 +293,7 @@ Useful checks:
 ./gradlew :app:testDebugUnitTest :app:lintDebug
 ```
 
-The app version and `versionCode` come from the root `package.json` (`1.5.1` → `10501`), so bumping
+The app version and `versionCode` come from the root `package.json` (`1.6.0` → `10600`), so bumping
 the desktop version also bumps Android. See [`android/README.md`](android/README.md) for the project
 layout and Play publishing steps.
 
