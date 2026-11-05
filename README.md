@@ -67,9 +67,9 @@ same way: open Quick Settings, tap the pencil, and drag the tile out.
 **What you need:** a computer (Windows 10/11, macOS 12 or newer, or Linux), your movie files, and a
 phone, tablet or TV on the same home Wi-Fi. No account, subscription or internet upload is needed.
 
-## What's new in Android 1.6.0
+## What's new in Android 2.0.0
 
-Android 1.6.0 adds separate movie and TV series folders.
+Android 2.0.0 is a stability update. The 1.6.0 movie/TV series folder features remain unchanged.
 
 - **Movie folders** keep every video as its own title.
 - **TV series folders** treat each folder as one show. Its videos become episodes, and the next
@@ -79,7 +79,7 @@ Android 1.6.0 adds separate movie and TV series folders.
   switch it to TV series, or back again. The desktop app has the same two sections.
 
 Download the signed APK or app bundle from the
-[Android 1.6.0 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v1.6.0).
+[Android 2.0.0 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v2.0.0).
 
 ---
 
@@ -227,7 +227,7 @@ connects to the same HOMEFLIX computer as the browser and has the same features:
 start over, series and auto-play next episode, audio languages, subtitles, remembered volume boost,
 and HEVC fallback.
 
-The 1.6.0 app adds separate **Movie folders** and **TV series folders** in Server Mode and the
+The 2.0.0 app is a stability update. The 1.6.0 app adds separate **Movie folders** and **TV series folders** in Server Mode and the
 desktop app. Each TV series folder is one show; its videos become episodes, with optional season
 subfolders and episode numbering. It also keeps the 1.5.1 **HOMEFLIX Server** Quick Settings tile and
 the live **Connected devices** card from 1.5.0: see who is watching, what they are playing, watch
@@ -293,7 +293,7 @@ Useful checks:
 ./gradlew :app:testDebugUnitTest :app:lintDebug
 ```
 
-The app version and `versionCode` come from the root `package.json` (`1.6.0` → `10600`), so bumping
+The app version and `versionCode` come from the root `package.json` (`2.0.0` → `20000`), so bumping
 the desktop version also bumps Android. See [`android/README.md`](android/README.md) for the project
 layout and Play publishing steps.
 
