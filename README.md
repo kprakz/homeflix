@@ -260,3 +260,9 @@ With `npm run serve`, set a PIN by adding `"pin": "1234"` to `config.json`.
 App settings live in `%APPDATA%\HOMEFLIX\settings.json` (Mac: `~/Library/Application Support/HOMEFLIX/settings.json`, Linux: `~/.config/HOMEFLIX/settings.json`). The PIN is stored there only as a salted scrypt hash. Converted copies live in `%LOCALAPPDATA%\HOMEFLIX\cache` (Mac: `~/Library/Caches/HOMEFLIX`, Linux: `~/.cache/HOMEFLIX`).
 
 HOMEFLIX ships unmodified FFmpeg programs, which are GPL-licensed. See `vendor/ffmpeg/LICENSE.txt` and `SOURCE.txt`, which are installed to `resources\ffmpeg`.
+
+## License
+
+HOMEFLIX's own code is released under the [MIT License](LICENSE): you're free to use, change and share it, as long as you keep the copyright notice. The bundled FFmpeg programs keep their own GPL license (see above).
+
+**The name.** "HOMEFLIX" refers to this official project. If you publish a fork or your own build, please give it a different name, or clearly mark it as **unofficial**, and use your own version numbers, so people don't mistake it for an official release. Official downloads are only at [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/) and [this repository's releases](https://github.com/kprakz/homeflix/releases). Want to add something, like an Android app? Pull requests are welcome.
