@@ -552,8 +552,8 @@ class ServerService : Service() {
         val address = _state.value.address
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("HOMEFLIX is sharing this phone")
-            .setContentText(if (address != null) "$text\n$address" else text)
+            .setContentTitle("HOMEFLIX Server Running")
+            .setContentText(address ?: text)
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(0, "Disable", stop)
