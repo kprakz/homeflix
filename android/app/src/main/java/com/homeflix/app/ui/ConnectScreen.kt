@@ -262,11 +262,11 @@ fun ConnectScreen(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Share phone's videos (Server Mode)",
+                        text = "Phone Server Mode",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.5.sp,
-                        maxLines = 2,
+                        fontSize = 14.sp,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )

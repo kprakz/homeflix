@@ -36,12 +36,27 @@ function normalizeFolders(folders) {
   return [...next.values()];
 }
 
+// 4-8 digits, or a 6-32 alphanumeric password with at least one letter and one digit.
+function isValidPin(pin) {
+  const value = String(pin == null ? '' : pin);
+  return /^\d{4,8}$/.test(value) || (/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{6,32}$/.test(value));
+}
+
 // The desktop app calls this with its own settings; `node server.js` uses config.json.
 // (config.json may give "pin": "1234" in plain text; it's kept hashed.)
+// Fail closed: a malformed PIN throws instead of silently disabling protection.
 function configure(options) {
-  CONFIG = { ...CONFIG, ...options };
-  CONFIG.folders = normalizeFolders(CONFIG.folders);
-  if (typeof CONFIG.pin === 'string' || typeof CONFIG.pin === 'number') CONFIG.pin = /^\d{4,8}$/.test(String(CONFIG.pin)) ? hashPin(CONFIG.pin) : null;
+  const next = { ...CONFIG, ...options };
+  next.folders = normalizeFolders(next.folders);
+  const pin = next.pin;
+  if (typeof pin === 'string' || typeof pin === 'number') {
+    if (!isValidPin(pin)) throw new Error('The PIN must be 4 to 8 digits, or 6 to 32 letters and numbers with at least one of each.');
+    next.pin = hashPin(String(pin));
+  } else if ((pin && typeof pin !== 'object') || (pin && typeof pin === 'object' && (typeof pin.salt !== 'string' || typeof pin.hash !== 'string'))) {
+    throw new Error('The PIN must be 4 to 8 digits, or 6 to 32 letters and numbers with at least one of each.');
+  }
+  if (next.pin === undefined) next.pin = null;
+  CONFIG = next;
   if (!CONFIG.secret) CONFIG.secret = crypto.randomBytes(16).toString('hex');
   CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
   fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -809,7 +824,7 @@ function pinWait(ip) {
 }
 function checkPin(ip, pin) {
   const t = pinTries.get(ip) || { fails: 0, until: 0 };
-  const ok = /^\d{4,8}$/.test(String(pin)) && crypto.timingSafeEqual(Buffer.from(hashPin(pin, CONFIG.pin.salt).hash, 'hex'), Buffer.from(CONFIG.pin.hash, 'hex'));
+  const ok = isValidPin(pin) && crypto.timingSafeEqual(Buffer.from(hashPin(String(pin), CONFIG.pin.salt).hash, 'hex'), Buffer.from(CONFIG.pin.hash, 'hex'));
   if (ok) pinTries.delete(ip);
   else {
     t.fails++;
@@ -1692,7 +1707,7 @@ function stop() {
   });
 }
 
-module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT, activityForControl, normalizeFolders };
+module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, isValidPin, VIDEO_EXT, activityForControl, normalizeFolders };
 
 if (require.main === module) {
   configure(loadConfig());

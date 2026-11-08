@@ -93,7 +93,7 @@ fun PinScreen(
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text(
-                        text = "This computer is protected by a PIN.",
+                        text = "Enter the PIN or password.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
@@ -101,17 +101,17 @@ fun PinScreen(
                     OutlinedTextField(
                         value = pin,
                         onValueChange = { value ->
-                            pin = value.filter(Char::isDigit).take(12)
+                            pin = value.filter { it.isLetterOrDigit() }.take(32)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focus),
-                        label = { Text("PIN") },
+                        label = { Text("PIN or password") },
                         singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.NumberPassword,
+                            keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done,
+                            autoCorrectEnabled = false,
                         ),
                         keyboardActions = KeyboardActions(
                             onDone = { if (pin.isNotBlank()) onUnlock(pin) },

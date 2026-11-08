@@ -59,8 +59,8 @@ all-files access. The server starts automatically and shows the LAN address and 
 connect to it exactly like they connect to the desktop app.
 
 You choose what is shared. Nothing is shared until you add folders: **Add movie folder** and
-**Add TV series folder** open the system folder picker (internal storage or SD card), and each folder
-can be removed again. A TV series folder is one show; its videos become episodes, with optional
+**Add series folder** open the system folder picker (internal storage or SD card), and each folder
+can be removed again. A series folder is one show; its videos become episodes, with optional
 `Season 1` / `S01` subfolders. Subfolders are scanned. Changes apply immediately while the server
 is running. The PIN works like the desktop app: **Change PIN** accepts 4 to 8 digits and **Turn off
 PIN** disables it. Changing or turning off the PIN makes every device enter the new state again.

@@ -1,5 +1,6 @@
 package com.homeflix.app
 
+import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -46,22 +47,30 @@ import com.homeflix.app.ui.theme.HomeflixTheme
 import com.homeflix.app.ui.theme.Ink
 
 class MainActivity : ComponentActivity() {
+    private val openServerUi = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        openServerUi.value = intent?.getBooleanExtra(ServerService.EXTRA_OPEN_SERVER, false) == true
         setContent {
             HomeflixTheme {
-                HomeflixRoot()
+                HomeflixRoot(openServerUi)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(ServerService.EXTRA_OPEN_SERVER, false)) openServerUi.value = true
     }
 }
 
 @Composable
-private fun HomeflixRoot() {
+private fun HomeflixRoot(openServerUi: androidx.compose.runtime.State<Boolean>) {
     val appVm: AppViewModel = viewModel()
     val playerVm: PlayerViewModel = viewModel()
     val state by appVm.state.collectAsStateWithLifecycle()
@@ -70,6 +79,15 @@ private fun HomeflixRoot() {
     var serverMode by rememberSaveable { mutableStateOf(false) }
     val serverState by ServerService.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // The server notification's tap intent opens the Share-this-phone screen (consumed once).
+    val serverUiRequested by openServerUi
+    LaunchedEffect(serverUiRequested) {
+        if (serverUiRequested) {
+            serverMode = true
+            (openServerUi as? androidx.compose.runtime.MutableState<Boolean>)?.value = false
+        }
+    }
 
     val playingItem = remember(state.library, playingId) {
         playingId?.let { id -> state.library.firstOrNull { it.id == id } }

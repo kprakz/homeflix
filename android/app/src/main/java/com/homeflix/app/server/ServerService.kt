@@ -75,6 +75,9 @@ class ServerService : Service() {
     companion object {
         const val ACTION_START = "com.homeflix.app.server.START"
         const val ACTION_STOP = "com.homeflix.app.server.STOP"
+
+        /** Set on the notification's tap intent so MainActivity opens the Share-this-phone screen. */
+        const val EXTRA_OPEN_SERVER = "com.homeflix.app.server.OPEN_UI"
         private const val CHANNEL_ID = "homeflix_server"
         private const val NOTIFICATION_ID = 42
         private const val PORT = 8080
@@ -136,7 +139,7 @@ class ServerService : Service() {
         startForegroundCompat(buildNotification("Starting HOMEFLIX server…"))
         if (stopping.get() || _state.value.running || _state.value.starting) return
         acquireLocks()
-        _state.value = ServerState(starting = true, pin = ServerPin.get(this), message = "Starting the embedded server…")
+        _state.value = ServerState(starting = true, pin = ServerPin.ensure(this), message = "Starting the embedded server…")
 
         val workDir = File(filesDir, "nodejs-project")
         val nativeDir = applicationInfo.nativeLibraryDir
@@ -499,7 +502,17 @@ class ServerService : Service() {
 
     private fun startForegroundCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            try {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } catch (err: Throwable) {
+                // The manifest declares dataSync, so this should never happen — but a
+                // mismatch between the running process and the manifest must not crash the app.
+                try {
+                    startForeground(NOTIFICATION_ID, notification)
+                } catch (_: Throwable) {
+                    throw err
+                }
+            }
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -514,7 +527,9 @@ class ServerService : Service() {
         val open = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java)
+                .putExtra(EXTRA_OPEN_SERVER, true)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val stop = PendingIntent.getService(
@@ -523,13 +538,14 @@ class ServerService : Service() {
             Intent(this, ServerService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val address = _state.value.address
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("HOMEFLIX is sharing this phone")
-            .setContentText(text)
+            .setContentText(if (address != null) "$text\n$address" else text)
             .setOngoing(true)
             .setContentIntent(open)
-            .addAction(0, "Stop", stop)
+            .addAction(0, "Disable", stop)
             .build()
     }
 

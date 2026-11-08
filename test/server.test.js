@@ -67,3 +67,25 @@ test('legacy folder paths migrate to movie folders', () => {
     ['three', 'movies'],
   ]);
 });
+
+test('PIN validation and configure accept alphanumeric passwords and fail closed', () => {
+  assert.equal(server.isValidPin('1234'), true);
+  assert.equal(server.isValidPin('123456'), true);
+  assert.equal(server.isValidPin('12345678'), true); // 4-8 digits family
+  assert.equal(server.isValidPin('12345'), true); // 4-8 digits family
+  assert.equal(server.isValidPin('Homeflix2026'), true);
+  assert.equal(server.isValidPin('abcdefg'), false); // password needs a digit too
+  assert.equal(server.isValidPin('password123'), true);
+  assert.equal(server.isValidPin('has space1'), false);
+  assert.equal(server.isValidPin('123'), false);
+  assert.equal(server.isValidPin('123456789'), false);
+  assert.equal(server.isValidPin(null), false);
+
+  // a malformed PIN must be rejected, not silently turned into "no protection"
+  assert.throws(() => server.configure({ pin: 'not valid' }));
+  assert.throws(() => server.configure({ pin: true }));
+  assert.throws(() => server.configure({ pin: { salt: 'abc' } }));
+  // legit values pass: hashed object from the desktop app, null (protection off)
+  server.configure({ pin: { salt: 'a'.repeat(16), hash: 'b'.repeat(64) } });
+  server.configure({ pin: null });
+});

@@ -285,7 +285,7 @@ fun LibraryScreen(
                                     Text(if (query.isBlank()) "No titles yet" else "No matches")
                                     if (query.isBlank()) {
                                         Text(
-                                            "Add a movie or TV series folder on your computer, then refresh.",
+                                            "Add a movie or series folder on your computer, then refresh.",
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.bodySmall,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
