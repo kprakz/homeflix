@@ -105,9 +105,9 @@ class ServerService : Service() {
             context.startService(Intent(context, ServerService::class.java).setAction(ACTION_STOP))
         }
 
-        /** Applies folder or PIN changes immediately when the server is running. */
-        fun configChanged(context: Context) {
-            instance?.reloadConfig()
+        /** Applies folder or PIN/password changes immediately when the server is running. */
+        fun configChanged(context: Context, fast: Boolean = false) {
+            instance?.reloadConfig(fast)
         }
     }
 
@@ -386,41 +386,52 @@ class ServerService : Service() {
         File(workDir, "cache").mkdirs()
     }
 
-    private fun reloadConfig() {
+    private fun reloadConfig(fast: Boolean = false) {
         Thread({
             val deadline = System.currentTimeMillis() + 30_000
             while (_state.value.starting && System.currentTimeMillis() < deadline && !stopping.get()) {
                 Thread.sleep(200)
             }
             if (!_state.value.running || stopping.get()) return@Thread
-            _state.update { it.copy(running = false, starting = true, message = "Updating server settings…", clients = emptyList()) }
             val workDir = File(filesDir, "nodejs-project")
             val nativeDir = applicationInfo.nativeLibraryDir
             val ffmpeg = File(nativeDir, "libffmpeg_exec.so").absolutePath
             val ffprobe = File(nativeDir, "libffprobe_exec.so").absolutePath
             try {
                 prepareProject(workDir, ffmpeg, ffprobe)
-                if (!postControl("/reload")) {
+                if (fast) {
+                    if (postControl("/reconfig")) {
+                        _state.update { it.copy(pin = ServerPin.get(this@ServerService)) }
+                    } else {
+                        postControl("/reload")
+                        waitUntilReady()
+                    }
+                } else {
+                    _state.update { it.copy(running = false, starting = true, message = "Updating server settings…", clients = emptyList()) }
+                    if (!postControl("/reload")) {
+                        _state.update {
+                            it.copy(
+                                starting = false,
+                                error = "Could not apply the change. Stop and start the server to retry.",
+                            )
+                        }
+                        return@Thread
+                    }
+                    waitUntilReady()
+                }
+            } catch (err: Throwable) {
+                if (!fast) {
                     _state.update {
                         it.copy(
                             starting = false,
-                            error = "Could not apply the change. Stop and start the server to retry.",
+                            running = false,
+                            error = err.message ?: err.javaClass.simpleName,
+                            clients = emptyList(),
                         )
                     }
-                    return@Thread
-                }
-                waitUntilReady()
-            } catch (err: Throwable) {
-                _state.update {
-                    it.copy(
-                        starting = false,
-                        running = false,
-                        error = err.message ?: err.javaClass.simpleName,
-                        clients = emptyList(),
-                    )
                 }
             }
-        }, "homeflix-server-folders").start()
+        }, "homeflix-server-config").start()
     }
 
     private fun copyAsset(path: String, target: File) {

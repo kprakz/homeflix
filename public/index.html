@@ -46,7 +46,18 @@
   .search svg { width: 22px; height: 22px; flex: none; cursor: pointer; }
   .search input { width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #fff; font-size: 15px; transition: width .3s; }
   .search.open input { width: min(240px, 42vw); }
-  @media (max-width: 600px) { nav { display: none; } }
+  .logout-btn {
+    display: none; align-items: center; gap: 6px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    border-radius: 8px; padding: 6px 12px; color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    transition: background .2s, border-color .2s; flex: none; margin-left: 12px;
+  }
+  .logout-btn:hover { background: rgba(229,9,20,.8); border-color: var(--red); }
+  .logout-btn svg { width: 16px; height: 16px; flex: none; }
+  @media (max-width: 600px) {
+    .logout-label { display: none; }
+    .logout-btn { padding: 8px; border-radius: 50%; margin-left: 8px; }
+    nav { display: none; }
+  }
 
   /* ---------- hero ---------- */
   /* The banner grows with its text (long titles, short laptop screens) instead of letting the text slide
@@ -208,30 +219,31 @@
   body.tv .row h2 { font-size: 24px; }
   body.tv .rows { padding-bottom: 120px; }
 
-  /* ---------- PIN screen (when the computer's owner turned on a PIN) ---------- */
+  /* ---------- PIN & Password screen (when the computer's owner turned on a PIN or password) ---------- */
   #lock { display: none; position: fixed; inset: 0; z-index: 60; background: radial-gradient(ellipse at top, #2a0a0c 0%, var(--bg) 60%); overflow-y: auto; }
   #lock.on { display: flex; padding: calc(24px + env(safe-area-inset-top)) 16px 24px; }
-  .lock-box { width: min(340px, 100%); margin: auto; text-align: center; } /* auto margins: centred, yet scrollable on short screens */
-  .lock-box .logo { font-size: 52px; cursor: default; margin-bottom: 18px; }
-  .lock-box p { color: var(--muted); margin: 0 0 18px; }
-  .dots { display: flex; justify-content: center; gap: 14px; height: 18px; margin-bottom: 14px; }
-  .dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #777; }
-  .dots i.on { background: #fff; border-color: #fff; }
-  .lock-msg { min-height: 24px; font-size: 15px; color: #ff6b6b; margin-bottom: 10px; }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .keypad button { height: 64px; border: 0; border-radius: 50%; width: 64px; justify-self: center; background: rgba(255,255,255,.1); color: #fff; font-size: 26px; font-weight: 500; }
+  .lock-box { width: min(380px, 100%); margin: auto; text-align: center; }
+  .lock-box .logo { font-size: 52px; cursor: default; margin-bottom: 14px; }
+  .lock-box p { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
+  .pin-field-wrap { position: relative; display: flex; align-items: center; margin-bottom: 12px; }
+  .pin-input { width: 100%; height: 52px; padding: 0 48px 0 16px; background: rgba(255,255,255,.08); border: 1.5px solid rgba(255,255,255,.2); border-radius: 12px; color: #fff; font-size: 18px; font-weight: 500; outline: none; transition: border-color .2s; }
+  .pin-input:focus { border-color: var(--red); background: rgba(255,255,255,.12); }
+  .pin-toggle-btn { position: absolute; right: 10px; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+  .pin-toggle-btn:hover { color: #fff; }
+  .pin-toggle-btn svg { width: 20px; height: 20px; }
+  .lock-msg { min-height: 24px; font-size: 14px; color: #ff6b6b; margin-bottom: 12px; }
+  .btn-unlock { width: 100%; height: 50px; background: var(--red); border: 0; border-radius: 12px; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; transition: background .2s; margin-bottom: 14px; }
+  .btn-unlock:hover { background: #f6121d; }
+  .keypad-wrap { margin-top: 8px; }
+  .btn-text { background: transparent; border: 0; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; margin-bottom: 10px; }
+  .btn-text:hover { color: #fff; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .keypad button { height: 56px; border: 0; border-radius: 50%; width: 56px; justify-self: center; background: rgba(255,255,255,.1); color: #fff; font-size: 22px; font-weight: 500; cursor: pointer; }
   .keypad button:hover { background: rgba(255,255,255,.2); }
   .keypad button:disabled { opacity: .35; }
-  .keypad .go { background: var(--red); font-size: 16px; font-weight: 700; }
-  .keypad .go:hover { background: #f6121d; }
+  .keypad .go { background: var(--red); font-size: 15px; font-weight: 700; }
   .keypad button:focus-visible, body.tv .keypad button:focus { outline: 3px solid #fff; outline-offset: 3px; }
-  @media (max-height: 560px) {
-    .lock-box .logo { font-size: 36px; margin-bottom: 6px; }
-    .lock-box p { margin-bottom: 10px; font-size: 14px; }
-    .keypad { gap: 8px; }
-    .keypad button { width: 50px; height: 50px; font-size: 21px; }
-  }
-  #lock.shake .dots { animation: shake .35s; }
+  #lock.shake .pin-field-wrap { animation: shake .35s; }
   @keyframes shake { 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
 </style>
 </head>
@@ -240,14 +252,18 @@
   <div class="logo" data-home>HOMEFLIX</div>
   <nav>
     <a data-home tabindex="0">Home</a>
-    <a data-jump="row-shows" tabindex="0">TV Shows</a>
+    <a data-jump="row-shows" tabindex="0">Series</a>
     <a data-jump="row-movies" tabindex="0">Movies</a>
     <a data-jump="row-continue" tabindex="0">My List</a>
   </nav>
   <label class="search" id="searchBox">
     <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5" stroke-linecap="round"/></svg>
-    <input id="search" type="search" placeholder="Titles, shows" autocomplete="off">
+    <input id="search" type="search" placeholder="Titles, series" autocomplete="off">
   </label>
+  <button type="button" id="logoutBtn" class="logout-btn" title="Logout" style="display:none;" aria-label="Logout">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    <span class="logout-label">Logout</span>
+  </button>
 </header>
 
 <main id="home">
@@ -258,13 +274,22 @@
 
 <div class="modal-bg" id="modal"><div class="modal" id="modalCard"></div></div>
 
-<section id="lock" aria-label="Enter PIN">
+<section id="lock" aria-label="Enter PIN or password">
   <div class="lock-box">
     <div class="logo">HOMEFLIX</div>
-    <p>Enter the PIN set on the HOMEFLIX computer.</p>
-    <div class="dots" id="pinDots"></div>
+    <p>Enter the PIN or password set on the HOMEFLIX server.</p>
+    <div class="pin-field-wrap">
+      <input id="pinInput" type="password" class="pin-input" placeholder="Enter PIN or password" maxlength="32" autocomplete="current-password">
+      <button type="button" id="pinToggleBtn" class="pin-toggle-btn" aria-label="Toggle password visibility">
+        <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
     <div class="lock-msg" id="pinMsg" role="alert"></div>
-    <div class="keypad" id="keypad"></div>
+    <button type="button" id="unlockBtn" class="btn btn-unlock">Unlock</button>
+    <div class="keypad-wrap">
+      <button type="button" id="toggleKeypadBtn" class="btn-text">Numeric keypad</button>
+      <div class="keypad" id="keypad" style="display:none;"></div>
+    </div>
   </div>
 </section>
 
@@ -1189,53 +1214,95 @@ $('search').addEventListener('blur', () => { if (!$('search').value) $('searchBo
 window.addEventListener('scroll', () => $('bar').classList.toggle('solid', scrollY > 40), { passive: true });
 window.addEventListener('hashchange', route);
 
-// ---------- PIN ----------
-const PIN_MAX = 8;
-let pin = '';
-function drawPin(msg) {
-  $('pinDots').innerHTML = Array.from({ length: Math.max(4, pin.length) }, (_, n) => `<i class="${n < pin.length ? 'on' : ''}"></i>`).join('');
-  if (msg !== undefined) $('pinMsg').textContent = msg;
-  $('keypad').querySelector('.go').disabled = pin.length < 4;
-}
+// ---------- PIN & Password ----------
+let pinInputVisible = false;
+
 function showLock() {
   closePlayer();
   $('lock').classList.add('on');
   document.body.classList.add('lock');
-  pin = '';
-  drawPin('');
-  if (usingKeys) focusEl($('keypad').querySelector('button'));
+  if ($('pinInput')) {
+    $('pinInput').value = '';
+    setTimeout(() => $('pinInput').focus(), 100);
+  }
+  if ($('pinMsg')) $('pinMsg').textContent = '';
 }
+
 async function unlock() {
-  if (pin.length < 4) return;
-  const tried = pin;
-  pin = '';
-  drawPin('');
-  const r = await fetch('/api/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: tried }) }).catch(() => null);
-  const d = r ? await r.json().catch(() => ({})) : { error: 'Can’t reach the computer. Is HOMEFLIX running?' };
+  const tried = ($('pinInput') ? $('pinInput').value || '' : '').trim();
+  if (!tried) {
+    if ($('pinMsg')) $('pinMsg').textContent = 'Please enter your PIN or password.';
+    return;
+  }
+  if ($('pinMsg')) $('pinMsg').textContent = '';
+  const r = await fetch('/api/unlock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: tried })
+  }).catch(() => null);
+
+  const d = r ? await r.json().catch(() => ({})) : { error: 'Can’t reach the server. Is HOMEFLIX running?' };
   if (r && r.ok) {
     try { if (d.key) localStorage.setItem('key', d.key); } catch {}
     $('lock').classList.remove('on');
     document.body.classList.remove('lock');
     return route();
   }
-  drawPin(d.error || 'Wrong PIN. Try again.');
+  if ($('pinMsg')) $('pinMsg').textContent = d.error || 'Wrong PIN or password. Try again.';
   $('lock').classList.remove('shake'); void $('lock').offsetWidth; $('lock').classList.add('shake');
 }
+
 function pinKey(k) {
-  if (k === 'del') pin = pin.slice(0, -1);
-  else if (k === 'go') return unlock();
-  else if (pin.length < PIN_MAX) pin += k;
-  drawPin();
+  const inp = $('pinInput');
+  if (!inp) return;
+  if (k === 'del') {
+    inp.value = inp.value.slice(0, -1);
+  } else if (k === 'go') {
+    return unlock();
+  } else if (inp.value.length < 32) {
+    inp.value += k;
+  }
 }
+
+if ($('pinInput')) {
+  $('pinInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      unlock();
+    }
+  });
+}
+if ($('unlockBtn')) {
+  $('unlockBtn').addEventListener('click', () => unlock());
+}
+if ($('pinToggleBtn')) {
+  $('pinToggleBtn').addEventListener('click', () => {
+    const inp = $('pinInput');
+    if (!inp) return;
+    pinInputVisible = !pinInputVisible;
+    inp.type = pinInputVisible ? 'text' : 'password';
+  });
+}
+if ($('toggleKeypadBtn')) {
+  $('toggleKeypadBtn').addEventListener('click', () => {
+    const kp = $('keypad');
+    if (!kp) return;
+    const showing = kp.style.display !== 'none';
+    kp.style.display = showing ? 'none' : 'grid';
+    $('toggleKeypadBtn').textContent = showing ? 'Numeric keypad' : 'Hide keypad';
+  });
+}
+
 $('keypad').innerHTML = [...'123456789'].map((d) => `<button data-pin="${d}">${d}</button>`).join('') +
   '<button data-pin="del" aria-label="Delete">⌫</button><button data-pin="0">0</button><button data-pin="go" class="go">OK</button>';
 $('keypad').addEventListener('click', (e) => { const b = e.target.closest('[data-pin]'); if (b) pinKey(b.dataset.pin); });
-// Number keys on a keyboard or TV remote type the PIN; Enter unlocks; Backspace deletes.
+
 document.addEventListener('keydown', (e) => {
   if (!$('lock').classList.contains('on')) return;
+  if (document.activeElement === $('pinInput')) return;
   if (/^[0-9]$/.test(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); pinKey(e.key); }
   else if (e.key === 'Backspace') { e.preventDefault(); e.stopImmediatePropagation(); pinKey('del'); }
-  else if (e.key === 'Enter' && !document.activeElement.closest('#keypad')) { e.preventDefault(); e.stopImmediatePropagation(); pinKey('go'); }
+  else if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); unlock(); }
 }, true);
 
 // Ask for the PIN first when one is set and this device hasn't got in yet.

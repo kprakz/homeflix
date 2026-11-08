@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -135,6 +136,7 @@ fun ServerScreen(
     var pinKindDraft by remember { mutableStateOf(ServerPin.kindOf(ServerPin.get(context) ?: "")) }
     var pinVisible by remember { mutableStateOf(false) }
     var pinCopied by remember { mutableStateOf(false) }
+    var pinLockConfirm by remember { mutableStateOf(false) }
     var addressCopied by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     // Without POST_NOTIFICATIONS on Android 13+ the sharing notification (and its Disable
@@ -364,19 +366,17 @@ fun ServerScreen(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp,
                         )
-                        currentPin?.let {
-                            Surface(
-                                color = Color(0xFF43D17A).copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(50),
-                            ) {
-                                Text(
-                                    text = ServerPin.kindOf(it).label,
-                                    color = Color(0xFF43D17A),
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                )
-                            }
+                        Surface(
+                            color = if (currentPin != null) Color(0xFF43D17A).copy(alpha = 0.15f) else HomeflixRed.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(50),
+                        ) {
+                            Text(
+                                text = currentPin?.let { ServerPin.kindOf(it).label } ?: "Off",
+                                color = if (currentPin != null) Color(0xFF43D17A) else HomeflixRed,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
                         }
                     }
                     Spacer(Modifier.height(6.dp))
@@ -389,9 +389,25 @@ fun ServerScreen(
                     val pin = currentPin
                     if (pin == null) {
                         Text(
-                            "No password yet. It is created the first time Server Mode starts.",
+                            "Password lock is disabled. Anyone on this Wi-Fi can watch without a password.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
                         )
+                        Spacer(Modifier.height(12.dp))
+                        PremiumButton(
+                            onClick = {
+                                val generated = ServerPin.generate(pinKindDraft)
+                                if (ServerPin.set(context, generated)) {
+                                    currentPin = generated
+                                    pinVisible = true
+                                    pinCopied = false
+                                    ServerService.configChanged(context, fast = true)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Enable password lock")
+                        }
                     } else {
                         Surface(shape = RoundedCornerShape(12.dp), color = PanelHigh, modifier = Modifier.fillMaxWidth()) {
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 10.dp)) {
@@ -428,37 +444,47 @@ fun ServerScreen(
                             )
                             LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); pinCopied = false }
                         }
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        PremiumOutlinedButton(
-                            onClick = {
-                                pinKindDraft = currentPin?.let { ServerPin.kindOf(it) } ?: PinKind.PIN4
-                                pinDraft = ""
-                                pinError = null
-                                pinDialog = true
-                            },
-                            modifier = Modifier.weight(1f),
+                        Spacer(Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(if (currentPin == null) "Set a PIN" else "Change PIN")
-                        }
-                        PremiumOutlinedButton(
-                            onClick = {
-                                val generated = ServerPin.generate(pinKindDraft)
-                                if (ServerPin.set(context, generated)) {
-                                    currentPin = generated
-                                    pinVisible = true
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Random")
+                            PremiumOutlinedButton(
+                                onClick = { pinLockConfirm = true },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                            ) {
+                                Text("Disable", fontSize = 13.sp, maxLines = 1)
+                            }
+                            PremiumOutlinedButton(
+                                onClick = {
+                                    pinKindDraft = currentPin?.let { ServerPin.kindOf(it) } ?: PinKind.PIN4
+                                    pinDraft = ""
+                                    pinError = null
+                                    pinDialog = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                            ) {
+                                Text("Change", fontSize = 13.sp, maxLines = 1)
+                            }
+                            PremiumOutlinedButton(
+                                onClick = {
+                                    val generated = ServerPin.generate(pinKindDraft)
+                                    if (ServerPin.set(context, generated)) {
+                                        currentPin = generated
+                                        pinVisible = true
+                                        ServerService.configChanged(context, fast = true)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            ) {
+                                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(Modifier.width(2.dp))
+                                Text("Random", fontSize = 13.sp, maxLines = 1)
+                            }
                         }
                     }
                 }
@@ -604,6 +630,33 @@ fun ServerScreen(
         }
     }
 
+    if (pinLockConfirm) {
+        AlertDialog(
+            onDismissRequest = { pinLockConfirm = false },
+            title = { Text("Turn off password lock?") },
+            text = {
+                Text("Anyone on your Wi-Fi — phones, laptops, smart TVs — will be able to open the library and watch without unlocking. You can turn it back on any time.")
+            },
+            confirmButton = {
+                PremiumTextButton(onClick = {
+                    ServerPin.set(context, null)
+                    currentPin = null
+                    pinVisible = false
+                    pinCopied = false
+                    ServerService.configChanged(context, fast = true)
+                    pinLockConfirm = false
+                }) {
+                    Text("Turn off")
+                }
+            },
+            dismissButton = {
+                PremiumTextButton(onClick = { pinLockConfirm = false }) {
+                    Text("Keep lock")
+                }
+            },
+        )
+    }
+
     if (pinDialog) {
         AlertDialog(
             onDismissRequest = { pinDialog = false },
@@ -690,7 +743,7 @@ fun ServerScreen(
                         currentPin = pinDraft
                         pinDialog = false
                         pinError = null
-                        ServerService.configChanged(context)
+                        ServerService.configChanged(context, fast = true)
                     }
                 }) {
                     Text("Save")

@@ -79,6 +79,11 @@ const control = http.createServer((req, res) => {
     status(res);
     return;
   }
+  if (req.method === 'POST' && req.url === '/reconfig') {
+    server.configure(config());
+    status(res);
+    return;
+  }
   if (req.method === 'POST' && req.url === '/shutdown') {
     stopServer();
     status(res);
