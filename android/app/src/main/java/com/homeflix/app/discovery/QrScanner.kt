@@ -131,8 +131,10 @@ fun QrScannerDialog(onResult: (String) -> Unit, onDismiss: () -> Unit) {
                     ) {
                         Text(
                             "HOMEFLIX needs the camera to scan the QR code.",
+                            modifier = Modifier.width(200.dp),
                             textAlign = TextAlign.Center,
                             color = Color.White,
+                            style = MaterialTheme.typography.bodySmall,
                         )
                         Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) {
                             Text("Allow camera")

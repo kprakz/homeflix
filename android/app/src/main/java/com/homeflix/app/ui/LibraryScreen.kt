@@ -59,15 +59,19 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.homeflix.app.R
 import com.homeflix.app.data.LibraryItem
 import com.homeflix.app.data.Resume
 import com.homeflix.app.ui.theme.Gold
 import com.homeflix.app.ui.theme.HomeflixRed
+import com.homeflix.app.util.Links
 import com.homeflix.app.ui.theme.PanelHigh
 import com.homeflix.app.util.ResumeRules
 import com.homeflix.app.util.Series
@@ -144,6 +148,7 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
+                    val uriHandler = LocalUriHandler.current
                     RefreshIconButton(
                         pulse = state.libraryPulse,
                         contentDescription = "Refresh library",
@@ -151,6 +156,12 @@ fun LibraryScreen(
                     )
                     PremiumIconButton(onClick = onDisconnect) {
                         Icon(Icons.Rounded.Tv, contentDescription = "Change computer")
+                    }
+                    PremiumIconButton(onClick = { uriHandler.openUri(Links.FORK_REPO) }) {
+                        Icon(
+                            painterResource(R.drawable.ic_github),
+                            contentDescription = "HOMEFLIX on GitHub",
+                        )
                     }
                 },
             )
