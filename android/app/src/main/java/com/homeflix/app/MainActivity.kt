@@ -8,6 +8,8 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,57 +114,65 @@ private fun HomeflixRoot(openServerUi: androidx.compose.runtime.State<Boolean>) 
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        when {
-            serverMode -> ServerScreen(
-                state = serverState,
-                onStart = { ServerService.start(context) },
-                onStop = { ServerService.stop(context) },
-                onBack = { serverMode = false },
-            )
-
-            state.initializing -> Splash()
-
-            playingItem != null -> PlayerScreen(
-                vm = playerVm,
-                item = playingItem,
-                library = state.library,
-                onClose = {
-                    playingId = null
-                    startOverFor = null
-                    appVm.refreshResume()
-                },
-                onNext = { nextId ->
-                    startOverFor = null
-                    playingId = nextId
-                },
-            )
-
-            state.connection == null -> ConnectScreen(
-                state = state,
-                isServerRunning = serverState.running,
-                onConnect = appVm::connect,
-                onDiscover = appVm::refreshDiscovery,
-                onServerMode = {
-                    serverMode = true
-                },
-            )
-
-            state.needsPin -> PinScreen(
-                state = state,
-                onUnlock = appVm::unlock,
-                onDisconnect = appVm::disconnect,
-            )
-
-            else -> LibraryScreen(
-                state = state,
-                onPlay = { id, startOver ->
-                    startOverFor = if (startOver) id else null
-                    playingId = id
-                },
-                onRefresh = appVm::refreshLibrary,
-                onDisconnect = appVm::disconnect,
-                thumbUrl = { id, hero -> appVm.thumbUrl(id, hero) },
-            )
+        Crossfade(
+            targetState = when {
+                serverMode -> "server"
+                state.initializing -> "splash"
+                playingItem != null -> "player"
+                state.connection == null -> "connect"
+                state.needsPin -> "pin"
+                else -> "library"
+            },
+            animationSpec = tween(durationMillis = 350),
+            label = "screen-transition",
+        ) { screen ->
+            when (screen) {
+                "server" -> ServerScreen(
+                    state = serverState,
+                    onStart = { ServerService.start(context) },
+                    onStop = { ServerService.stop(context) },
+                    onBack = { serverMode = false },
+                )
+                "splash" -> Splash()
+                "player" -> PlayerScreen(
+                    vm = playerVm,
+                    item = playingItem!!,
+                    library = state.library,
+                    onClose = {
+                        playingId = null
+                        startOverFor = null
+                        appVm.refreshResume()
+                    },
+                    onNext = { nextId ->
+                        startOverFor = null
+                        playingId = nextId
+                    },
+                )
+                "connect" -> ConnectScreen(
+                    state = state,
+                    isServerRunning = serverState.running,
+                    onConnect = appVm::connect,
+                    onDiscover = appVm::refreshDiscovery,
+                    onServerMode = {
+                        serverMode = true
+                    },
+                )
+                "pin" -> PinScreen(
+                    state = state,
+                    onUnlock = appVm::unlock,
+                    onDisconnect = appVm::disconnect,
+                )
+                else -> LibraryScreen(
+                    state = state,
+                    onPlay = { id, startOver ->
+                        startOverFor = if (startOver) id else null
+                        playingId = id
+                    },
+                    onRefresh = appVm::refreshLibrary,
+                    onDisconnect = appVm::disconnect,
+                    thumbUrl = { id, hero -> appVm.thumbUrl(id, hero) },
+                )
+            }
         }
     }
 }
