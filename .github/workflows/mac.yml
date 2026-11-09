@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   mac:
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'android-')
     strategy:
       fail-fast: false
       matrix:

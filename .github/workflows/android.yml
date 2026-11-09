@@ -1,0 +1,135 @@
+# Builds and tests the native Android app, attaches the APK/AAB to GitHub releases, and (when a
+# Play service account is configured) uploads the bundle to Google Play's internal track.
+#
+# Runs on pushes and pull requests that touch the app, when a release is published, or by hand
+# (Actions → Android build → Run workflow), optionally attaching the files to an existing release tag.
+
+name: Android build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'server.js'
+      - 'package.json'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'server.js'
+      - 'package.json'
+      - '.github/workflows/android.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the APK/AAB to (leave empty to only build and test)
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'android-')
+    runs-on: ubuntu-latest
+    env:
+      PLAY_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Node.js and FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/homeflix-native
+          key: homeflix-native-node-24.18.0-0-ffmpeg-8.1.3-r1
+
+      - name: Fetch Node.js and FFmpeg
+        run: |
+          chmod +x android/scripts/fetch-native.sh android/scripts/prepare-native.sh
+          ./android/scripts/fetch-native.sh
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/homeflix-release.jks"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release keystore configured; building a debug APK instead." >&2
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Unit tests and lint
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon
+
+      - name: Build signed APK and app bundle
+        if: steps.signing.outputs.signed == 'true'
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/homeflix-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon
+
+      - name: Build debug APK
+        if: steps.signing.outputs.signed != 'true'
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Collect artifacts
+        id: files
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p out
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk "out/HOMEFLIX-$VERSION.apk"
+            cp android/app/build/outputs/bundle/release/app-release.aab "out/HOMEFLIX-$VERSION.aab"
+            echo "aab=out/HOMEFLIX-$VERSION.aab" >> "$GITHUB_OUTPUT"
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk "out/HOMEFLIX-$VERSION-debug.apk"
+          fi
+          ls -lh out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HOMEFLIX-android
+          path: out/*
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: github.event_name == 'release' || github.event.inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name || github.event.inputs.tag }}" out/* --clobber
+
+      - name: Upload to Google Play (internal, draft)
+        if: steps.signing.outputs.signed == 'true' && env.PLAY_JSON != ''
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ env.PLAY_JSON }}
+          packageName: com.homeflix.app
+          releaseFiles: ${{ steps.files.outputs.aab }}
+          track: internal
+          status: draft
