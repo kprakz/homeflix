@@ -244,12 +244,16 @@
   .pin-toggle-btn svg { width: 26px; height: 26px; }
   .lock-msg { min-height: 24px; font-size: 14px; color: #ff6b6b; margin: 12px 0; padding: 0 4px; }
   .btn-unlock {
-    width: 100%; height: 58px; margin: 0 0 4px; background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border: 0;
-    border-radius: 18px; color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
-    box-shadow: 0 10px 30px rgba(229,9,20,.30); transition: transform .2s, box-shadow .2s, filter .2s;
+    width: 100%; height: 58px; margin: 0 0 4px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10);
+    border-radius: 18px; color: var(--dim); font-size: 20px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
+    box-shadow: none; opacity: .55; transition: transform .2s, box-shadow .2s, filter .2s, background .2s, opacity .2s, color .2s;
     display: flex; align-items: center; justify-content: center; text-align: center; box-sizing: border-box;
   }
-  .btn-unlock:hover { filter: brightness(1.15); box-shadow: 0 12px 34px rgba(229,9,20,.42); }
+  .btn-unlock.ready {
+    background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border: 0; color: #fff; opacity: 1;
+    box-shadow: 0 10px 30px rgba(229,9,20,.30);
+  }
+  .btn-unlock.ready:hover { filter: brightness(1.15); box-shadow: 0 12px 34px rgba(229,9,20,.42); }
   .btn-unlock:active { transform: translateY(0); filter: brightness(1.05); }
   .keypad-wrap { margin-top: 24px; }
   .keypad-toggles { display: flex; justify-content: center; align-items: center; margin: 8px 0 0; }
@@ -1308,7 +1312,15 @@ function showLock() {
     setTimeout(() => $('pinInput').focus(), 100);
   }
   if ($('pinMsg')) $('pinMsg').textContent = '';
+  syncUnlockBtn();
   if (typeof syncPadToggles === 'function') syncPadToggles();
+}
+
+function syncUnlockBtn() {
+  const btn = $('unlockBtn');
+  const inp = $('pinInput');
+  if (!btn || !inp) return;
+  btn.classList.toggle('ready', !!(inp.value || '').trim());
 }
 
 async function unlock() {
@@ -1345,6 +1357,7 @@ function pinKey(k) {
   } else if (inp.value.length < 32) {
     inp.value += k;
   }
+  syncUnlockBtn();
 }
 
 if ($('pinInput')) {
@@ -1354,6 +1367,7 @@ if ($('pinInput')) {
       unlock();
     }
   });
+  $('pinInput').addEventListener('input', syncUnlockBtn);
 }
 if ($('unlockBtn')) {
   $('unlockBtn').addEventListener('click', () => unlock());
