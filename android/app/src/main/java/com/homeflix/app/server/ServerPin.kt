@@ -50,7 +50,7 @@ object ServerPin {
         var candidate: String
         do {
             candidate = generateFrom(alphabet, 12, minLetters = 1, minDigits = 1)
-        } while (!isValid(candidate))
+        } while (!isValid(candidate, PinKind.PASSWORD))
         return candidate
     }
 
@@ -77,6 +77,6 @@ object ServerPin {
         PinKind.PIN4 -> "^\\d{4}\$"
         PinKind.PIN6 -> "^\\d{6}\$"
         PinKind.PASSWORD -> "^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z0-9]{6,32}\$"
-        null -> "^\\d{4,8}\$"
+        null -> "^(\\d{4,8}|(?=.*[A-Za-z])(?=.*\\d)[A-Za-z0-9]{6,32})\$"
     }
 }
