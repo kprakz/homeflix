@@ -259,9 +259,34 @@
   .qwerty button.wide { flex: 1.4; font-size: 13px; font-weight: 700; background: rgba(255,255,255,.16); }
   .qwerty button.go { background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); font-weight: 700; }
   .qwerty button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  /* ---------- intro animation (user verbatim) ---------- */
+  #introOverlay { position: fixed; inset: 0; z-index: 100; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; transition: opacity .5s; }
+  #introOverlay.fade-out { opacity: 0; pointer-events: none; }
+  #introOverlay .stage { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000; }
+  #introOverlay .word { display: flex; font-family: var(--display); font-size: clamp(3rem, 14vw, 10rem); letter-spacing: .04em; color: var(--red); position: relative; z-index: 2; will-change: transform, opacity; }
+  #introOverlay .word span { display: inline-block; opacity: 0; text-shadow: 0 0 18px rgba(229,9,20,.55), 0 0 60px rgba(229,9,20,.35); }
+  #introOverlay .streaks { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+  #introOverlay .streaks i { position: absolute; top: 0; bottom: 0; opacity: 0; transform: scaleY(0); }
+  #introOverlay .glow { position: absolute; inset: 0; z-index: 0; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(229,9,20,.5), transparent 55%); }
+  #introOverlay.play .word span { animation: in .7s cubic-bezier(.2,.8,.2,1) forwards; animation-delay: calc(var(--i)*.09s + .3s); }
+  #introOverlay.play .word { animation: zoom 1.6s cubic-bezier(.7,0,.9,.4) 2.3s forwards; }
+  #introOverlay.play .streaks i { animation: streak 1.8s ease-out forwards; animation-delay: var(--d); }
+  #introOverlay.play .glow { animation: flash 2.2s ease-in-out 2.1s forwards; }
+  @keyframes in { 0% { opacity: 0; transform: translateY(-40px) scaleY(1.6); filter: blur(6px); } 100% { opacity: 1; transform: none; filter: none; } }
+  @keyframes zoom { 0% { transform: scale(1); opacity: 1; filter: blur(0); } 70% { opacity: 1; } 100% { transform: scale(14); opacity: 0; filter: blur(8px); } }
+  @keyframes streak { 0% { opacity: 0; transform: scaleY(0); } 30% { opacity: .9; transform: scaleY(1); } 100% { opacity: 0; transform: scaleY(1); } }
+  @keyframes flash { 0% { opacity: 0; } 40% { opacity: 1; } 100% { opacity: 0; } }
 </style>
 </head>
 <body>
+<div id="introOverlay">
+  <div class="stage" id="introStage">
+    <div class="glow"></div>
+    <div class="streaks" id="introStreaks"></div>
+    <div class="word" id="introWord" aria-label="HOMEFLIX"></div>
+  </div>
+</div>
 <header id="bar">
   <div class="logo" data-home>HOMEFLIX</div>
   <nav>
@@ -1412,6 +1437,41 @@ fetch('/api/auth').then((r) => r.json()).catch(() => ({})).then((a) => {
   }
   route();
 });
+
+(function(){
+  var overlay = $('introOverlay');
+  if (!overlay) return;
+  var word = $('introWord'), streaks = $('introStreaks');
+  if (word && !word.hasChildNodes()) {
+    'HOMEFLIX'.split('').forEach(function(ch,i){
+      var s=document.createElement('span');s.textContent=ch;s.style.setProperty('--i',i);word.appendChild(s);
+    });
+  }
+  var colors=['#e50914','#ff3b30','#3a5bff','#8a2be2','#ff6a00','#00b3ff'];
+  if (streaks && !streaks.hasChildNodes()) {
+    for(var k=0;k<70;k++){
+      var l=document.createElement('i');
+      var w=1+Math.random()*3;
+      var c=colors[Math.floor(Math.random()*colors.length)];
+      l.style.left=(Math.random()*100)+'%';
+      l.style.width=w+'px';
+      l.style.background='linear-gradient(to bottom,transparent,'+c+' 50%,transparent)';
+      l.style.boxShadow='0 0 12px '+c;
+      l.style.setProperty('--d',(2.2+Math.random()*0.9).toFixed(2)+'s');
+      streaks.appendChild(l);
+    }
+  }
+  function playIntro(){
+    overlay.classList.remove('play');
+    void overlay.offsetWidth;
+    overlay.classList.add('play');
+    setTimeout(function(){
+      overlay.classList.add('fade-out');
+      setTimeout(function(){ overlay.remove(); }, 500);
+    }, 3800);
+  }
+  playIntro();
+})();
 </script>
 </body>
 </html>
