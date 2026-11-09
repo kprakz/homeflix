@@ -1,5 +1,6 @@
 package com.homeflix.app.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -108,7 +110,7 @@ fun PinScreen(
                         )
                     }
                     Text(
-                        text = "Enter the PIN or password.",
+                        text = "Unlock your library.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
@@ -161,8 +163,14 @@ fun PinScreen(
                     }
 
                     Spacer(Modifier.height(4.dp))
-                    PremiumTextButton(onClick = onDisconnect) {
-                        Text("Use a different computer")
+                    PremiumOutlinedButton(
+                        onClick = onDisconnect,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = HomeflixRed),
+                        border = BorderStroke(1.dp, HomeflixRed),
+                    ) {
+                        Text("Use a different device")
                     }
 
                     HorizontalDivider(
