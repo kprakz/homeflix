@@ -2,7 +2,9 @@
 
 Watch the movies on your Windows PC, Mac or Linux computer from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. No account, no internet upload, no subscription.
 
-**Website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
+> **Unofficial fork.** This repository is an **unofficial**, community-maintained fork. It is **not** an official HOMEFLIX release and is not endorsed by the upstream project. Official project and downloads: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/) and [github.com/kprakz/homeflix](https://github.com/kprakz/homeflix).
+
+**Upstream (official) website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
 
 > **This fork** adds a native Android app. The Windows, macOS and Linux installers are still published by the upstream project; Android builds and release files come from [this fork](https://github.com/VigneshVijayK/homeflix-android-fork).
 
@@ -447,4 +449,4 @@ HOMEFLIX ships unmodified FFmpeg programs, which are GPL-licensed. See `vendor/f
 
 HOMEFLIX's own code is released under the [MIT License](LICENSE): you're free to use, change and share it, as long as you keep the copyright notice. The bundled FFmpeg programs keep their own GPL license (see above).
 
-**The name.** "HOMEFLIX" refers to this official project. If you publish a fork or your own build, please give it a different name, or clearly mark it as **unofficial**, and use your own version numbers, so people don't mistake it for an official release. Official downloads are only at [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/) and [this repository's releases](https://github.com/kprakz/homeflix/releases). Want to add something, like an Android app? Pull requests are welcome.
+**The name.** "HOMEFLIX" refers to the official upstream project. This repository is an **unofficial** fork: it is not an official HOMEFLIX release and is not endorsed by the upstream author. If you publish a fork or your own build, please give it a different name, or clearly mark it as **unofficial**, and use your own version numbers, so people don't mistake it for an official release. Official downloads are only at [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/) and [github.com/kprakz/homeflix](https://github.com/kprakz/homeflix). Want to add something, like an Android app? Pull requests to the upstream project are welcome.
