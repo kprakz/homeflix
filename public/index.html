@@ -220,49 +220,54 @@
   body.tv .rows { padding-bottom: 120px; }
 
   /* ---------- PIN & Password screen (when the computer's owner turned on a PIN or password) ---------- */
-  #lock { display: none; position: fixed; inset: 0; z-index: 60; background: radial-gradient(ellipse at top, #2a0a0c 0%, var(--bg) 60%); overflow-y: auto; }
+  #lock { display: none; position: fixed; inset: 0; z-index: 60; background: radial-gradient(ellipse at 50% 20%, #2a0a0c 0%, var(--bg) 60%); overflow-y: auto; }
   #lock.on { display: flex; padding: calc(24px + env(safe-area-inset-top)) 16px 24px; }
-  .lock-box { width: min(380px, 100%); margin: auto; text-align: center; }
-  .lock-box .logo { font-size: 52px; cursor: default; margin-bottom: 14px; }
-  .lock-box p { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
-  .pin-field-wrap { position: relative; display: flex; align-items: center; margin-bottom: 12px; }
-  .pin-input { width: 100%; height: 52px; padding: 0 48px 0 16px; background: rgba(255,255,255,.08); border: 1.5px solid rgba(255,255,255,.2); border-radius: 12px; color: #fff; font-size: 18px; font-weight: 500; outline: none; transition: border-color .2s; }
-  .pin-input:focus { border-color: var(--red); background: rgba(255,255,255,.12); }
-  .pin-toggle-btn { position: absolute; right: 10px; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+  .lock-box { width: min(440px, 100%); margin: auto; text-align: center; }
+  .lock-box .logo { font-size: clamp(56px, 14vw, 72px); cursor: default; margin: 0; letter-spacing: .04em; }
+  .lock-box .lock-sub { color: var(--muted); margin: 20px 0 32px; font-size: 18px; }
+  .pin-field-wrap { position: relative; display: flex; align-items: center; gap: 12px; height: 64px; padding: 0 12px 0 20px; background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.10); border-radius: 18px; transition: border-color .2s, background .2s; }
+  .pin-field-wrap:focus-within { border-color: var(--red); background: rgba(255,255,255,.04); }
+  .pin-lead { width: 20px; height: 20px; flex: 0 0 auto; color: var(--muted); }
+  .pin-input { flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; color: #fff; font-size: 20px; font-weight: 500; outline: none; }
+  .pin-input::placeholder { color: var(--dim); }
+  .pin-toggle-btn { flex: 0 0 auto; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
   .pin-toggle-btn:hover { color: #fff; }
-  .pin-toggle-btn svg { width: 20px; height: 20px; }
-  .lock-msg { min-height: 24px; font-size: 14px; color: #ff6b6b; margin-bottom: 12px; }
+  .pin-toggle-btn svg { width: 26px; height: 26px; }
+  .lock-msg { min-height: 24px; font-size: 14px; color: #ff6b6b; margin: 12px 0; padding: 0 4px; }
   .btn-unlock {
-    width: 220px; max-width: 100%; height: 44px; margin: 0 auto 14px; background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border: 0;
-    border-radius: 10px; color: #fff; font-size: 15px; font-weight: 700; letter-spacing: 0.03em; cursor: pointer;
-    box-shadow: 0 4px 14px rgba(229,9,20,.35); transition: transform .2s, box-shadow .2s, background .2s;
+    width: 100%; height: 58px; margin: 0 0 4px; background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border: 0;
+    border-radius: 18px; color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
+    box-shadow: 0 10px 30px rgba(229,9,20,.30); transition: transform .2s, box-shadow .2s, filter .2s;
     display: flex; align-items: center; justify-content: center; text-align: center; box-sizing: border-box;
   }
-  .btn-unlock:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(229,9,20,.5); }
-  .btn-unlock:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(229,9,20,.3); }
-  .keypad-wrap { margin-top: 8px; }
-  .btn-text {
-    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); color: #fff;
-    font-size: 13.5px; font-weight: 500; cursor: pointer; border-radius: 50px; padding: 7px 16px;
-    text-decoration: none; transition: background .2s, border-color .2s, transform .15s; display: inline-flex; align-items: center; gap: 6px;
-  }
-  .btn-text:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.3); transform: translateY(-1px); }
-  .btn-text:active { transform: translateY(0); }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
-  .keypad button { height: 56px; border: 0; border-radius: 50%; width: 56px; justify-self: center; background: rgba(255,255,255,.1); color: #fff; font-size: 22px; font-weight: 500; cursor: pointer; }
-  .keypad button:hover { background: rgba(255,255,255,.2); }
+  .btn-unlock:hover { filter: brightness(1.15); box-shadow: 0 12px 34px rgba(229,9,20,.42); }
+  .btn-unlock:active { transform: translateY(0); filter: brightness(1.05); }
+  .keypad-wrap { margin-top: 24px; }
+  .keypad-toggles { display: flex; justify-content: center; align-items: center; margin: 8px 0 0; }
+  .seg { display: inline-flex; gap: 2px; padding: 4px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 999px; }
+  .seg-btn { background: transparent; border: 0; color: var(--muted); font-size: 15px; font-weight: 600; letter-spacing: .01em; padding: 8px 20px; border-radius: 999px; cursor: pointer; transition: background .18s, color .18s, box-shadow .18s; -webkit-tap-highlight-color: transparent; }
+  .seg-btn:hover { color: #fff; }
+  .seg-btn.active { background: rgba(229,9,20,.18); color: #fff; box-shadow: inset 0 0 0 1px rgba(229,9,20,.45); }
+  .seg-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: min(270px, 100%); margin: 16px auto 0; animation: padIn .24s ease; }
+  .keypad button { height: 60px; border: 1px solid rgba(255,255,255,.10); border-radius: 16px; background: rgba(255,255,255,.05); color: #fff; font-size: 22px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s, transform .1s; -webkit-tap-highlight-color: transparent; }
+  .keypad button:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.20); }
+  .keypad button:active { transform: scale(.96); }
   .keypad button:disabled { opacity: .35; }
-  .keypad .go { background: var(--red); font-size: 15px; font-weight: 700; }
+  .keypad .go { background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border-color: transparent; font-size: 15px; font-weight: 700; letter-spacing: .02em; }
+  .keypad .go:hover { background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); filter: brightness(1.12); }
   .keypad button:focus-visible, body.tv .keypad button:focus { outline: 3px solid #fff; outline-offset: 3px; }
   #lock.shake .pin-field-wrap { animation: shake .35s; }
   @keyframes shake { 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
-  .keypad-toggles { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 6px; }
-  .qwerty { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; background: rgba(0,0,0,.3); padding: 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,.1); }
-  .qwerty-row { display: flex; justify-content: center; gap: 4px; }
-  .qwerty button { height: 42px; min-width: 28px; flex: 1; border: 0; border-radius: 6px; background: rgba(255,255,255,.1); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: background .15s; }
-  .qwerty button:hover { background: rgba(255,255,255,.22); }
-  .qwerty button.wide { flex: 1.4; font-size: 13px; font-weight: 700; background: rgba(255,255,255,.16); }
-  .qwerty button.go { background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); font-weight: 700; }
+  @keyframes padIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .qwerty { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; background: rgba(255,255,255,.02); padding: 10px; border-radius: 18px; border: 1px solid rgba(255,255,255,.08); animation: padIn .24s ease; }
+  .qwerty-row { display: flex; justify-content: center; gap: 6px; }
+  .qwerty button { height: 44px; min-width: 28px; flex: 1; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; background: rgba(255,255,255,.05); color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: background .15s, border-color .15s, transform .1s; -webkit-tap-highlight-color: transparent; }
+  .qwerty button:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.16); }
+  .qwerty button:active { transform: scale(.96); }
+  .qwerty button.wide { flex: 1.4; font-size: 13px; font-weight: 700; background: rgba(255,255,255,.10); }
+  .qwerty button.go { background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border-color: transparent; font-weight: 700; }
+  .qwerty button.go:hover { filter: brightness(1.12); }
   .qwerty button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
   /* ---------- intro animation (user verbatim) ---------- */
@@ -321,19 +326,22 @@
 <section id="lock" aria-label="Enter PIN or password">
   <div class="lock-box">
     <div class="logo">HOMEFLIX</div>
-    <p>Unlock your library.</p>
+    <p class="lock-sub">Unlock your library</p>
     <div class="pin-field-wrap">
+      <svg class="pin-lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       <input id="pinInput" type="password" class="pin-input" placeholder="Enter PIN or password" maxlength="32" autocomplete="current-password">
       <button type="button" id="pinToggleBtn" class="pin-toggle-btn" aria-label="Toggle password visibility">
-        <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><line id="eyeSlash" x1="3" y1="3" x2="21" y2="21" style="display:none"/></svg>
       </button>
     </div>
     <div class="lock-msg" id="pinMsg" role="alert"></div>
     <button type="button" id="unlockBtn" class="btn btn-unlock">Unlock</button>
     <div class="keypad-wrap">
       <div class="keypad-toggles">
-        <button type="button" id="toggleQwertyBtn" class="btn-text">QWERTY Keyboard</button>
-        <button type="button" id="toggleKeypadBtn" class="btn-text">Numeric Keypad</button>
+        <div class="seg" role="group" aria-label="Keyboard type">
+          <button type="button" id="toggleKeypadBtn" class="seg-btn" aria-pressed="false">Numeric</button>
+          <button type="button" id="toggleQwertyBtn" class="seg-btn" aria-pressed="false">QWERTY</button>
+        </div>
       </div>
       <div class="qwerty" id="qwertyKeyboard" style="display:none;"></div>
       <div class="keypad" id="keypad" style="display:none;"></div>
@@ -1274,6 +1282,7 @@ function showLock() {
     setTimeout(() => $('pinInput').focus(), 100);
   }
   if ($('pinMsg')) $('pinMsg').textContent = '';
+  if (typeof syncPadToggles === 'function') syncPadToggles();
 }
 
 async function unlock() {
@@ -1329,18 +1338,30 @@ if ($('pinToggleBtn')) {
     if (!inp) return;
     pinInputVisible = !pinInputVisible;
     inp.type = pinInputVisible ? 'text' : 'password';
+    const slash = $('eyeSlash');
+    if (slash) slash.style.display = pinInputVisible ? '' : 'none';
   });
 }
+function syncPadToggles() {
+  const kp = $('keypad');
+  const q = $('qwertyKeyboard');
+  const kpBtn = $('toggleKeypadBtn');
+  const qBtn = $('toggleQwertyBtn');
+  const kpOn = !!kp && kp.style.display !== 'none';
+  const qOn = !!q && q.style.display !== 'none';
+  if (kpBtn) { kpBtn.classList.toggle('active', kpOn); kpBtn.setAttribute('aria-pressed', kpOn ? 'true' : 'false'); }
+  if (qBtn) { qBtn.classList.toggle('active', qOn); qBtn.setAttribute('aria-pressed', qOn ? 'true' : 'false'); }
+}
+
 if ($('toggleKeypadBtn')) {
   $('toggleKeypadBtn').addEventListener('click', () => {
     const kp = $('keypad');
     const q = $('qwertyKeyboard');
-    if (q) q.style.display = 'none';
     if (!kp) return;
     const showing = kp.style.display !== 'none';
+    if (q) q.style.display = 'none';
     kp.style.display = showing ? 'none' : 'grid';
-    $('toggleKeypadBtn').textContent = showing ? 'Numeric Keypad' : 'Hide Keypad';
-    if ($('toggleQwertyBtn')) $('toggleQwertyBtn').textContent = 'QWERTY Keyboard';
+    syncPadToggles();
   });
 }
 
@@ -1378,12 +1399,12 @@ if ($('toggleQwertyBtn')) {
   $('toggleQwertyBtn').addEventListener('click', () => {
     const q = $('qwertyKeyboard');
     const kp = $('keypad');
-    if (kp) kp.style.display = 'none';
+    if (!q) return;
     renderQwerty();
     const showing = q.style.display !== 'none';
+    if (kp) kp.style.display = 'none';
     q.style.display = showing ? 'none' : 'flex';
-    $('toggleQwertyBtn').textContent = showing ? 'QWERTY Keyboard' : 'Hide QWERTY';
-    if ($('toggleKeypadBtn')) $('toggleKeypadBtn').textContent = 'Numeric Keypad';
+    syncPadToggles();
   });
 }
 
