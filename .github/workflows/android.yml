@@ -104,17 +104,17 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           mkdir -p out
           if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk "out/HOMEFLIX-$VERSION.apk"
-            cp android/app/build/outputs/bundle/release/app-release.aab "out/HOMEFLIX-$VERSION.aab"
-            echo "aab=out/HOMEFLIX-$VERSION.aab" >> "$GITHUB_OUTPUT"
+            cp android/app/build/outputs/apk/release/app-release.apk "out/homeflix-android-fork-$VERSION.apk"
+            cp android/app/build/outputs/bundle/release/app-release.aab "out/homeflix-android-fork-$VERSION.aab"
+            echo "aab=out/homeflix-android-fork-$VERSION.aab" >> "$GITHUB_OUTPUT"
           else
-            cp android/app/build/outputs/apk/debug/app-debug.apk "out/HOMEFLIX-$VERSION-debug.apk"
+            cp android/app/build/outputs/apk/debug/app-debug.apk "out/homeflix-android-fork-$VERSION-debug.apk"
           fi
           ls -lh out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: HOMEFLIX-android
+          name: homeflix-android-fork-android
           path: out/*
           if-no-files-found: error
 
