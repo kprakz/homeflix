@@ -4,7 +4,7 @@ Watch the movies on your Windows PC, Mac or Linux computer from your iPad, iPhon
 
 **Website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
 
-> **This fork** adds a native Android app. The Windows, macOS and Linux installers are still published by the upstream project; Android builds and release files come from [this fork](https://github.com/VigneshVijayK/homeflix).
+> **This fork** adds a native Android app. The Windows, macOS and Linux installers are still published by the upstream project; Android builds and release files come from [this fork](https://github.com/VigneshVijayK/homeflix-android-fork).
 
 ## Two ways to use HOMEFLIX
 
@@ -79,7 +79,7 @@ Android 2.0.0 is a stability update. The 1.6.0 movie/TV series folder features r
   switch it to TV series, or back again. The desktop app has the same two sections.
 
 Download the signed APK or app bundle from the
-[Android 2.0.0 release](https://github.com/VigneshVijayK/homeflix/releases/tag/android-v2.0.0).
+[Latest Android release](https://github.com/VigneshVijayK/homeflix-android-fork/releases/latest).
 
 ---
 
@@ -243,7 +243,7 @@ as the desktop app; see [`android/README.md`](android/README.md#server-mode-on-t
 
 ### Install the APK
 
-1. Download **`HOMEFLIX-<version>.apk`** from [this fork's latest release](https://github.com/VigneshVijayK/homeflix/releases/latest)
+1. Download **`HOMEFLIX-<version>.apk`** from [this fork's latest release](https://github.com/VigneshVijayK/homeflix-android-fork/releases/latest)
    and open it. Android asks once whether to allow installing apps from this source; allow it, then
    tap **Install**.
 2. Open **HOMEFLIX**. It looks for your computer on the same Wi-Fi and lists computers as it finds
