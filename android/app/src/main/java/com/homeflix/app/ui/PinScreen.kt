@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.homeflix.app.ui.theme.Panel
 import com.homeflix.app.ui.theme.HomeflixRed
 
@@ -88,10 +89,15 @@ fun PinScreen(
                             modifier = Modifier.padding(14.dp),
                         )
                     }
-                    Text(
-                        text = state.connection?.name ?: "HOMEFLIX",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
+                    val name = state.connection?.name ?: "HOMEFLIX"
+                    if (name == "HOMEFLIX") {
+                        HomeflixLogo(fontSize = 32.sp)
+                    } else {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                    }
                     Text(
                         text = "Enter the PIN or password.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

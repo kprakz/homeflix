@@ -90,13 +90,7 @@ fun ConnectScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = "HOMEFLIX",
-                color = HomeflixRed,
-                fontWeight = FontWeight.Black,
-                fontSize = 42.sp,
-                letterSpacing = 3.sp,
-            )
+            HomeflixLogo(fontSize = 42.sp)
             Text(
                 text = "Your library. On every screen.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

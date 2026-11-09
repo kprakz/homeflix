@@ -133,12 +133,7 @@ fun LibraryScreen(
                 ),
                 title = {
                     Column {
-                        Text(
-                            text = "HOMEFLIX",
-                            color = HomeflixRed,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 2.sp,
-                        )
+                        HomeflixLogo(fontSize = 32.sp)
                         state.connection?.name?.let { name ->
                             Text(
                                 text = name,

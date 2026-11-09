@@ -40,6 +40,7 @@ import com.homeflix.app.ui.ServerScreen
 import com.homeflix.app.player.PlayerViewModel
 import com.homeflix.app.ui.AppViewModel
 import com.homeflix.app.ui.ConnectScreen
+import com.homeflix.app.ui.HomeflixLogo
 import com.homeflix.app.ui.LibraryScreen
 import com.homeflix.app.ui.PinScreen
 import com.homeflix.app.ui.theme.HomeflixRed
@@ -175,13 +176,7 @@ private fun Splash() {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "HOMEFLIX",
-                color = HomeflixRed,
-                fontWeight = FontWeight.Black,
-                fontSize = 40.sp,
-                letterSpacing = 3.sp,
-            )
+            HomeflixLogo(fontSize = 48.sp)
             Spacer(Modifier.height(20.dp))
             CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp)
         }
