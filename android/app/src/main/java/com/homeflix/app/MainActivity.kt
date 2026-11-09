@@ -1,0 +1,349 @@
+package com.homeflix.app
+
+import android.content.Intent
+import android.graphics.Color as AndroidColor
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import com.homeflix.app.ui.BebasNeueFamily
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.homeflix.app.player.PlayerScreen
+import com.homeflix.app.server.ServerService
+import com.homeflix.app.ui.ServerScreen
+import com.homeflix.app.player.PlayerViewModel
+import com.homeflix.app.ui.AppViewModel
+import com.homeflix.app.ui.ConnectScreen
+import com.homeflix.app.ui.HomeflixLogo
+import com.homeflix.app.ui.LibraryScreen
+import com.homeflix.app.ui.PinScreen
+import com.homeflix.app.ui.theme.HomeflixRed
+import com.homeflix.app.ui.theme.HomeflixTheme
+import com.homeflix.app.ui.theme.Ink
+
+class MainActivity : ComponentActivity() {
+    private val openServerUi = mutableStateOf(false)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+        )
+        super.onCreate(savedInstanceState)
+        openServerUi.value = intent?.getBooleanExtra(ServerService.EXTRA_OPEN_SERVER, false) == true
+        setContent {
+            HomeflixTheme {
+                HomeflixRoot(openServerUi)
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(ServerService.EXTRA_OPEN_SERVER, false)) openServerUi.value = true
+    }
+}
+
+@Composable
+private fun HomeflixRoot(openServerUi: androidx.compose.runtime.State<Boolean>) {
+    val appVm: AppViewModel = viewModel()
+    val playerVm: PlayerViewModel = viewModel()
+    val state by appVm.state.collectAsStateWithLifecycle()
+    var playingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var startOverFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var serverMode by rememberSaveable { mutableStateOf(false) }
+    val serverState by ServerService.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // The server notification's tap intent opens the Share-this-phone screen (consumed once).
+    val serverUiRequested by openServerUi
+    LaunchedEffect(serverUiRequested) {
+        if (serverUiRequested) {
+            serverMode = true
+            (openServerUi as? androidx.compose.runtime.MutableState<Boolean>)?.value = false
+        }
+    }
+
+    val playingItem = remember(state.library, playingId) {
+        playingId?.let { id -> state.library.firstOrNull { it.id == id } }
+    }
+
+    LaunchedEffect(playingId, startOverFor) {
+        playingId?.let { playerVm.open(it, startOver = startOverFor == it) }
+    }
+
+    BackHandler(enabled = playingId != null) {
+        playingId = null
+        startOverFor = null
+        appVm.refreshResume()
+    }
+
+    BackHandler(enabled = playingId == null && serverMode) {
+        serverMode = false
+    }
+
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(3800)
+        showSplash = false
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Crossfade(
+            targetState = when {
+                showSplash -> "splash"
+                serverMode -> "server"
+                state.initializing -> "splash"
+                playingItem != null -> "player"
+                state.connection == null -> "connect"
+                state.needsPin -> "pin"
+                else -> "library"
+            },
+            animationSpec = tween(durationMillis = if (showSplash) 350 else 0),
+            label = "screen-transition",
+        ) { screen ->
+            when (screen) {
+                "server" -> ServerScreen(
+                    state = serverState,
+                    onStart = { ServerService.start(context) },
+                    onStop = { ServerService.stop(context) },
+                    onBack = { serverMode = false },
+                )
+                "splash" -> Splash(onFinished = { showSplash = false })
+                "player" -> PlayerScreen(
+                    vm = playerVm,
+                    item = playingItem!!,
+                    library = state.library,
+                    onClose = {
+                        playingId = null
+                        startOverFor = null
+                        appVm.refreshResume()
+                    },
+                    onNext = { nextId ->
+                        startOverFor = null
+                        playingId = nextId
+                    },
+                )
+                "connect" -> ConnectScreen(
+                    state = state,
+                    isServerRunning = serverState.running,
+                    onConnect = appVm::connect,
+                    onDiscover = appVm::refreshDiscovery,
+                    onServerMode = {
+                        serverMode = true
+                    },
+                )
+                "pin" -> PinScreen(
+                    state = state,
+                    onUnlock = appVm::unlock,
+                    onDisconnect = appVm::disconnect,
+                )
+                else -> LibraryScreen(
+                    state = state,
+                    onPlay = { id, startOver ->
+                        startOverFor = if (startOver) id else null
+                        playingId = id
+                    },
+                    onRefresh = appVm::refreshLibrary,
+                    onDisconnect = appVm::disconnect,
+                    thumbUrl = { id, hero -> appVm.thumbUrl(id, hero) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Splash(onFinished: () -> Unit = {}) {
+    val letters = "HOMEFLIX".toList()
+    var startAnim by remember { mutableStateOf(false) }
+
+    val streaks = remember {
+        val colors = listOf(
+            Color(0xFFE50914),
+            Color(0xFFFF3B30),
+            Color(0xFF3A5BFF),
+            Color(0xFF8A2BE2),
+            Color(0xFFFF6A00),
+            Color(0xFF00B3FF)
+        )
+        List(70) { i ->
+            Triple(
+                (i * 1.43f) % 100f,
+                1f + (i * 0.04f) % 3f,
+                colors[i % colors.size]
+            )
+        }
+    }
+
+    val transition = updateTransition(targetState = startAnim, label = "intro")
+
+    val progress by transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 3800, easing = LinearEasing) },
+        label = "progress"
+    ) { active -> if (active) 1f else 0f }
+
+    val zoomScale by transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 1000, delayMillis = 2500, easing = FastOutSlowInEasing) },
+        label = "zoom"
+    ) { active -> if (active) 1.08f else 1f }
+
+    val wordAlpha by transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 800, delayMillis = 2500, easing = FastOutSlowInEasing) },
+        label = "alpha"
+    ) { active -> if (active) 0f else 1f }
+
+    val glowAlpha by transition.animateFloat(
+        transitionSpec = {
+            keyframes {
+                durationMillis = 4000
+                0f at 0
+                0f at 2100
+                1f at 2500
+                0f at 4000
+            }
+        },
+        label = "glow"
+    ) { active -> if (active) 1f else 0f }
+
+    LaunchedEffect(Unit) {
+        startAnim = true
+        kotlinx.coroutines.delay(3300)
+        onFinished()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val canvasWidth = size.width
+            val canvasHeight = size.height
+
+            if (glowAlpha > 0f) {
+                drawCircle(
+                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(HomeflixRed.copy(alpha = glowAlpha * 0.5f), Color.Transparent),
+                        center = center,
+                        radius = canvasWidth * 0.7f
+                    ),
+                    radius = canvasWidth * 0.7f,
+                    center = center
+                )
+            }
+
+            streaks.forEachIndexed { index, (leftPercent, widthPx, streakColor) ->
+                val streakProgress = ((progress * 3800f) - (300f + (index * 15f))).coerceIn(0f, 1500f) / 1500f
+                if (streakProgress > 0f) {
+                    val alpha = if (streakProgress < 0.3f) (streakProgress / 0.3f) * 0.9f else (1f - ((streakProgress - 0.3f) / 0.7f)).coerceAtLeast(0f)
+                    val scaleY = ((progress * 3800f) - (index * 10f)).coerceIn(0f, 1800f) / 1800f
+
+                    val x = (leftPercent / 100f) * canvasWidth
+                    val rectWidth = widthPx * density
+
+                    drawRect(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, streakColor.copy(alpha = alpha), Color.Transparent),
+                            startY = 0f,
+                            endY = canvasHeight * scaleY
+                        ),
+                        topLeft = androidx.compose.ui.geometry.Offset(x, 0f),
+                        size = androidx.compose.ui.geometry.Size(rectWidth, canvasHeight * scaleY)
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .graphicsLayer(
+                    scaleX = zoomScale,
+                    scaleY = zoomScale,
+                    alpha = wordAlpha
+                ),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            letters.forEachIndexed { index, ch ->
+                val delay = 300 + (index * 90)
+                val letterTransition = updateTransition(targetState = startAnim, label = "letter-$index")
+
+                val letterAlpha by letterTransition.animateFloat(
+                    transitionSpec = { tween(durationMillis = 700, delayMillis = delay, easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)) },
+                    label = "alpha-$index"
+                ) { active -> if (active) 1f else 0f }
+
+                val letterOffsetY by letterTransition.animateFloat(
+                    transitionSpec = { tween(durationMillis = 700, delayMillis = delay, easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)) },
+                    label = "offset-$index"
+                ) { active -> if (active) 0f else -40f }
+
+                Text(
+                    text = ch.toString(),
+                    color = HomeflixRed,
+                    fontFamily = BebasNeueFamily,
+                    fontSize = 72.sp,
+                    fontWeight = FontWeight.Normal,
+                    modifier = Modifier
+                        .graphicsLayer(
+                            alpha = letterAlpha,
+                            translationY = letterOffsetY
+                        )
+                )
+            }
+        }
+    }
+}

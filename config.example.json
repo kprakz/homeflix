@@ -1,5 +1,8 @@
 {
   "port": 8080,
-  "folders": ["C:\\Users\\YOU\\Videos"],
+  "folders": [
+    { "path": "C:\\Users\\YOU\\Videos", "type": "movies" },
+    { "path": "C:\\Users\\YOU\\TV Shows", "type": "series" }
+  ],
   "minSizeMB": 5
 }

@@ -1,7 +1,7 @@
 {
   "name": "homeflix",
   "productName": "HOMEFLIX",
-  "version": "1.4.1",
+  "version": "2.0.2",
   "description": "Stream the movies on your laptop to your iPad, phone or TV over your home Wi-Fi.",
   "author": {
     "name": "HOMEFLIX",
@@ -19,7 +19,8 @@
     "dist": "node scripts/get-ffmpeg.mjs && electron-builder --win --publish never",
     "dist:mac": "node scripts/get-ffmpeg.mjs && electron-builder --mac --publish never",
     "world-grid": "node scripts/make-world-grid.mjs",
-    "dist:linux": "node scripts/get-ffmpeg.mjs && electron-builder --linux --publish never"
+    "dist:linux": "node scripts/get-ffmpeg.mjs && electron-builder --linux --publish never",
+    "test:server": "node --test test/server.test.js"
   },
   "dependencies": {
     "hls.js": "^1.7.3",

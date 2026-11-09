@@ -46,7 +46,27 @@
   .search svg { width: 22px; height: 22px; flex: none; cursor: pointer; }
   .search input { width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #fff; font-size: 15px; transition: width .3s; }
   .search.open input { width: min(240px, 42vw); }
-  @media (max-width: 600px) { nav { display: none; } }
+  .logout-btn {
+    display: none; align-items: center; gap: 6px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    border-radius: 8px; padding: 6px 12px; color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    transition: background .2s, border-color .2s; flex: none; margin-left: 12px;
+  }
+  .logout-btn:hover { background: rgba(229,9,20,.8); border-color: var(--red); }
+  .logout-btn svg { width: 16px; height: 16px; flex: none; }
+  .gh-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 6px 12px; color: #fff; font-size: 13.5px; font-weight: 600; text-decoration: none; cursor: pointer; flex: none; margin-left: 12px; transition: background .2s, border-color .2s; }
+  .gh-btn:hover { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.35); }
+  .gh-btn svg { width: 16px; height: 16px; flex: none; }
+  .lock-credit { margin: 28px auto 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .lock-credit .credit { color: var(--dim); font-size: 12.5px; line-height: 1.4; max-width: 340px; }
+  .lock-credit .gh-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .lock-credit .gh-btn { margin-left: 0; }
+  @media (max-width: 600px) {
+    .logout-label, .gh-header .gh-label { display: none; }
+    .logout-btn { padding: 8px; border-radius: 50%; margin-left: 8px; }
+    .gh-header { padding: 8px; border-radius: 50%; margin-left: 8px; }
+    .lock-credit .gh-btn { padding: 8px 14px; border-radius: 999px; margin-left: 0; }
+    nav { display: none; }
+  }
 
   /* ---------- hero ---------- */
   /* The banner grows with its text (long titles, short laptop screens) instead of letting the text slide
@@ -208,46 +228,108 @@
   body.tv .row h2 { font-size: 24px; }
   body.tv .rows { padding-bottom: 120px; }
 
-  /* ---------- PIN screen (when the computer's owner turned on a PIN) ---------- */
-  #lock { display: none; position: fixed; inset: 0; z-index: 60; background: radial-gradient(ellipse at top, #2a0a0c 0%, var(--bg) 60%); overflow-y: auto; }
+  /* ---------- PIN & Password screen (when the computer's owner turned on a PIN or password) ---------- */
+  #lock { display: none; position: fixed; inset: 0; z-index: 60; background: radial-gradient(ellipse at 50% 20%, #2a0a0c 0%, var(--bg) 60%); overflow-y: auto; }
   #lock.on { display: flex; padding: calc(24px + env(safe-area-inset-top)) 16px 24px; }
-  .lock-box { width: min(340px, 100%); margin: auto; text-align: center; } /* auto margins: centred, yet scrollable on short screens */
-  .lock-box .logo { font-size: 52px; cursor: default; margin-bottom: 18px; }
-  .lock-box p { color: var(--muted); margin: 0 0 18px; }
-  .dots { display: flex; justify-content: center; gap: 14px; height: 18px; margin-bottom: 14px; }
-  .dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #777; }
-  .dots i.on { background: #fff; border-color: #fff; }
-  .lock-msg { min-height: 24px; font-size: 15px; color: #ff6b6b; margin-bottom: 10px; }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .keypad button { height: 64px; border: 0; border-radius: 50%; width: 64px; justify-self: center; background: rgba(255,255,255,.1); color: #fff; font-size: 26px; font-weight: 500; }
-  .keypad button:hover { background: rgba(255,255,255,.2); }
-  .keypad button:disabled { opacity: .35; }
-  .keypad .go { background: var(--red); font-size: 16px; font-weight: 700; }
-  .keypad .go:hover { background: #f6121d; }
-  .keypad button:focus-visible, body.tv .keypad button:focus { outline: 3px solid #fff; outline-offset: 3px; }
-  @media (max-height: 560px) {
-    .lock-box .logo { font-size: 36px; margin-bottom: 6px; }
-    .lock-box p { margin-bottom: 10px; font-size: 14px; }
-    .keypad { gap: 8px; }
-    .keypad button { width: 50px; height: 50px; font-size: 21px; }
+  .lock-box { width: min(440px, 100%); margin: auto; text-align: center; }
+  .lock-box .logo { font-size: clamp(56px, 14vw, 72px); cursor: default; margin: 0; letter-spacing: .04em; }
+  .lock-box .lock-sub { color: var(--muted); margin: 20px 0 32px; font-size: 18px; }
+  .pin-field-wrap { position: relative; display: flex; align-items: center; gap: 12px; height: 64px; padding: 0 12px 0 20px; background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.10); border-radius: 18px; transition: border-color .2s, background .2s; }
+  .pin-field-wrap:focus-within { border-color: var(--red); background: rgba(255,255,255,.04); }
+  .pin-lead { width: 20px; height: 20px; flex: 0 0 auto; color: var(--muted); }
+  .pin-input { flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; color: #fff; font-size: 20px; font-weight: 500; outline: none; }
+  .pin-input::placeholder { color: var(--dim); }
+  .pin-toggle-btn { flex: 0 0 auto; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+  .pin-toggle-btn:hover { color: #fff; }
+  .pin-toggle-btn svg { width: 26px; height: 26px; }
+  .lock-msg { min-height: 24px; font-size: 14px; color: #ff6b6b; margin: 12px 0; padding: 0 4px; }
+  .btn-unlock {
+    width: 100%; height: 58px; margin: 0 0 4px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10);
+    border-radius: 18px; color: var(--dim); font-size: 20px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
+    box-shadow: none; opacity: .55; transition: transform .2s, box-shadow .2s, filter .2s, background .2s, opacity .2s, color .2s;
+    display: flex; align-items: center; justify-content: center; text-align: center; box-sizing: border-box;
   }
-  #lock.shake .dots { animation: shake .35s; }
+  .btn-unlock.ready {
+    background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border: 0; color: #fff; opacity: 1;
+    box-shadow: 0 10px 30px rgba(229,9,20,.30);
+  }
+  .btn-unlock.ready:hover { filter: brightness(1.15); box-shadow: 0 12px 34px rgba(229,9,20,.42); }
+  .btn-unlock:active { transform: translateY(0); filter: brightness(1.05); }
+  .keypad-wrap { margin-top: 24px; }
+  .keypad-toggles { display: flex; justify-content: center; align-items: center; margin: 8px 0 0; }
+  .seg { display: inline-flex; gap: 2px; padding: 4px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 999px; }
+  .seg-btn { background: transparent; border: 0; color: var(--muted); font-size: 15px; font-weight: 600; letter-spacing: .01em; padding: 8px 20px; border-radius: 999px; cursor: pointer; transition: background .18s, color .18s, box-shadow .18s; -webkit-tap-highlight-color: transparent; }
+  .seg-btn:hover { color: #fff; }
+  .seg-btn.active { background: rgba(229,9,20,.18); color: #fff; box-shadow: inset 0 0 0 1px rgba(229,9,20,.45); }
+  .seg-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: min(270px, 100%); margin: 16px auto 0; animation: padIn .24s ease; }
+  .keypad button { height: 60px; border: 1px solid rgba(255,255,255,.10); border-radius: 16px; background: rgba(255,255,255,.05); color: #fff; font-size: 22px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s, transform .1s; -webkit-tap-highlight-color: transparent; }
+  .keypad button:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.20); }
+  .keypad button:active { transform: scale(.96); }
+  .keypad button:disabled { opacity: .35; }
+  .keypad .go { background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border-color: transparent; font-size: 15px; font-weight: 700; letter-spacing: .02em; }
+  .keypad .go:hover { background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); filter: brightness(1.12); }
+  .keypad button:focus-visible, body.tv .keypad button:focus { outline: 3px solid #fff; outline-offset: 3px; }
+  #lock.shake .pin-field-wrap { animation: shake .35s; }
   @keyframes shake { 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+  @keyframes padIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .qwerty { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; background: rgba(255,255,255,.02); padding: 10px; border-radius: 18px; border: 1px solid rgba(255,255,255,.08); animation: padIn .24s ease; }
+  .qwerty-row { display: flex; justify-content: center; gap: 6px; }
+  .qwerty button { height: 44px; min-width: 28px; flex: 1; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; background: rgba(255,255,255,.05); color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: background .15s, border-color .15s, transform .1s; -webkit-tap-highlight-color: transparent; }
+  .qwerty button:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.16); }
+  .qwerty button:active { transform: scale(.96); }
+  .qwerty button.wide { flex: 1.4; font-size: 13px; font-weight: 700; background: rgba(255,255,255,.10); }
+  .qwerty button.go { background: linear-gradient(135deg, var(--red) 0%, var(--red-dark) 100%); border-color: transparent; font-weight: 700; }
+  .qwerty button.go:hover { filter: brightness(1.12); }
+  .qwerty button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  /* ---------- intro animation (user verbatim) ---------- */
+  #introOverlay { position: fixed; inset: 0; z-index: 100; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; transition: opacity .5s; }
+  #introOverlay.fade-out { opacity: 0; pointer-events: none; }
+  #introOverlay .stage { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000; }
+  #introOverlay .word { display: flex; font-family: var(--display); font-size: clamp(3rem, 14vw, 10rem); letter-spacing: .04em; color: var(--red); position: relative; z-index: 2; will-change: transform, opacity; }
+  #introOverlay .word span { display: inline-block; opacity: 0; text-shadow: 0 0 18px rgba(229,9,20,.55), 0 0 60px rgba(229,9,20,.35); }
+  #introOverlay .streaks { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+  #introOverlay .streaks i { position: absolute; top: 0; bottom: 0; opacity: 0; transform: scaleY(0); }
+  #introOverlay .glow { position: absolute; inset: 0; z-index: 0; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(229,9,20,.5), transparent 55%); }
+  #introOverlay.play .word span { animation: in .7s cubic-bezier(.2,.8,.2,1) forwards; animation-delay: calc(var(--i)*.09s + .3s); }
+  #introOverlay.play .word { animation: zoom 1.6s cubic-bezier(.7,0,.9,.4) 2.3s forwards; }
+  #introOverlay.play .streaks i { animation: streak 1.8s ease-out forwards; animation-delay: var(--d); }
+  #introOverlay.play .glow { animation: flash 2.2s ease-in-out 2.1s forwards; }
+  @keyframes in { 0% { opacity: 0; transform: translateY(-40px) scaleY(1.6); filter: blur(6px); } 100% { opacity: 1; transform: none; filter: none; } }
+  @keyframes zoom { 0% { transform: scale(1); opacity: 1; filter: blur(0); } 70% { opacity: 1; } 100% { transform: scale(14); opacity: 0; filter: blur(8px); } }
+  @keyframes streak { 0% { opacity: 0; transform: scaleY(0); } 30% { opacity: .9; transform: scaleY(1); } 100% { opacity: 0; transform: scaleY(1); } }
+  @keyframes flash { 0% { opacity: 0; } 40% { opacity: 1; } 100% { opacity: 0; } }
 </style>
 </head>
 <body>
+<div id="introOverlay">
+  <div class="stage" id="introStage">
+    <div class="glow"></div>
+    <div class="streaks" id="introStreaks"></div>
+    <div class="word" id="introWord" aria-label="HOMEFLIX"></div>
+  </div>
+</div>
 <header id="bar">
   <div class="logo" data-home>HOMEFLIX</div>
   <nav>
     <a data-home tabindex="0">Home</a>
-    <a data-jump="row-shows" tabindex="0">TV Shows</a>
+    <a data-jump="row-shows" tabindex="0">Series</a>
     <a data-jump="row-movies" tabindex="0">Movies</a>
     <a data-jump="row-continue" tabindex="0">My List</a>
   </nav>
   <label class="search" id="searchBox">
     <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5" stroke-linecap="round"/></svg>
-    <input id="search" type="search" placeholder="Titles, shows" autocomplete="off">
+    <input id="search" type="search" placeholder="Titles, series" autocomplete="off">
   </label>
+  <button type="button" id="logoutBtn" class="logout-btn" title="Logout" style="display:none;" aria-label="Logout">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    <span class="logout-label">Logout</span>
+  </button>
+  <a class="gh-btn gh-header" href="https://github.com/VigneshVijayK/homeflix-android-fork" target="_blank" rel="noopener noreferrer" title="HOMEFLIX on GitHub" aria-label="HOMEFLIX on GitHub">
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    <span class="gh-label">GitHub</span>
+  </a>
 </header>
 
 <main id="home">
@@ -258,13 +340,42 @@
 
 <div class="modal-bg" id="modal"><div class="modal" id="modalCard"></div></div>
 
-<section id="lock" aria-label="Enter PIN">
+<section id="lock" aria-label="Enter PIN or password">
   <div class="lock-box">
     <div class="logo">HOMEFLIX</div>
-    <p>Enter the PIN set on the HOMEFLIX computer.</p>
-    <div class="dots" id="pinDots"></div>
+    <p class="lock-sub">Unlock your library</p>
+    <div class="pin-field-wrap">
+      <svg class="pin-lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <input id="pinInput" type="password" class="pin-input" placeholder="Enter PIN or password" maxlength="32" autocomplete="current-password">
+      <button type="button" id="pinToggleBtn" class="pin-toggle-btn" aria-label="Toggle password visibility">
+        <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><line id="eyeSlash" x1="3" y1="3" x2="21" y2="21" style="display:none"/></svg>
+      </button>
+    </div>
     <div class="lock-msg" id="pinMsg" role="alert"></div>
-    <div class="keypad" id="keypad"></div>
+    <button type="button" id="unlockBtn" class="btn btn-unlock">Unlock</button>
+    <div class="keypad-wrap">
+      <div class="keypad-toggles">
+        <div class="seg" role="group" aria-label="Keyboard type">
+          <button type="button" id="toggleKeypadBtn" class="seg-btn" aria-pressed="false">Numeric</button>
+          <button type="button" id="toggleQwertyBtn" class="seg-btn" aria-pressed="false">QWERTY</button>
+        </div>
+      </div>
+      <div class="qwerty" id="qwertyKeyboard" style="display:none;"></div>
+      <div class="keypad" id="keypad" style="display:none;"></div>
+    </div>
+    <div class="lock-credit">
+      <span class="credit">Android build by Vignesh Vijay K · Original HOMEFLIX by kprakz</span>
+      <div class="gh-row">
+        <a class="gh-btn" href="https://github.com/VigneshVijayK/homeflix-android-fork" target="_blank" rel="noopener noreferrer" title="Android app on GitHub">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          Android app
+        </a>
+        <a class="gh-btn" href="https://github.com/kprakz/homeflix" target="_blank" rel="noopener noreferrer" title="Original HOMEFLIX project">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          Original project
+        </a>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -306,7 +417,12 @@ async function info(id) {
 
 function parse(m) {
   const x = m.title.match(SERIES_RE);
-  if (x) Object.assign(m, { show: x[1].trim(), season: +x[2], ep: +x[3], epLabel: `S${+x[2]}:E${+x[3]}` });
+  if (x && !m.show && m.folderType === undefined) Object.assign(m, { show: x[1].trim(), season: +x[2], ep: +x[3] });
+  if (m.show) {
+    const season = +(m.season || 1);
+    const ep = +(m.ep || 0);
+    Object.assign(m, { season, ep, epLabel: `S${season}:E${ep}` });
+  }
   return m;
 }
 
@@ -359,10 +475,10 @@ function renderHome() {
 
   let html = row('row-continue', 'Continue Watching', continuing.map(movieCard));
   html += row('row-recent', 'Recently Added', recent);
-  html += showNames.length ? row('row-shows', 'TV Shows', showNames.map(showCard)) : '';
+  html += showNames.length ? row('row-shows', 'Series', showNames.map(showCard)) : '';
   for (const name of showNames) html += row('row-show-' + name.replace(/\W+/g, '-'), name, shows.get(name).map(movieCard));
   html += row('row-movies', 'Movies', films.map(movieCard));
-  $('rows').innerHTML = movies.length ? html : '<div class="empty">No movies yet. On your laptop, open the HOMEFLIX app and choose the folder where your movies are.</div>';
+  $('rows').innerHTML = movies.length ? html : '<div class="empty">No videos yet. On your laptop, open the HOMEFLIX app and add a movie or series folder.</div>';
   renderHero(continuing[0] || movies.find((m) => !m.downloading));
 }
 
@@ -1184,63 +1300,243 @@ $('search').addEventListener('blur', () => { if (!$('search').value) $('searchBo
 window.addEventListener('scroll', () => $('bar').classList.toggle('solid', scrollY > 40), { passive: true });
 window.addEventListener('hashchange', route);
 
-// ---------- PIN ----------
-const PIN_MAX = 8;
-let pin = '';
-function drawPin(msg) {
-  $('pinDots').innerHTML = Array.from({ length: Math.max(4, pin.length) }, (_, n) => `<i class="${n < pin.length ? 'on' : ''}"></i>`).join('');
-  if (msg !== undefined) $('pinMsg').textContent = msg;
-  $('keypad').querySelector('.go').disabled = pin.length < 4;
-}
+// ---------- PIN & Password ----------
+let pinInputVisible = false;
+
 function showLock() {
   closePlayer();
   $('lock').classList.add('on');
   document.body.classList.add('lock');
-  pin = '';
-  drawPin('');
-  if (usingKeys) focusEl($('keypad').querySelector('button'));
+  if ($('pinInput')) {
+    $('pinInput').value = '';
+    setTimeout(() => $('pinInput').focus(), 100);
+  }
+  if ($('pinMsg')) $('pinMsg').textContent = '';
+  syncUnlockBtn();
+  if (typeof syncPadToggles === 'function') syncPadToggles();
 }
+
+function syncUnlockBtn() {
+  const btn = $('unlockBtn');
+  const inp = $('pinInput');
+  if (!btn || !inp) return;
+  btn.classList.toggle('ready', !!(inp.value || '').trim());
+}
+
 async function unlock() {
-  if (pin.length < 4) return;
-  const tried = pin;
-  pin = '';
-  drawPin('');
-  const r = await fetch('/api/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: tried }) }).catch(() => null);
-  const d = r ? await r.json().catch(() => ({})) : { error: 'Can’t reach the computer. Is HOMEFLIX running?' };
+  const tried = ($('pinInput') ? $('pinInput').value || '' : '').trim();
+  if (!tried) {
+    if ($('pinMsg')) $('pinMsg').textContent = 'Please enter your PIN or password.';
+    return;
+  }
+  if ($('pinMsg')) $('pinMsg').textContent = '';
+  const r = await fetch('/api/unlock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: tried })
+  }).catch(() => null);
+
+  const d = r ? await r.json().catch(() => ({})) : { error: 'Can’t reach the server. Is HOMEFLIX running?' };
   if (r && r.ok) {
     try { if (d.key) localStorage.setItem('key', d.key); } catch {}
     $('lock').classList.remove('on');
     document.body.classList.remove('lock');
     return route();
   }
-  drawPin(d.error || 'Wrong PIN. Try again.');
+  if ($('pinMsg')) $('pinMsg').textContent = d.error || 'Wrong PIN or password. Try again.';
   $('lock').classList.remove('shake'); void $('lock').offsetWidth; $('lock').classList.add('shake');
 }
+
 function pinKey(k) {
-  if (k === 'del') pin = pin.slice(0, -1);
-  else if (k === 'go') return unlock();
-  else if (pin.length < PIN_MAX) pin += k;
-  drawPin();
+  const inp = $('pinInput');
+  if (!inp) return;
+  if (k === 'del') {
+    inp.value = inp.value.slice(0, -1);
+  } else if (k === 'go') {
+    return unlock();
+  } else if (inp.value.length < 32) {
+    inp.value += k;
+  }
+  syncUnlockBtn();
 }
+
+if ($('pinInput')) {
+  $('pinInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      unlock();
+    }
+  });
+  $('pinInput').addEventListener('input', syncUnlockBtn);
+}
+if ($('unlockBtn')) {
+  $('unlockBtn').addEventListener('click', () => unlock());
+}
+if ($('pinToggleBtn')) {
+  $('pinToggleBtn').addEventListener('click', () => {
+    const inp = $('pinInput');
+    if (!inp) return;
+    pinInputVisible = !pinInputVisible;
+    inp.type = pinInputVisible ? 'text' : 'password';
+    const slash = $('eyeSlash');
+    if (slash) slash.style.display = pinInputVisible ? '' : 'none';
+  });
+}
+function syncPadToggles() {
+  const kp = $('keypad');
+  const q = $('qwertyKeyboard');
+  const kpBtn = $('toggleKeypadBtn');
+  const qBtn = $('toggleQwertyBtn');
+  const kpOn = !!kp && kp.style.display !== 'none';
+  const qOn = !!q && q.style.display !== 'none';
+  if (kpBtn) { kpBtn.classList.toggle('active', kpOn); kpBtn.setAttribute('aria-pressed', kpOn ? 'true' : 'false'); }
+  if (qBtn) { qBtn.classList.toggle('active', qOn); qBtn.setAttribute('aria-pressed', qOn ? 'true' : 'false'); }
+}
+
+if ($('toggleKeypadBtn')) {
+  $('toggleKeypadBtn').addEventListener('click', () => {
+    const kp = $('keypad');
+    const q = $('qwertyKeyboard');
+    if (!kp) return;
+    const showing = kp.style.display !== 'none';
+    if (q) q.style.display = 'none';
+    kp.style.display = showing ? 'none' : 'grid';
+    syncPadToggles();
+  });
+}
+
+const qwertyRows = [
+  ['q','w','e','r','t','y','u','i','o','p'],
+  ['a','s','d','f','g','h','j','k','l'],
+  ['z','x','c','v','b','n','m','del','go']
+];
+
+function renderQwerty() {
+  const q = $('qwertyKeyboard');
+  if (!q || q.innerHTML) return;
+  q.innerHTML = qwertyRows.map(row =>
+    `<div class="qwerty-row">${row.map(k => {
+      if (k === 'del') return `<button type="button" class="wide" data-qwerty="del" aria-label="Delete">⌫</button>`;
+      if (k === 'go') return `<button type="button" class="wide go" data-qwerty="go">OK</button>`;
+      return `<button type="button" data-qwerty="${k}">${k}</button>`;
+    }).join('')}</div>`
+  ).join('');
+}
+
+function qwertyKey(k) {
+  const inp = $('pinInput');
+  if (!inp) return;
+  if (k === 'del') {
+    inp.value = inp.value.slice(0, -1);
+  } else if (k === 'go') {
+    return unlock();
+  } else if (inp.value.length < 32) {
+    inp.value += k;
+  }
+}
+
+if ($('toggleQwertyBtn')) {
+  $('toggleQwertyBtn').addEventListener('click', () => {
+    const q = $('qwertyKeyboard');
+    const kp = $('keypad');
+    if (!q) return;
+    renderQwerty();
+    const showing = q.style.display !== 'none';
+    if (kp) kp.style.display = 'none';
+    q.style.display = showing ? 'none' : 'flex';
+    syncPadToggles();
+  });
+}
+
+if ($('qwertyKeyboard')) {
+  $('qwertyKeyboard').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-qwerty]');
+    if (b) qwertyKey(b.dataset.qwerty);
+  });
+}
+
 $('keypad').innerHTML = [...'123456789'].map((d) => `<button data-pin="${d}">${d}</button>`).join('') +
   '<button data-pin="del" aria-label="Delete">⌫</button><button data-pin="0">0</button><button data-pin="go" class="go">OK</button>';
 $('keypad').addEventListener('click', (e) => { const b = e.target.closest('[data-pin]'); if (b) pinKey(b.dataset.pin); });
-// Number keys on a keyboard or TV remote type the PIN; Enter unlocks; Backspace deletes.
+
 document.addEventListener('keydown', (e) => {
   if (!$('lock').classList.contains('on')) return;
+  if (document.activeElement === $('pinInput')) return;
   if (/^[0-9]$/.test(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); pinKey(e.key); }
   else if (e.key === 'Backspace') { e.preventDefault(); e.stopImmediatePropagation(); pinKey('del'); }
-  else if (e.key === 'Enter' && !document.activeElement.closest('#keypad')) { e.preventDefault(); e.stopImmediatePropagation(); pinKey('go'); }
+  else if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); unlock(); }
 }, true);
 
 // Ask for the PIN first when one is set and this device hasn't got in yet.
+function logout() {
+  try { localStorage.removeItem('key'); } catch {}
+  document.cookie = 'homeflix_key=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  if ($('logoutBtn')) $('logoutBtn').style.display = 'none';
+  showLock();
+}
+if ($('logoutBtn')) {
+  $('logoutBtn').addEventListener('click', logout);
+}
+
+async function checkAuth() {
+  const r = await fetch('/api/auth').then((res) => res.json()).catch(() => ({}));
+  if ($('logoutBtn')) $('logoutBtn').style.display = r.pin ? 'inline-flex' : 'none';
+  if (r.pin && !r.ok) {
+    try { localStorage.removeItem('key'); } catch {}
+    return showLock();
+  } else if (!r.pin && $('lock').classList.contains('on')) {
+    $('lock').classList.remove('on');
+    document.body.classList.remove('lock');
+    return route();
+  }
+}
+setInterval(checkAuth, 10000);
+window.addEventListener('focus', checkAuth);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkAuth(); });
+
 fetch('/api/auth').then((r) => r.json()).catch(() => ({})).then((a) => {
+  if ($('logoutBtn')) $('logoutBtn').style.display = a.pin ? 'inline-flex' : 'none';
   if (a.pin && !a.ok) {
     try { localStorage.removeItem('key'); } catch {}
     return showLock();
   }
   route();
 });
+
+(function(){
+  var overlay = $('introOverlay');
+  if (!overlay) return;
+  var word = $('introWord'), streaks = $('introStreaks');
+  if (word && !word.hasChildNodes()) {
+    'HOMEFLIX'.split('').forEach(function(ch,i){
+      var s=document.createElement('span');s.textContent=ch;s.style.setProperty('--i',i);word.appendChild(s);
+    });
+  }
+  var colors=['#e50914','#ff3b30','#3a5bff','#8a2be2','#ff6a00','#00b3ff'];
+  if (streaks && !streaks.hasChildNodes()) {
+    for(var k=0;k<70;k++){
+      var l=document.createElement('i');
+      var w=1+Math.random()*3;
+      var c=colors[Math.floor(Math.random()*colors.length)];
+      l.style.left=(Math.random()*100)+'%';
+      l.style.width=w+'px';
+      l.style.background='linear-gradient(to bottom,transparent,'+c+' 50%,transparent)';
+      l.style.boxShadow='0 0 12px '+c;
+      l.style.setProperty('--d',(2.2+Math.random()*0.9).toFixed(2)+'s');
+      streaks.appendChild(l);
+    }
+  }
+  function playIntro(){
+    overlay.classList.remove('play');
+    void overlay.offsetWidth;
+    overlay.classList.add('play');
+    setTimeout(function(){
+      overlay.classList.add('fade-out');
+      setTimeout(function(){ overlay.remove(); }, 500);
+    }, 3800);
+  }
+  playIntro();
+})();
 </script>
 </body>
 </html>

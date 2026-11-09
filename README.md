@@ -2,7 +2,86 @@
 
 Watch the movies on your Windows PC, Mac or Linux computer from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. No account, no internet upload, no subscription.
 
-**Website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
+> **Unofficial fork.** This repository is an **unofficial**, community-maintained fork. It is **not** an official HOMEFLIX release and is not endorsed by the upstream project. Official project and downloads: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/) and [github.com/kprakz/homeflix](https://github.com/kprakz/homeflix).
+
+**Upstream (official) website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
+
+> **This fork** adds a native Android app. The Windows, macOS and Linux installers are still published by the upstream project; Android builds and release files come from [this fork](https://github.com/VigneshVijayK/homeflix-android-fork).
+
+## Two ways to use HOMEFLIX
+
+HOMEFLIX has two sides: the **computer** that holds your movies, and the **screen** that plays them.
+Most people use the computer as the server and watch from a phone, tablet or TV. The Android app can
+also work the other way around and share the phone's own videos.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/android-client-mode.png" alt="HOMEFLIX client mode showing a movie and TV show library" width="300"><br>
+      <strong>Client mode</strong><br>
+      Browse and watch the movies stored on your computer.
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/android-server.png" alt="HOMEFLIX server mode sharing this phone's videos" width="300"><br>
+      <strong>Server mode</strong><br>
+      Share this phone's videos with other HOMEFLIX devices.
+    </td>
+  </tr>
+</table>
+
+### Client mode: watch your computer's movies
+
+Install HOMEFLIX on the computer that has your videos and add your movie or TV series folders. Then open the
+Android app or the address shown in the HOMEFLIX window on your phone, tablet or TV. The app finds
+the computer automatically; on iPhone, iPad and smart TVs, open the address in a browser.
+
+This is the normal setup. Your movies stay on the computer, and every screen plays them over your
+home Wi-Fi. Resume positions, series, auto-play next episode, audio tracks, subtitles and HEVC
+fallback all work in this mode.
+
+### Server mode: share this phone's videos
+
+The Android app can also serve videos stored on the phone. Open **Share this phone's videos**, choose
+the folders to share, and give other devices the address and PIN shown on the screen. Other HOMEFLIX
+devices connect exactly as they connect to a computer.
+
+This is useful when the computer is off, when you are travelling, or when the videos are already
+downloaded on the phone. For one-tap control, add the **HOMEFLIX Server** tile to Quick Settings
+(Server Mode → **Status bar shortcut**) and start or stop sharing from the status bar. Remove it the
+same way: open Quick Settings, tap the pencil, and drag the tile out.
+
+## Start here
+
+| Your device | What to do |
+| --- | --- |
+| Windows PC | [Install on Windows](#install-on-windows-5-minutes-one-time) |
+| Mac | [Install on a Mac](#install-on-a-mac) |
+| Linux computer | [Install on Linux](#install-on-linux) |
+| Android phone, tablet or TV | [Install the Android app](#install-on-android) |
+| iPhone, iPad or smart TV | Nothing to install: [open the address in a browser](#watch) |
+
+**Three steps for most people:**
+
+1. Install HOMEFLIX on the computer that has your movies.
+2. Add the folders where your movies or TV series are.
+3. Open the address shown in HOMEFLIX on your phone or TV, or let the Android app find the computer.
+
+**What you need:** a computer (Windows 10/11, macOS 12 or newer, or Linux), your movie files, and a
+phone, tablet or TV on the same home Wi-Fi. No account, subscription or internet upload is needed.
+
+## What's new in Android 2.0.0
+
+Android 2.0.0 is a stability update. The 1.6.0 movie/TV series folder features remain unchanged.
+
+- **Movie folders** keep every video as its own title.
+- **TV series folders** treat each folder as one show. Its videos become episodes, and the next
+  episode plays automatically. `Season 1` / `S01` subfolders and `S01E02`-style numbers are optional:
+  HOMEFLIX uses them when present and otherwise follows the file order.
+- **Easy switching.** Existing folders stay movie folders. Tap a folder's type in Server Mode to
+  switch it to TV series, or back again. The desktop app has the same two sections.
+
+Download the signed APK or app bundle from the
+[Latest Android release](https://github.com/VigneshVijayK/homeflix-android-fork/releases/latest).
 
 ---
 
@@ -11,7 +90,7 @@ Watch the movies on your Windows PC, Mac or Linux computer from your iPad, iPhon
 1. **[Download HOMEFLIX for Mac](https://kprakz.github.io/homeflix/#download)**. Choose **Apple Silicon** for Macs with an M1–M4 chip, or **Intel**. (Apple menu → About This Mac shows which you have.) Requires macOS 12 or later.
 2. Open the downloaded `.dmg` and drag **HOMEFLIX** onto **Applications**.
 3. Open HOMEFLIX from Applications. The first time, macOS says it can't verify the app. Click **Done**, open System Settings → **Privacy & Security**, scroll down and click **Open Anyway**. You only do this once. (HOMEFLIX isn't notarized by Apple, which needs a paid developer account.)
-4. Click **Choose your movies folder**.
+4. Click **Choose movies folder** for films, or **Choose TV series folder** for a show.
 5. When macOS asks whether HOMEFLIX may **accept incoming network connections**, click **Allow**. Your phone and TV can't connect otherwise.
 
 HOMEFLIX then lives in the menu bar at the top right of the screen. Everything else below works the same as on Windows.
@@ -56,7 +135,7 @@ Or right-click it → Properties → **Allow executing as program**, then double
 ### Start HOMEFLIX
 
 - Open **HOMEFLIX** from your apps menu, or type `homeflix &` in a terminal (.deb).
-- Click **Choose your movies folder** and pick the folder with your films. Sub-folders are included.
+- Click **Choose movies folder** or **Choose TV series folder** and pick the folder with your videos. Sub-folders are included.
 - **Don't run it with `sudo`.** It doesn't need admin rights.
 - HOMEFLIX keeps running in the system tray when you close the window. On GNOME (Ubuntu's default desktop), you may need the *AppIndicator* extension to see the icon. To quit, use the tray icon or run `pkill homeflix`.
 
@@ -129,8 +208,10 @@ Requires Windows 10 or 11 (64-bit).
 
 Follow the installer. It puts HOMEFLIX on your Desktop and in the Start menu, and opens it when it finishes. No admin password is needed.
 
-### 2. Choose your movies folder
-Click **Choose your movies folder** and pick the folder where your movies are, for example `Downloads` or `Videos`. Sub-folders are included, and you can add more folders any time.
+### 2. Add your movie and TV series folders
+Click **Choose movies folder** for films, or **Choose TV series folder** for a show. Pick a folder such as `Downloads` or `Videos`; sub-folders are included, and you can add more folders any time.
+
+A **TV series folder is one show**: its name becomes the show name, and every video inside becomes an episode. You don't need to rename files to `S01E02`; HOMEFLIX uses episode numbers when present and otherwise follows the file order. Optional `Season 1` or `S01` sub-folders set the season. Movies stay as individual titles.
 
 ### 3. Let your phone through Windows Firewall (if HOMEFLIX asks)
 HOMEFLIX checks Windows Firewall and shows a box at the top of its window if something needs doing:
@@ -140,6 +221,104 @@ HOMEFLIX checks Windows Firewall and shows a box at the top of its window if som
 > The first time HOMEFLIX starts, Windows may ask *"Allow HOMEFLIX to communicate on these networks?"* It ticks whichever network type you're on at that moment. If your Wi-Fi was Public then, HOMEFLIX ends up allowed only on Public networks, and stops working once you switch the Wi-Fi to Private. The **Allow on home networks** button fixes that.
 
 ---
+
+## Install on Android
+
+This fork includes a native Android app for phones, tablets, Android TV, Google TV and Fire TV. It
+connects to the same HOMEFLIX computer as the browser and has the same features: resume positions and
+start over, series and auto-play next episode, audio languages, subtitles, remembered volume boost,
+and HEVC fallback.
+
+The 2.0.0 app is a stability update. The 1.6.0 app adds separate **Movie folders** and **TV series folders** in Server Mode and the
+desktop app. Each TV series folder is one show; its videos become episodes, with optional season
+subfolders and episode numbering. It also keeps the 1.5.1 **HOMEFLIX Server** Quick Settings tile and
+the live **Connected devices** card from 1.5.0: see who is watching, what they are playing, watch
+time and data used, then open a device for daily, monthly or yearly history. For privacy, a fresh
+install shares no folders until you add them. Android devices also advertise their real hostname, so
+they are easier to recognise on other devices.
+
+The phone can also act as the server; see [Server mode](#server-mode-share-this-phones-videos) above.
+Tap **Share this phone's videos** on the connect screen and other HOMEFLIX devices on the same Wi-Fi
+can watch it. You choose the shared folders with the system folder picker, and the PIN can be changed
+(4 to 8 digits) or turned off, just like the desktop app. The embedded server is the same `server.js`
+as the desktop app; see [`android/README.md`](android/README.md#server-mode-on-the-phone) for details.
+
+### Install the APK
+
+1. Download **`HOMEFLIX-<version>.apk`** from [this fork's latest release](https://github.com/VigneshVijayK/homeflix-android-fork/releases/latest)
+   and open it. Android asks once whether to allow installing apps from this source; allow it, then
+   tap **Install**.
+2. Open **HOMEFLIX**. It looks for your computer on the same Wi-Fi and lists computers as it finds
+   them. If yours does not appear, wait for the scan to finish or tap the refresh button. Older
+   computers that do not announce themselves are found by the local network scan.
+3. Choose your computer. You can also tap **Scan QR code** to use the camera, tap **Import from
+   gallery** to pick a screenshot or photo of the QR code, or type the address shown (for example
+   `192.168.1.57:8080`).
+4. If the computer has a PIN, enter it once. The app remembers the computer and the PIN.
+5. To reload the movie list later, tap the refresh button at the top of the library. It spins while
+   it reads the library again.
+
+If the app still cannot find the computer, make sure both are on the same Wi-Fi and type the
+computer's address by hand. A firewall on the computer can also block the connection; see
+[Troubleshooting](#troubleshooting).
+
+Requires **Android 7.0 or newer**. The same APK works on Android TV, Google TV and Fire TV; sideload it
+and it appears under your apps. If no release is available yet, build it from source below or run the
+**Android build** GitHub Actions workflow and download the `HOMEFLIX-android` artifact.
+
+### Build from source
+
+Requirements: JDK 17 or newer, Android SDK 36 (`platforms;android-36` and
+`build-tools;36.0.0`), NDK `28.0.13004108` and CMake `3.22.1`. Point `ANDROID_HOME` at the SDK, or
+create `android/local.properties` with `sdk.dir=/path/to/android-sdk` (that file is gitignored).
+
+Server mode also needs the Node.js and FFmpeg Android binaries, which are not committed. Download and
+copy them in once with `android/scripts/fetch-native.sh` (paths and layout are in
+[`android/README.md`](android/README.md#build)).
+
+```bash
+cd android
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+For Android TV / Google TV / Fire TV over ADB:
+
+```bash
+adb connect <tv-ip>:5555
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Useful checks:
+
+```bash
+./gradlew :app:testDebugUnitTest :app:lintDebug
+```
+
+The app version and `versionCode` come from the root `package.json` (`2.0.0` → `20000`), so bumping
+the desktop version also bumps Android. See [`android/README.md`](android/README.md) for the project
+layout and Play publishing steps.
+
+### Signed releases and GitHub Actions
+
+Create a keystore once and set the `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` environment variables (or use
+`keystore.properties` inside `android/`). Then build:
+
+```bash
+cd android
+./gradlew :app:assembleRelease :app:bundleRelease
+```
+
+Outputs:
+
+- `app/build/outputs/apk/release/app-release.apk` for GitHub Releases
+- `app/build/outputs/bundle/release/app-release.aab` for Google Play
+
+`.github/workflows/android.yml` builds and tests the app on pushes and pull requests, attaches a
+signed APK/AAB to published GitHub releases, and optionally uploads the AAB to Google Play's internal
+track. Without keystore secrets it uploads a debug APK instead. Configuration details are in
+[`android/README.md`](android/README.md).
 
 ## Watch
 
@@ -180,7 +359,7 @@ Subtitles inside the movie, or a `.srt` / `.vtt` file next to it with the same n
 **Tips**
 - Each device remembers where you stopped and shows those movies under **Continue Watching**. To watch from the beginning instead, choose **Start over**: next to **Resume** on the home screen and in **More Info**, at the top of the player, or in the TV controls.
 - **Too quiet?** Many films are mixed quietly for cinemas, and phones and TVs can't go above 100% the way VLC can. Turn on **Volume boost** in the player (top right; on a TV, press Up). It makes the sound about twice as loud on that device without distorting it, and the device remembers it. Turn it off for the original sound.
-- TV shows named like `Show S01E05` are grouped into series, and the next episode plays automatically.
+- TV series folders are grouped into shows, and the next episode plays automatically. You don't need to rename episodes like `Show S01E05`.
 
 ## Good to know
 
@@ -207,6 +386,9 @@ Settings → Apps → Installed apps → **HOMEFLIX** → Uninstall. This also r
 
 | Problem | Fix |
 |---|---|
+| Android app can't find my computer | Make sure both are on the same home Wi-Fi. Tap the refresh button and wait for the local network scan. If it still does not appear, type the computer's address shown in the HOMEFLIX window under **OR CONNECT BY HAND**. |
+| Android app finds the computer but can't connect | Check that the computer's firewall allows HOMEFLIX on private/home networks and that the address and port are correct. |
+| QR code won't scan or import | Use a clear, square screenshot of the QR code, or point the camera at the code in the HOMEFLIX window. You can also type the address instead. |
 | The page won't open on my phone | Same Wi-Fi? Then follow the box at the top of the HOMEFLIX window. To check by hand: Windows Security → Firewall & network protection → Allow an app through firewall → Change settings → **homeflix.exe** should have **Private** ticked, and your home Wi-Fi should be set to Private. |
 | It only works when my Wi-Fi is Public | HOMEFLIX was allowed on Public networks only. Click **Allow on home networks** in HOMEFLIX (or tick **Private** for homeflix.exe as above), then set your Wi-Fi to Private. |
 | The address changed | Your router gave the laptop a new address. Scan the new QR code in the HOMEFLIX window. |
@@ -235,7 +417,9 @@ npm start           # run the desktop app
 npm run dist        # Windows: build dist/HOMEFLIX-Setup-<version>.exe
 ```
 
-With `npm run serve`, set a PIN by adding `"pin": "1234"` to `config.json`.
+With `npm run serve`, set a PIN by adding `"pin": "1234"` to `config.json`. Folder entries in
+`config.json` are `{ "path": "...", "type": "movies" }` or `"type": "series"`; older plain string
+paths still work as movie folders.
 
 **Website and download map.** The site in `docs/` is served by GitHub Pages and by a Vercel project ([homeflix-rho.vercel.app](https://homeflix-rho.vercel.app)), which also runs the download counter in `api/`:
 - `api/download.js` counts a download for the visitor's country (Vercel's `x-vercel-ip-country` header; no IP addresses or personal data are stored), once per browser, then redirects to the installer on GitHub. It only redirects to HOMEFLIX's own release files.
@@ -265,4 +449,4 @@ HOMEFLIX ships unmodified FFmpeg programs, which are GPL-licensed. See `vendor/f
 
 HOMEFLIX's own code is released under the [MIT License](LICENSE): you're free to use, change and share it, as long as you keep the copyright notice. The bundled FFmpeg programs keep their own GPL license (see above).
 
-**The name.** "HOMEFLIX" refers to this official project. If you publish a fork or your own build, please give it a different name, or clearly mark it as **unofficial**, and use your own version numbers, so people don't mistake it for an official release. Official downloads are only at [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/) and [this repository's releases](https://github.com/kprakz/homeflix/releases). Want to add something, like an Android app? Pull requests are welcome.
+**The name.** "HOMEFLIX" refers to the official upstream project. This repository is an **unofficial** fork: it is not an official HOMEFLIX release and is not endorsed by the upstream author. If you publish a fork or your own build, please give it a different name, or clearly mark it as **unofficial**, and use your own version numbers, so people don't mistake it for an official release. Official downloads are only at [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/) and [github.com/kprakz/homeflix](https://github.com/kprakz/homeflix). Want to add something, like an Android app? Pull requests to the upstream project are welcome.

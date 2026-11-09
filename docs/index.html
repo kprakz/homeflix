@@ -313,7 +313,7 @@
         <p>No account to create, no cloud, no subscription. HOMEFLIX runs quietly on your computer and your other screens open it like a website.</p>
       </div>
       <div class="steps">
-        <div class="step"><h3>Install and pick your folder</h3><p>Download HOMEFLIX for Windows, Mac or Linux, install it and choose the folder where your movies are. Sub-folders are included.</p></div>
+        <div class="step"><h3>Install and pick your folder</h3><p>Download HOMEFLIX for Windows, Mac or Linux, install it and add your movie or TV series folders. Sub-folders are included.</p></div>
         <div class="step"><h3>Scan the code</h3><p>On your phone, iPad or TV, connect to the same Wi-Fi and scan the QR code HOMEFLIX shows, or type its address into the browser.</p></div>
         <div class="step"><h3>Watch</h3><p>Browse your films and shows like on Netflix and press play. Each device remembers where you stopped.</p></div>
       </div>
@@ -399,7 +399,7 @@
           <div class="kicker">Installing on Windows</div>
           <ol class="install" style="margin-top:18px">
             <li><b>Run the installer</b><span>Open the downloaded <code>HOMEFLIX-Setup</code> file. No admin password needed.</span></li>
-            <li><b>Choose your movies folder</b><span>For example Downloads or Videos. You can add more later.</span></li>
+            <li><b>Choose your movie and TV series folders</b><span>Each TV series folder is one show; its videos become episodes. You can add more later.</span></li>
             <li><b>Allow it on your home network</b><span>If HOMEFLIX asks, click <em>Allow on home networks</em> and say Yes.</span></li>
             <li><b>Scan and watch</b><span>Point your phone's camera at the QR code.</span></li>
           </ol>
@@ -410,7 +410,7 @@
           <ol class="install" style="margin-top:18px">
             <li><b>Drag HOMEFLIX to Applications</b><span>Open the downloaded <code>.dmg</code> and drag the HOMEFLIX icon onto Applications.</span></li>
             <li><b>Open it the first time</b><span>Open HOMEFLIX from Applications. If macOS says it can't verify it, click <b>Done</b>, then go to System Settings → <b>Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>. Only needed once.</span></li>
-            <li><b>Choose your movies folder, and allow connections</b><span>When macOS asks if HOMEFLIX may accept incoming network connections, click <b>Allow</b>.</span></li>
+            <li><b>Choose your folders, and allow connections</b><span>Add movies and TV series, then allow incoming network connections when macOS asks.</span></li>
             <li><b>Scan and watch</b><span>Point your phone's camera at the QR code.</span></li>
           </ol>
           <div class="note"><b>Why the extra step?</b> Apple charges developers yearly to "notarize" apps; HOMEFLIX is a free open-source project, so macOS asks you to confirm once. You can <a href="https://github.com/kprakz/homeflix">read every line</a> of it.</div>
@@ -426,7 +426,7 @@
               <span>The second line adds a sound library HOMEFLIX needs, which minimal systems may not have. A closing <code>N: Download is performed unsandboxed…</code> note is harmless.</span></li>
             <li><b>Or run the AppImage</b><span>No install needed:</span>
               <div class="cmd"><code>chmod +x HOMEFLIX-*.AppImage &amp;&amp; ./HOMEFLIX-*.AppImage</code><button type="button">Copy</button></div></li>
-            <li><b>Start it and choose your folder</b><span>Open HOMEFLIX from your apps menu (or type <code>homeflix &amp;</code>), then click <b>Choose your movies folder</b>. Don't run it with <code>sudo</code>.</span></li>
+            <li><b>Start it and choose your folders</b><span>Open HOMEFLIX from your apps menu (or type <code>homeflix &amp;</code>), then add your movie and TV series folders. Don't run it with <code>sudo</code>.</span></li>
             <li><b>Phone can't connect?</b><span>Only if you use a firewall, let your home network in:</span>
               <div class="cmd"><code>sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp</code><button type="button">Copy</button></div></li>
           </ol>

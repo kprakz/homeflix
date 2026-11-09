@@ -1,0 +1,14 @@
+.gradle/
+build/
+local.properties
+keystore.properties
+*.jks
+*.keystore
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+.idea/
+app/src/main/jniLibs/
+app/src/main/cpp/nodejs-mobile-include/

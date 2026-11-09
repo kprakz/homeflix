@@ -7,9 +7,12 @@ const fsp = fs.promises;
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const dgram = require('dgram');
 const { spawn } = require('child_process');
 
 const ROOT = __dirname;
+const APP_VERSION = (() => { try { return require('./package.json').version; } catch { return '0.0.0'; } })();
+const API_VERSION = 1;
 let CONFIG = { port: 8080, folders: [], minSizeMB: 5, cacheDir: 'cache', ffmpeg: 'ffmpeg', ffprobe: 'ffprobe' };
 let CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.avi', '.webm', '.wmv', '.flv', '.ts', '.m2ts', '.mpg', '.mpeg', '.3gp']);
@@ -19,20 +22,53 @@ const DIRECT_CONTAINERS = new Set(['.mp4', '.m4v', '.mov']);
 const UNIVERSAL_AUDIO = new Set(['aac', 'mp3']);
 const TEXT_SUBS = new Set(['subrip', 'ass', 'ssa', 'mov_text', 'webvtt', 'text']);
 
+// Folder entries are { path, type } where type is "movies" or "series". Older configs stored
+// plain paths; those keep working as movie folders.
+function normalizeFolders(folders) {
+  const next = new Map();
+  for (const entry of Array.isArray(folders) ? folders : []) {
+    const raw = typeof entry === 'string' ? entry : entry && entry.path;
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+    const resolved = path.resolve(raw.trim());
+    const type = entry && typeof entry === 'object' && entry.type === 'series' ? 'series' : 'movies';
+    next.set(resolved.toLowerCase(), { path: resolved, type });
+  }
+  return [...next.values()];
+}
+
+// 4-8 digits, or a 6-32 alphanumeric password with at least one letter and one digit.
+function isValidPin(pin) {
+  const value = String(pin == null ? '' : pin);
+  return /^\d{4,8}$/.test(value) || (/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{6,32}$/.test(value));
+}
+
 // The desktop app calls this with its own settings; `node server.js` uses config.json.
 // (config.json may give "pin": "1234" in plain text; it's kept hashed.)
+// Fail closed: a malformed PIN throws instead of silently disabling protection.
 function configure(options) {
-  CONFIG = { ...CONFIG, ...options };
-  if (typeof CONFIG.pin === 'string' || typeof CONFIG.pin === 'number') CONFIG.pin = /^\d{4,8}$/.test(String(CONFIG.pin)) ? hashPin(CONFIG.pin) : null;
+  const next = { ...CONFIG, ...options };
+  next.folders = normalizeFolders(next.folders);
+  const pin = next.pin;
+  if (typeof pin === 'string' || typeof pin === 'number') {
+    if (!isValidPin(pin)) throw new Error('The PIN must be 4 to 8 digits, or 6 to 32 letters and numbers with at least one of each.');
+    next.pin = hashPin(String(pin));
+  } else if ((pin && typeof pin !== 'object') || (pin && typeof pin === 'object' && (typeof pin.salt !== 'string' || typeof pin.hash !== 'string'))) {
+    throw new Error('The PIN must be 4 to 8 digits, or 6 to 32 letters and numbers with at least one of each.');
+  }
+  if (next.pin === undefined) next.pin = null;
+  CONFIG = next;
   if (!CONFIG.secret) CONFIG.secret = crypto.randomBytes(16).toString('hex');
   CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
   fs.mkdirSync(CACHE_DIR, { recursive: true });
+  loadDevices();
 }
 
 function loadConfig() {
   const defaults = {
     port: 8080,
-    folders: [path.join(os.homedir(), 'Videos'), path.join(os.homedir(), 'Downloads')],
+    // Nothing is shared until the owner names folders in config.json (or picks them in the app):
+    // pre-selecting Videos/Downloads would serve files they never agreed to share.
+    folders: [],
     minSizeMB: 5,
     cacheDir: 'cache',
     ffmpeg: 'ffmpeg',
@@ -93,23 +129,123 @@ function scanLibrary() {
   return scanning;
 }
 
+
+function naturalCompare(a, b) {
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+// A series folder is one show. The folder name becomes the show name, and every video below it
+// becomes an episode. Season subfolders are optional; numbering can come from filenames or order.
+function showNameFor(root) {
+  return (prettyName(root).title || path.basename(root)).trim();
+}
+
+function seasonFromRelative(relative) {
+  const dirs = path.dirname(relative).split(path.sep).filter(Boolean);
+  for (let i = dirs.length - 1; i >= 0; i--) {
+    const m = dirs[i].match(/^(?:season|series)[\s._-]*(\d{1,2})$/i) || dirs[i].match(/^S(\d{1,2})$/i);
+    if (m) return Number(m[1]);
+  }
+  return null;
+}
+
+function episodeNumber(name) {
+  let m = name.match(/(?:^|[\s._-])S(\d{1,2})[\s._-]*E(\d{1,3})(?:\b|$)/i);
+  if (m) return { season: Number(m[1]), ep: Number(m[2]) };
+  m = name.match(/(?:^|[\s._-])(\d{1,2})x(\d{1,3})(?:\b|$)/i);
+  if (m) return { season: Number(m[1]), ep: Number(m[2]) };
+  m = name.match(/(?:^|[\s._-])Season[\s._-]*(\d{1,2})[\s._-]*(?:Episode|Ep|E)[\s._-]*(\d{1,3})(?:\b|$)/i);
+  if (m) return { season: Number(m[1]), ep: Number(m[2]) };
+  let season = null;
+  m = name.match(/(?:^|[\s._-])S(\d{1,2})(?:[\s._-]|$)/i);
+  if (m) season = Number(m[1]);
+  let ep = null;
+  m = name.match(/(?:^|[\s._-])(?:E|EP|Episode|Chapter)[\s._-]*(\d{1,3})(?:\b|$)/i);
+  if (m) ep = Number(m[1]);
+  if (ep == null) {
+    m = name.match(/(?:^|[\s._-])(\d{1,3})$/);
+    if (m) ep = Number(m[1]);
+  }
+  if (ep == null) {
+    m = name.match(/^(?:Ep?|Episode|Chapter)?[\s._-]*(\d{1,3})(?:[\s._-]|$)/i);
+    if (m) ep = Number(m[1]);
+  }
+  return { season, ep };
+}
+
+function episodeTitle(name, show, ep) {
+  let title = prettyName(name).title;
+  if (show) {
+    const escaped = show.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    title = title.replace(new RegExp(`^${escaped}[\\s._-]*(?:[-–—:]\\s*)?`, 'i'), '');
+  }
+  title = title
+    .replace(/\bS\d{1,2}[\s._-]*E\d{1,3}\b/ig, ' ')
+    .replace(/\b\d{1,2}x\d{1,3}\b/ig, ' ')
+    .replace(/\bSeason[\s._-]*\d{1,2}\b/ig, ' ')
+    .replace(/\b(?:Episode|Ep|Chapter)[\s._-]*\d{1,3}\b/ig, ' ')
+    .replace(/\bS\d{1,2}\b/ig, ' ')
+    .replace(/\bE\d{1,3}\b/ig, ' ')
+    .replace(/^\d{1,3}[\s._-]+/, '')
+    .replace(/^[\s._\-–—:]+|[\s._\-–—:]+$/g, '')
+    .replace(/[\s._-]+/g, ' ')
+    .trim();
+  return title || (ep != null ? `Episode ${ep}` : 'Episode');
+}
+
 async function buildLibrary() {
-  const files = [];
-  for (const folder of CONFIG.folders) await walk(path.resolve(folder), 0, files);
   const next = new Map();
-  for (const file of files) {
-    let stat;
-    try {
-      stat = await fsp.stat(file);
-    } catch {
-      continue;
+  for (const folder of CONFIG.folders) {
+    const root = path.resolve(folder.path);
+    const files = [];
+    await walk(root, 0, files);
+    const series = [];
+    for (const file of files) {
+      let stat;
+      try {
+        stat = await fsp.stat(file);
+      } catch {
+        continue;
+      }
+      if (stat.size < CONFIG.minSizeMB * 1024 * 1024) continue;
+      const id = idFor(file);
+      // A file written to in the last 2 minutes is most likely still downloading (e.g. from Telegram).
+      const downloading = Date.now() - stat.mtimeMs < 2 * 60 * 1000;
+      const folderName = path.basename(root);
+      if (folder.type === 'series') {
+        const relative = path.relative(root, file);
+        const name = path.basename(file, path.extname(file));
+        const show = showNameFor(root);
+        const numbered = episodeNumber(name);
+        series.push({ file, id, stat, downloading, relative, name, show, season: numbered.season, ep: numbered.ep });
+      } else {
+        const { title, year } = prettyName(file);
+        next.set(id, {
+          id, path: file, title, year,
+          size: stat.size, mtime: stat.mtimeMs, folder: folderName, folderType: folder.type, downloading,
+        });
+      }
     }
-    if (stat.size < CONFIG.minSizeMB * 1024 * 1024) continue;
-    const id = idFor(file);
-    const folder = CONFIG.folders.find((f) => file.toLowerCase().startsWith(path.resolve(f).toLowerCase())) || '';
-    // A file written to in the last 2 minutes is most likely still downloading (e.g. from Telegram).
-    const downloading = Date.now() - stat.mtimeMs < 2 * 60 * 1000;
-    next.set(id, { id, path: file, ...prettyName(file), size: stat.size, mtime: stat.mtimeMs, folder: path.basename(folder), downloading });
+    const bySeason = new Map();
+    for (const entry of series) {
+      entry.season = entry.season || seasonFromRelative(entry.relative) || 1;
+      if (!bySeason.has(entry.season)) bySeason.set(entry.season, []);
+      bySeason.get(entry.season).push(entry);
+    }
+    for (const [season, entries] of bySeason) {
+      const numbered = entries.filter((entry) => entry.ep != null);
+      const missing = entries.filter((entry) => entry.ep == null).sort((a, b) => naturalCompare(a.relative, b.relative));
+      let nextEp = Math.max(0, ...numbered.map((entry) => entry.ep)) + 1;
+      for (const entry of missing) entry.ep = nextEp++;
+      for (const entry of entries) {
+        next.set(entry.id, {
+          id: entry.id, path: entry.file, title: episodeTitle(entry.name, entry.show, entry.ep),
+          show: entry.show, season, ep: entry.ep,
+          size: entry.stat.size, mtime: entry.stat.mtimeMs, folder: path.basename(root), folderType: folder.type,
+          downloading: entry.downloading,
+        });
+      }
+    }
   }
   library = next;
   return [...library.values()].sort((a, b) => b.mtime - a.mtime);
@@ -669,7 +805,9 @@ function deviceKey() {
 }
 function keyFrom(req, url) {
   const cookie = /(?:^|;\s*)homeflix_key=([0-9a-f]+)/.exec(req.headers.cookie || '');
-  return url.searchParams.get('k') || (cookie && cookie[1]) || '';
+  // Apps that aren't browsers send the key as a header instead of a cookie/query string.
+  const header = String(req.headers['x-homeflix-key'] || '').toLowerCase();
+  return /^[0-9a-f]{16,64}$/.test(header) ? header : url.searchParams.get('k') || (cookie && cookie[1]) || '';
 }
 function hasKey(req, url) {
   const want = deviceKey();
@@ -686,7 +824,7 @@ function pinWait(ip) {
 }
 function checkPin(ip, pin) {
   const t = pinTries.get(ip) || { fails: 0, until: 0 };
-  const ok = /^\d{4,8}$/.test(String(pin)) && crypto.timingSafeEqual(Buffer.from(hashPin(pin, CONFIG.pin.salt).hash, 'hex'), Buffer.from(CONFIG.pin.hash, 'hex'));
+  const ok = isValidPin(pin) && crypto.timingSafeEqual(Buffer.from(hashPin(String(pin), CONFIG.pin.salt).hash, 'hex'), Buffer.from(CONFIG.pin.hash, 'hex'));
   if (ok) pinTries.delete(ip);
   else {
     t.fails++;
@@ -737,8 +875,16 @@ async function gate(req, res, url, parts) {
     res.end(JSON.stringify({ ok: true, key }));
     return false;
   }
+  // Public, read-only description of this server: used by the Android app's connect screen and by
+  // anything that wants to check the version before talking to the rest of the API.
+  if (parts[0] === 'api' && parts[1] === 'hello') {
+    return send(res, 200, {
+      app: 'homeflix', name: 'HOMEFLIX', hostname: deviceHostname(), version: APP_VERSION, api: API_VERSION,
+      pin: !!CONFIG.pin, port: CONFIG.port,
+    }), false;
+  }
   const ok = hasKey(req, url);
-  if (parts[0] === 'api' && parts[1] === 'auth') return send(res, 200, { pin: !!CONFIG.pin, ok }), false;
+  if (parts[0] === 'api' && parts[1] === 'auth') return send(res, 200, { pin: !!CONFIG.pin, ok, hostname: deviceHostname(), version: APP_VERSION, api: API_VERSION }), false;
   // A valid ?k= (from the desktop app's "Watch on this laptop", or AirPlay) also signs this browser in.
   if (ok && CONFIG.pin && url.searchParams.has('k') && !/homeflix_key=/.test(req.headers.cookie || '')) res.setHeader('Set-Cookie', keyCookie(deviceKey()));
   // The page itself, its icons and scripts load without the PIN so it can ask for it; movies don't.
@@ -748,16 +894,455 @@ async function gate(req, res, url, parts) {
   return false;
 }
 
+// ---------- connected devices ----------
+// Server Mode shows who is connected, what they opened and how much they transferred. One record
+// per IP address (the same device reconnecting keeps its stats), usage is bucketed per day and the
+// buckets, totals and watch history survive restarts in devices.json next to the config. Nothing
+// ever leaves the network.
+const dns = require('dns');
+const ACTIVITY_ACTIVE_MS = 60_000;
+const ACTIVITY_KEEP_MS = 10 * 60_000;
+const STATS_KEEP_DAYS = 800;
+const HISTORY_KEEP = 200;     // remembered watches per device
+const HISTORY_REPORT = 10;    // watches sent to the app each poll
+const SESSION_GAP_MS = 30 * 60_000;   // same title inside half an hour counts as one watch
+const SESSION_MAX_MS = 6 * 3_600_000; // never let one watch stretch longer than this
+const SAVE_DEBOUNCE_MS = 30_000;
+const activity = new Map(); // ip -> record
+const openResponses = new Set(); // live responses, so usage shows while a movie is still playing
+let devicesLoaded = false;
+let devicesSaveTimer = null;
+
+function devicesFile() {
+  return path.resolve(CONFIG.dataDir || ROOT, 'devices.json');
+}
+
+function dateKey(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function bodyBytes(chunk) {
+  return typeof chunk === 'string' || Buffer.isBuffer(chunk) || ArrayBuffer.isView(chunk) ? Buffer.byteLength(chunk) : 0;
+}
+
+function deviceName(ua) {
+  const s = String(ua || '');
+  const os =
+    /iPhone/.test(s) ? 'iPhone' :
+    /iPad/.test(s) ? 'iPad' :
+    /Android/.test(s) ? 'Android' :
+    /Windows/.test(s) ? 'Windows' :
+    /Macintosh|Mac OS X/.test(s) ? 'Mac' :
+    /Linux/.test(s) ? 'Linux' :
+    /AppleTV/.test(s) ? 'Apple TV' :
+    /SMART-TV|SmartTV|Tizen|Web0S|WebOS/i.test(s) ? 'Smart TV' : '';
+  const app =
+    /ExoPlayerLib/i.test(s) ? 'HOMEFLIX app' :
+    /okhttp/i.test(s) ? 'HOMEFLIX app' :
+    /Edg\//.test(s) ? 'Edge' :
+    /OPR\//.test(s) ? 'Opera' :
+    /Chrome\//.test(s) ? 'Chrome' :
+    /Firefox\//.test(s) ? 'Firefox' :
+    /Safari\//.test(s) ? 'Safari' : 'Browser';
+  return os ? `${app} on ${os}` : app;
+}
+
+// So devices stay recognisable even when the router hands out changing addresses: one record per
+// IP, plus the network name for that address found with a reverse DNS lookup when there is one.
+function isLanIp(ip) {
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+}
+
+function lookupHostname(rec) {
+  if (rec.hostLooked || !isLanIp(rec.ip)) return;
+  rec.hostLooked = true;
+  dns.reverse(rec.ip).then((names) => {
+    const host = (names || []).find((n) => n && !n.includes('.in-addr.arpa'));
+    if (host) {
+      rec.host = host.replace(/\.local\.?$/, '').split('.')[0];
+      rec.name = rec.host;
+      scheduleSave();
+    }
+  }).catch(() => {});
+}
+
+function freshRecord(ip, now) {
+  return {
+    ip, uas: {}, host: null, client: null, name: null, firstSeen: now, lastSeen: now,
+    total: { bytes: 0, seconds: 0, requests: 0 },
+    days: {}, history: [],
+    open: 0, watchingOpen: 0, mode: 'idle', title: null, session: null,
+  };
+}
+
+function recordFor(ip, ua) {
+  const now = Date.now();
+  let rec = activity.get(ip);
+  if (!rec) {
+    rec = freshRecord(ip, now);
+    activity.set(ip, rec);
+    lookupHostname(rec);
+  }
+  if (ua) {
+    rec.uas[ua] = (rec.uas[ua] || 0) + 1;
+    // Prefer a name that actually describes the device ("Chrome on Windows") over the generic
+    // fallback ("Browser") that one-off probes and unknown clients produce, then break ties by
+    // how often that user agent has been seen.
+    let best = null;
+    let bestScore = -1;
+    for (const [agent, count] of Object.entries(rec.uas)) {
+      const label = deviceName(agent);
+      const score = (label === 'Browser' ? 0 : 1) * 1e9 + count;
+      if (score > bestScore || (score === bestScore && agent === ua)) { best = label; bestScore = score; }
+    }
+    rec.client = best;
+    if (!rec.host) rec.name = rec.client;
+  }
+  return rec;
+}
+
+function loadDevices() {
+  if (devicesLoaded) return;
+  devicesLoaded = true;
+  let array = [];
+  try {
+    array = JSON.parse(fs.readFileSync(devicesFile(), 'utf8'));
+  } catch {}
+  if (!Array.isArray(array)) return;
+  for (const item of array) {
+    if (!item || typeof item.ip !== 'string' || !item.ip) continue;
+    const now = Date.now();
+    const rec = Object.assign(freshRecord(item.ip, now), {
+      uas: item.uas && typeof item.uas === 'object' ? item.uas : {},
+      host: typeof item.host === 'string' ? item.host : null,
+      name: typeof item.name === 'string' ? item.name : null,
+      firstSeen: Number(item.firstSeen) || now,
+      lastSeen: Number(item.lastSeen) || now,
+      total: item.total && typeof item.total === 'object' ? item.total : freshRecord(item.ip, now).total,
+      days: item.days && typeof item.days === 'object' ? item.days : {},
+      history: Array.isArray(item.history) ? item.history : [],
+    });
+    if (rec.host) rec.hostLooked = true;
+    trimRecord(rec);
+    activity.set(rec.ip, rec);
+  }
+}
+
+function dayBucket(rec, key) {
+  return rec.days[key] || (rec.days[key] = { bytes: 0, seconds: 0, requests: 0 });
+}
+
+// Inclusive sum over the daily buckets whose date key falls in [from, to] (YYYY-MM-DD strings).
+function rangeTotals(rec, from, to) {
+  const out = { bytes: 0, seconds: 0, requests: 0 };
+  for (const [key, bucket] of Object.entries(rec.days)) {
+    if (key >= from && key <= to) {
+      out.bytes += bucket.bytes || 0;
+      out.seconds += bucket.seconds || 0;
+      out.requests += bucket.requests || 0;
+    }
+  }
+  return out;
+}
+
+function trimRecord(rec) {
+  const keys = Object.keys(rec.days).sort();
+  if (keys.length > STATS_KEEP_DAYS) {
+    for (const key of keys.slice(0, keys.length - STATS_KEEP_DAYS)) delete rec.days[key];
+  }
+  if (rec.history.length > HISTORY_KEEP) rec.history.length = HISTORY_KEEP;
+}
+
+function saveDevices() {
+  devicesSaveTimer = null;
+  loadDevices();
+  for (const rec of activity.values()) {
+    flushSession(rec);
+    trimRecord(rec);
+  }
+  const array = [...activity.values()]
+    .sort((a, b) => b.lastSeen - a.lastSeen)
+    .map((rec) => ({
+      ip: rec.ip, uas: rec.uas, host: rec.host, name: rec.name,
+      firstSeen: rec.firstSeen, lastSeen: rec.lastSeen,
+      total: rec.total, days: rec.days, history: rec.history,
+    }));
+  const file = devicesFile();
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temp = `${file}.tmp`;
+    fs.writeFileSync(temp, JSON.stringify(array));
+    fs.renameSync(temp, file);
+  } catch (err) {
+    console.error(`devices.json: ${err.message}`);
+  }
+}
+
+function scheduleSave() {
+  if (!devicesSaveTimer && devicesLoaded) {
+    devicesSaveTimer = setTimeout(saveDevices, SAVE_DEBOUNCE_MS);
+    devicesSaveTimer.unref?.();
+  }
+}
+
+// A "watch" starts when a device opens a title and keeps growing while the player keeps fetching
+// from it; half an hour without the device touching that title ends the entry.
+function flushSession(rec) {
+  const session = rec.session;
+  if (!session) return;
+  rec.session = null;
+  const seconds = Math.min(SESSION_MAX_MS, Math.max(0, session.lastAt - session.startedAt));
+  if (seconds >= 2000 || session.bytes >= 512 * 1024) {
+    rec.history.unshift({
+      ts: session.startedAt, id: session.id, title: session.title,
+      seconds: Math.round(seconds / 1000), bytes: session.bytes,
+    });
+    if (rec.history.length > HISTORY_KEEP) rec.history.length = HISTORY_KEEP;
+    scheduleSave();
+  }
+}
+
+function watchItem(rec, item) {
+  if (!item) return;
+  const now = Date.now();
+  if (rec.session) {
+    if (rec.session.id === item.id) {
+      if (now - rec.session.startedAt > SESSION_MAX_MS || now - rec.session.lastAt > SESSION_GAP_MS) flushSession(rec);
+      else {
+        rec.session.lastAt = now;
+        return;
+      }
+    } else {
+      flushSession(rec);
+    }
+  }
+  rec.session = { id: item.id, title: watchTitle(item) || item.id, startedAt: now, lastAt: now, bytes: 0 };
+}
+
+function reachItem(rec, item) {
+  if (!item) return;
+  if (rec.session && rec.session.id === item.id) rec.session.lastAt = Date.now();
+}
+
+function beginActivity(req, res) {
+  const ip = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  const ua = String(req.headers['user-agent'] || '');
+  const rec = recordFor(ip, ua || null);
+  const now = Date.now();
+  rec.lastSeen = now;
+  rec.total.requests++;
+  dayBucket(rec, dateKey(now)).requests++;
+  rec.open++;
+
+  const state = { client: rec, itemId: null, itemBytes: 0, startedAt: now, isWatch: false, isDirect: false, isSegment: false, touchedUsage: false };
+  openResponses.add(state);
+  let touch = now;
+  const write = res.write;
+  const end = res.end;
+  res.write = function (chunk, ...args) {
+    const n = bodyBytes(chunk);
+    if (n) {
+      rec.total.bytes += n;
+      dayBucket(rec, dateKey(Date.now())).bytes += n;
+      state.itemBytes += n;
+      state.touchedUsage = true;
+      const t = Date.now();
+      if (t - touch > 1000) {
+        rec.lastSeen = t;
+        touch = t;
+      }
+    }
+    return write.call(this, chunk, ...args);
+  };
+  res.end = function (chunk, ...args) {
+    const n = bodyBytes(chunk);
+    if (n) {
+      rec.total.bytes += n;
+      dayBucket(rec, dateKey(Date.now())).bytes += n;
+      state.itemBytes += n;
+      state.touchedUsage = true;
+    }
+    return end.call(this, chunk, ...args);
+  };
+
+  let closed = false;
+  const done = () => {
+    if (closed) return;
+    closed = true;
+    openResponses.delete(state);
+    const t = Date.now();
+    if (state.isWatch) rec.watchingOpen = Math.max(0, rec.watchingOpen - 1);
+    if (state.isDirect) {
+      const secs = Math.max(0, Math.round((t - state.startedAt) / 1000));
+      if (secs) {
+        rec.total.seconds += secs;
+        dayBucket(rec, dateKey(t)).seconds += secs;
+        state.touchedUsage = true;
+      }
+    } else if (state.isSegment && res.statusCode < 400) {
+      rec.total.seconds += SEG;
+      dayBucket(rec, dateKey(t)).seconds += SEG;
+    }
+    if (rec.session && state.itemId && rec.session.id === state.itemId) {
+      rec.session.bytes += state.itemBytes;
+      rec.session.lastAt = t;
+    }
+    rec.open = Math.max(0, rec.open - 1);
+    rec.lastSeen = t;
+    if (state.touchedUsage) scheduleSave();
+  };
+  res.once('finish', done);
+  res.once('close', done);
+  return state;
+}
+
+function watchTitle(item) {
+  if (!item) return null;
+  return item.show ? `${item.show}${item.epLabel ? ` ${item.epLabel}` : ''}` : item.title;
+}
+
+function noteAccess(state, parts, item) {
+  if (!state) return;
+  const rec = state.client;
+  const route = parts[0] || '';
+  const last = parts[parts.length - 1] || '';
+  if (route === 'video' || route === 'hls') {
+    rec.mode = 'watching';
+    rec.title = watchTitle(item);
+    rec.watchingOpen++;
+    state.isWatch = true;
+    if (route === 'video') {
+      state.isDirect = true;
+      if (item) {
+        state.itemId = item.id;
+        watchItem(rec, item);
+      }
+    } else if (/\.m3u8$/.test(last)) {
+      if (item) {
+        state.itemId = item.id;
+        watchItem(rec, item);
+      }
+    } else if (item) {
+      state.itemId = item.id;
+      reachItem(rec, item);
+      state.isSegment = /^\d+\.ts$/.test(last);
+    }
+  } else if (route === 'subs' && item) {
+    rec.mode = 'watching';
+    rec.title = watchTitle(item);
+    state.itemId = item.id;
+    reachItem(rec, item);
+  } else if (route === 'api' && (parts[1] === 'info' || parts[1] === 'prepare' || parts[1] === 'hls')) {
+    rec.mode = 'opening';
+    rec.title = watchTitle(item);
+    if (item) {
+      state.itemId = item.id;
+      reachItem(rec, item);
+    }
+  } else if (route === 'api' && parts[1] === 'library') {
+    rec.mode = 'browsing';
+    rec.title = null;
+  } else if (route === 'thumb' || route === '' || route === 'watch') {
+    if (rec.watchingOpen === 0) {
+      rec.mode = 'browsing';
+      rec.title = null;
+    }
+  }
+  rec.lastSeen = Date.now();
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const rec of activity.values()) {
+    if (rec.session && now - rec.session.lastAt > SESSION_GAP_MS) flushSession(rec);
+  }
+}, 60_000).unref();
+
+// Current and recent devices, newest activity first. `active` stays true while a response is open
+// (a movie being streamed) or while the device has talked to the server in the last minute.
+function activitySnapshot(range) {
+  const now = Date.now();
+  const todayKey = dateKey(now);
+  const monthStart = `${todayKey.slice(0, 7)}-01`;
+  const yearStart = `${todayKey.slice(0, 4)}-01-01`;
+  for (const [ip, rec] of activity) {
+    if (rec.session && now - rec.session.lastAt > SESSION_GAP_MS) flushSession(rec);
+    if (rec.open === 0 && now - rec.lastSeen > ACTIVITY_KEEP_MS && !rec.total.bytes && !rec.history.length) activity.delete(ip);
+  }
+  return [...activity.values()]
+    .map((rec) => {
+      // A movie that is still streaming has not "finished", so add its elapsed time to the usage
+      // shown now instead of waiting for the response to close (which could be hours).
+      let liveSeconds = 0;
+      for (const st of openResponses) {
+        if (st.client === rec && st.isDirect) liveSeconds += Math.max(0, now - st.startedAt);
+      }
+      liveSeconds = Math.round(liveSeconds / 1000);
+      const today = rangeTotals(rec, todayKey, todayKey);
+      const month = rangeTotals(rec, monthStart, todayKey);
+      const year = rangeTotals(rec, yearStart, todayKey);
+      today.seconds += liveSeconds;
+      month.seconds += liveSeconds;
+      year.seconds += liveSeconds;
+      const out = {
+        id: rec.ip,
+        name: rec.host || rec.client || rec.name || rec.ip,
+        host: rec.host || null,
+        client: rec.client || null,
+        address: rec.ip,
+        firstSeen: rec.firstSeen,
+        active: rec.open > 0 || now - rec.lastSeen <= ACTIVITY_ACTIVE_MS,
+        activity: rec.mode,
+        title: rec.title,
+        bytes: rec.total.bytes,
+        seconds: rec.total.seconds + liveSeconds,
+        requests: rec.total.requests,
+        today,
+        thisMonth: month,
+        thisYear: year,
+        lastSeen: Math.max(0, Math.round((now - rec.lastSeen) / 1000)),
+        history: rec.history.slice(0, HISTORY_REPORT),
+      };
+      if (range) {
+        out.range = rangeTotals(rec, range.from, range.to);
+        if (todayKey >= range.from && todayKey <= range.to) out.range.seconds += liveSeconds;
+      }
+      return out;
+    })
+    .sort((a, b) => Number(b.active) - Number(a.active) || a.lastSeen - b.lastSeen);
+}
+
+// Exposed through the embedded control server, which is only reachable from this device.
+// `query` may carry "from=YYYY-MM-DD&to=YYYY-MM-DD" for a custom usage range.
+function activityForControl(query) {
+  let range = null;
+  try {
+    const params = new URLSearchParams(query || '');
+    const from = params.get('from');
+    const to = params.get('to');
+    if (from && to && /^\d{4}-\d{2}-\d{2}/.test(from) && /^\d{4}-\d{2}-\d{2}/.test(to)) {
+      range = from <= to ? { from, to } : { from: to, to: from };
+    }
+  } catch {}
+  return activitySnapshot(range);
+}
+
+
+
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x');
   const parts = url.pathname.split('/').filter(Boolean);
   if (!(await gate(req, res, url, parts))) return;
+  const request = beginActivity(req, res);
   // /api/<action>/<id>  or  /video|thumb|subs|hls/<id>/...
   const id = parts[0] === 'api' ? parts[2] : parts[1];
   // Unknown movie (just added, or a device resuming right after a restart): look again before giving up.
   const movieRoute = ['api', 'video', 'thumb', 'subs', 'hls'].includes(parts[0]) && parts[1] !== 'library';
   if (movieRoute && id && !library.has(id)) await scanLibrary();
   const item = library.get(id) || null;
+  noteAccess(request, parts, item);
+
 
   if (url.pathname === '/vendor/hls.min.js') {
     res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'max-age=86400' });
@@ -865,6 +1450,227 @@ function cacheSize() {
   return dirSize(CACHE_DIR);
 }
 
+// ---------- mDNS: let the Android app find this computer ----------
+// Advertises _homeflix._tcp.local on the LAN. Implemented here with Node's dgram (no dependency) so the
+// server keeps its "standard library only" promise. If anything goes wrong (another mDNS daemon holds
+// port 5353, multicast unavailable) discovery is simply unavailable; the address/QR still work.
+const MDNS_ADDR = '224.0.0.251';
+const MDNS_PORT = 5353;
+let mdnsSocket = null;
+let mdnsChild = null;
+
+// The name clients show for this server. Android's embedded Node reports "localhost", which is
+// useless to a phone trying to tell servers apart, so treat it (and blanks) as "no name".
+function deviceHostname() {
+  const raw = String(os.hostname() || '').split('.')[0].trim();
+  return raw && !/^localhost$/i.test(raw) ? raw : null;
+}
+
+function mdnsHost() {
+  const raw = String(deviceHostname() || 'homeflix').split('.')[0] || 'homeflix';
+  return raw.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || 'homeflix';
+}
+
+function dnsName(name) {
+  const parts = [];
+  for (const label of String(name).split('.').filter(Boolean)) {
+    const bytes = Buffer.from(label, 'utf8');
+    parts.push(Buffer.from([Math.min(bytes.length, 63)]), bytes.subarray(0, 63));
+  }
+  parts.push(Buffer.from([0]));
+  return Buffer.concat(parts);
+}
+
+function mdnsRecords(ttl = null) {
+  const host = mdnsHost();
+  const label = deviceHostname();
+  const service = '_homeflix._tcp.local';
+  const instance = `${label ? `HOMEFLIX ${host}` : 'HOMEFLIX'}._homeflix._tcp.local`;
+  const target = `${host}.local`;
+  const records = [];
+  const record = (name, type, recordTtl, rdata, unique) => {
+    const head = Buffer.alloc(10);
+    head.writeUInt16BE(type, 0);
+    head.writeUInt16BE(unique ? 0x8001 : 0x0001, 2);
+    head.writeUInt32BE(Math.max(0, ttl == null ? recordTtl : ttl), 4);
+    head.writeUInt16BE(rdata.length, 8);
+    records.push(Buffer.concat([dnsName(name), head, rdata]));
+  };
+  record(service, 12, 4500, dnsName(instance), false);
+  const srv = Buffer.alloc(6);
+  srv.writeUInt16BE(0, 0); // priority
+  srv.writeUInt16BE(0, 2); // weight
+  srv.writeUInt16BE(Number(CONFIG.port) || 8080, 4);
+  record(instance, 33, 120, Buffer.concat([srv, dnsName(target)]), true);
+  const txtParts = [`version=${APP_VERSION}`, `api=${API_VERSION}`, 'path=/'];
+  if (label) txtParts.unshift(`name=${label}`);
+  const txt = txtParts
+    .map((s) => { const b = Buffer.from(s, 'utf8'); return Buffer.concat([Buffer.from([b.length]), b]); });
+  record(instance, 16, 4500, Buffer.concat(txt), true);
+  for (const ip of lanAddresses()) {
+    const bytes = ip.split('.').map(Number);
+    if (bytes.length === 4 && bytes.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+      record(target, 1, 120, Buffer.from(bytes), true);
+    }
+  }
+  return { records, target, service };
+}
+
+function mdnsPacket(ttl = null) {
+  const { records } = mdnsRecords(ttl);
+  const header = Buffer.alloc(12);
+  header.writeUInt16BE(0, 0); // id
+  header.writeUInt16BE(0x8400, 2); // response + authoritative
+  header.writeUInt16BE(0, 4); // questions
+  header.writeUInt16BE(records.length, 6); // answers
+  return Buffer.concat([header, ...records]);
+}
+
+function readDnsName(buf, offset) {
+  const labels = [];
+  let next = offset;
+  let jumped = false;
+  for (let guard = 0; guard < 128 && offset < buf.length; guard++) {
+    const len = buf[offset];
+    if (len === 0) {
+      if (!jumped) next = offset + 1;
+      break;
+    }
+    if ((len & 0xc0) === 0xc0) {
+      if (offset + 1 >= buf.length) break;
+      const pointer = ((len & 0x3f) << 8) | buf[offset + 1];
+      if (!jumped) next = offset + 2;
+      jumped = true;
+      offset = pointer;
+      continue;
+    }
+    offset++;
+    labels.push(buf.toString('utf8', offset, offset + len));
+    offset += len;
+    if (!jumped) next = offset;
+  }
+  return { name: labels.join('.').toLowerCase(), next };
+}
+
+function onMdnsMessage(msg, rinfo) {
+  if (!mdnsSocket || msg.length < 12) return;
+  const questions = msg.readUInt16BE(4);
+  const { target, service } = mdnsRecords();
+  const host = `${mdnsHost()}.local`;
+  let offset = 12;
+  let asked = false;
+  let unicast = false;
+  for (let i = 0; i < questions && offset < msg.length; i++) {
+    const parsed = readDnsName(msg, offset);
+    offset = parsed.next;
+    if (offset + 4 > msg.length) break;
+    const qclass = msg.readUInt16BE(offset + 2);
+    offset += 4;
+    const name = parsed.name;
+    if (name === service || name.endsWith(`.${service}`) || name === target || name === host ||
+        name === '_services._dns-sd._udp.local') {
+      asked = true;
+      if (qclass & 0x8000) unicast = true; // QU: reply directly to the asker
+    }
+  }
+  if (!asked) return;
+  const packet = mdnsPacket();
+  if (unicast) mdnsSocket.send(packet, 0, packet.length, rinfo.port, rinfo.address, () => {});
+  else mdnsSocket.send(packet, 0, packet.length, MDNS_PORT, MDNS_ADDR, () => {});
+}
+
+// macOS keeps port 5353 for mDNSResponder, so ask it to publish the service instead of fighting for
+// the socket. Linux/Windows use the built-in responder; if the port is taken (Avahi) the helper below
+// takes over.
+function startMdnsHelper() {
+  if (mdnsChild) return;
+  const label = deviceHostname();
+  const instance = label ? `HOMEFLIX ${mdnsHost()}` : 'HOMEFLIX';
+  const txt = [`version=${APP_VERSION}`, `api=${API_VERSION}`, 'path=/'];
+  if (label) txt.unshift(`name=${label}`);
+  const candidates = process.platform === 'darwin'
+    ? [{ cmd: 'dns-sd', args: ['-R', instance, '_homeflix._tcp', '.', String(CONFIG.port), ...txt] }]
+    : process.platform === 'linux'
+      ? [{ cmd: 'avahi-publish-service', args: [instance, '_homeflix._tcp', String(CONFIG.port), ...txt] }]
+      : [{ cmd: 'dns-sd', args: ['-R', instance, '_homeflix._tcp', '.', String(CONFIG.port), ...txt] }];
+  const next = () => {
+    const option = candidates.shift();
+    if (!option || mdnsChild) return;
+    let child;
+    try {
+      child = spawn(option.cmd, option.args, { stdio: 'ignore', windowsHide: true });
+    } catch {
+      next();
+      return;
+    }
+    mdnsChild = child;
+    child.on('error', () => {
+      if (mdnsChild === child) mdnsChild = null;
+      next();
+    });
+    child.on('exit', () => {
+      if (mdnsChild === child) mdnsChild = null;
+    });
+  };
+  next();
+}
+
+function startMdns() {
+  if (mdnsSocket || mdnsChild) return;
+  if (process.platform === 'darwin') {
+    startMdnsHelper();
+    return;
+  }
+  let sock;
+  try {
+    sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  } catch (err) {
+    console.error(`mDNS discovery unavailable: ${err.message}`);
+    return;
+  }
+  sock.on('error', (err) => {
+    console.error(`mDNS discovery unavailable: ${err.message}`);
+    if (mdnsSocket === sock) mdnsSocket = null;
+    try { sock.close(); } catch {}
+    startMdnsHelper();
+  });
+  sock.on('message', (msg, rinfo) => { try { onMdnsMessage(msg, rinfo); } catch {} });
+  sock.bind(MDNS_PORT, () => {
+    if (mdnsSocket !== sock) return;
+    try {
+      sock.addMembership(MDNS_ADDR);
+      sock.setMulticastTTL(255);
+      sock.setMulticastLoopback(true);
+    } catch (err) {
+      console.error(`mDNS discovery unavailable: ${err.message}`);
+    }
+    const announce = () => {
+      if (mdnsSocket !== sock) return;
+      const packet = mdnsPacket();
+      sock.send(packet, 0, packet.length, MDNS_PORT, MDNS_ADDR, () => {});
+    };
+    announce();
+    setTimeout(announce, 1000);
+    setTimeout(announce, 3000);
+  });
+  mdnsSocket = sock;
+}
+
+function stopMdns() {
+  if (mdnsChild) {
+    try { mdnsChild.kill(); } catch {}
+    mdnsChild = null;
+  }
+  const sock = mdnsSocket;
+  if (!sock) return;
+  mdnsSocket = null;
+  try {
+    const packet = mdnsPacket(0); // goodbye: TTL 0
+    sock.send(packet, 0, packet.length, MDNS_PORT, MDNS_ADDR, () => {});
+  } catch {}
+  try { sock.close(); } catch {}
+}
+
 let server = null;
 
 function start() {
@@ -879,13 +1685,20 @@ function start() {
     server.once('error', reject);
     server.listen(CONFIG.port, '0.0.0.0', () => {
       server.off('error', reject);
+      CONFIG.port = server.address().port;
+      startMdns();
       resolve(server.address().port);
     });
   });
 }
 
 function stop() {
+  try {
+    for (const rec of activity.values()) flushSession(rec);
+    saveDevices();
+  } catch {}
   return new Promise((resolve) => {
+    stopMdns();
     for (const st of hls.values()) stopHls(st);
     if (!server) return resolve();
     server.closeAllConnections();
@@ -894,7 +1707,7 @@ function stop() {
   });
 }
 
-module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT };
+module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, isValidPin, VIDEO_EXT, activityForControl, normalizeFolders };
 
 if (require.main === module) {
   configure(loadConfig());
@@ -902,7 +1715,7 @@ if (require.main === module) {
     .then(async (port) => {
       const movies = await scanLibrary();
       console.log('\n  HOMEFLIX is running.\n');
-      console.log(`  Library: ${movies.length} video(s) from ${CONFIG.folders.join(', ')}`);
+      console.log(`  Library: ${movies.length} video(s) from ${CONFIG.folders.map((f) => f.path).join(', ')}`);
       console.log('  On your iPad (same Wi-Fi), open Safari and go to:\n');
       for (const ip of lanAddresses()) console.log(`     http://${ip}:${port}`);
       console.log(`\n  On this laptop: http://localhost:${port}`);

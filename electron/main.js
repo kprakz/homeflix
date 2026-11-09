@@ -1,5 +1,5 @@
 // HOMEFLIX desktop app (Windows, macOS and Linux): runs the streaming server in the background, lives in
-// the system tray / menu bar, and gives a small window to pick movie folders and see the address to
+// the system tray / menu bar, and gives a small window to pick video folders and see the address to
 // open on other devices.
 
 const { app, BrowserWindow, Tray, Menu, Notification, dialog, ipcMain, shell, clipboard, nativeImage } = require('electron');
@@ -43,11 +43,23 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(boot);
 }
 
+function normalizeFolders(folders) {
+  const next = new Map();
+  for (const entry of Array.isArray(folders) ? folders : []) {
+    const raw = typeof entry === 'string' ? entry : entry && entry.path;
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+    const type = entry && typeof entry === 'object' && entry.type === 'series' ? 'series' : 'movies';
+    const key = raw.toLowerCase();
+    if (!next.has(key)) next.set(key, { path: raw, type });
+  }
+  return [...next.values()];
+}
+
 function loadSettings() {
   try {
     settings = { ...settings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) };
   } catch {}
-  settings.folders = settings.folders.filter((f) => fs.existsSync(f));
+  settings.folders = normalizeFolders(settings.folders).filter((f) => fs.existsSync(f.path));
   if (!settings.secret) {
     settings.secret = crypto.randomBytes(16).toString('hex');
     saveSettings();
@@ -65,6 +77,7 @@ function applyConfig() {
     pin: settings.pin,
     secret: settings.secret,
     cacheDir: CACHE_DIR,
+    dataDir: app.getPath('userData'),
     ffmpeg: path.join(FFMPEG_DIR, 'ffmpeg' + EXE),
     ffprobe: path.join(FFMPEG_DIR, 'ffprobe' + EXE),
   });
@@ -240,9 +253,14 @@ async function state() {
     url,
     localUrl: port ? `http://localhost:${port}` : null,
     qr: url ? await QRCode.toDataURL(url, { margin: 1, width: 360, color: { dark: '#000000', light: '#ffffff' } }) : null,
-    folders: settings.folders.map((f) => ({ path: f, count: movies.filter((m) => m.path.toLowerCase().startsWith(path.join(f, path.sep).toLowerCase())).length })),
+    folders: settings.folders.map((f) => ({
+      path: f.path,
+      type: f.type,
+      count: movies.filter((m) => m.path.toLowerCase().startsWith(path.join(f.path, path.sep).toLowerCase())).length,
+    })),
     movieCount: movies.length,
     openAtLogin: settings.openAtLogin,
+    devices: homeflix.activityForControl ? homeflix.activityForControl() : [],
     cacheBytes: await homeflix.cacheSize(),
     network: await networkStatus(),
     ffmpegFound: fs.existsSync(path.join(FFMPEG_DIR, 'ffmpeg' + EXE)),
@@ -253,16 +271,18 @@ async function state() {
 
 ipcMain.handle('state', state);
 
-ipcMain.handle('add-folder', async () => {
+ipcMain.handle('add-folder', async (_e, requestedType) => {
+  const type = requestedType === 'series' ? 'series' : 'movies';
   const result = await dialog.showOpenDialog(win, {
-    title: 'Choose the folder where your movies are',
+    title: type === 'series' ? 'Choose a TV series folder' : 'Choose a movies folder',
     buttonLabel: 'Use this folder',
     properties: ['openDirectory', 'multiSelections'],
   });
   if (!result.canceled) {
     for (const folder of result.filePaths) {
-      const already = settings.folders.some((f) => f.toLowerCase() === folder.toLowerCase());
-      if (!already) settings.folders.push(folder);
+      const existing = settings.folders.find((f) => f.path.toLowerCase() === folder.toLowerCase());
+      if (existing) existing.type = type;
+      else settings.folders.push({ path: folder, type });
     }
     saveSettings();
     applyConfig();
@@ -270,8 +290,18 @@ ipcMain.handle('add-folder', async () => {
   return state();
 });
 
+ipcMain.handle('set-folder-type', async (_e, folder, requestedType) => {
+  const entry = settings.folders.find((f) => f.path === folder);
+  if (entry) {
+    entry.type = requestedType === 'series' ? 'series' : 'movies';
+    saveSettings();
+    applyConfig();
+  }
+  return state();
+});
+
 ipcMain.handle('remove-folder', async (_e, folder) => {
-  settings.folders = settings.folders.filter((f) => f !== folder);
+  settings.folders = settings.folders.filter((f) => f.path !== folder);
   saveSettings();
   applyConfig();
   return state();
