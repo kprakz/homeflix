@@ -19,8 +19,8 @@
     <string name="pin_new">New PIN</string>
 
     <string name="folders_title">Folders to share</string>
-    <string name="folders_hint">Tick only the folders with your movies. Nothing is shared until you do, and only the ticked folders themselves, not folders inside them.</string>
-    <string name="folder_personal">Personal videos (camera, chats or social apps): anyone with the PIN on your Wi-Fi could watch them.</string>
+    <string name="folders_hint">Tick only the folders with your movies. Nothing is shared until you do, and only the ticked folders themselves, not folders inside them.\n\nFolders marked (personal) hold camera, chat or social-app videos: anyone with the PIN on your Wi-Fi could watch them.</string>
+    <string name="folder_personal">(personal)</string>
     <string name="folders_none">No videos found on this phone yet.</string>
     <string name="folders_permission">HOMEFLIX needs permission to see the videos on this phone.</string>
     <string name="allow_videos">Allow access to videos</string>

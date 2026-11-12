@@ -196,7 +196,7 @@ class MainActivity : AppCompatActivity() {
         for (f in folders) {
             val box = CheckBox(this)
             val line = getString(R.string.folder_line, f.name, f.count, Formatter.formatShortFileSize(this, f.bytes))
-            box.text = if (Folders.isPersonal(f.path)) "$line\n${getString(R.string.folder_personal)}" else line
+            box.text = if (Folders.isPersonal(f.path)) "$line ${getString(R.string.folder_personal)}" else line
             box.setTextColor(getColor(R.color.text))
             box.isChecked = f.path in chosen
             box.setOnCheckedChangeListener { _, on ->
