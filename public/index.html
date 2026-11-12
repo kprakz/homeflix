@@ -1234,8 +1234,9 @@ function pinKey(k) {
   else if (pin.length < PIN_MAX) pin += k;
   drawPin();
 }
+// The delete key is drawn, not a ⌫ character: many TV browsers have no font with that symbol.
 $('keypad').innerHTML = [...'123456789'].map((d) => `<button data-pin="${d}">${d}</button>`).join('') +
-  '<button data-pin="del" aria-label="Delete">⌫</button><button data-pin="0">0</button><button data-pin="go" class="go">OK</button>';
+  '<button data-pin="del" aria-label="Delete"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M21 5H9l-6 7 6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"/><path d="m16 9-5 6M11 9l5 6"/></svg></button><button data-pin="0">0</button><button data-pin="go" class="go">OK</button>';
 $('keypad').addEventListener('click', (e) => { const b = e.target.closest('[data-pin]'); if (b) pinKey(b.dataset.pin); });
 // Number keys on a keyboard or TV remote type the PIN; Enter unlocks; Backspace deletes.
 document.addEventListener('keydown', (e) => {
