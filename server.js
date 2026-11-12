@@ -10,7 +10,10 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 
 const ROOT = __dirname;
-let CONFIG = { port: 8080, folders: [], minSizeMB: 5, cacheDir: 'cache', ffmpeg: 'ffmpeg', ffprobe: 'ffprobe' };
+// maxCacheGB caps converted copies (null: only keep reserveGB of disk free). videoConvert: false never
+// re-encodes video (phones, to stay cool). clearCacheOnStop empties the cache when the server stops.
+let CONFIG = { port: 8080, folders: [], minSizeMB: 5, cacheDir: 'cache', ffmpeg: 'ffmpeg', ffprobe: 'ffprobe',
+  maxCacheGB: null, reserveGB: 2, videoConvert: true, clearCacheOnStop: false };
 let CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.avi', '.webm', '.wmv', '.flv', '.ts', '.m2ts', '.mpg', '.mpeg', '.3gp']);
 const DIRECT_CONTAINERS = new Set(['.mp4', '.m4v', '.mov']);
@@ -258,9 +261,11 @@ function audioParam(url) {
 }
 
 // ---------- disk space ----------
-// Converted copies are as big as the movie. Keep 2 GB free on the laptop by deleting the copies
-// watched longest ago (their mtime is bumped whenever they're streamed).
-const RESERVE = 2 * 1024 ** 3;
+// Converted copies are as big as the movie. Keep reserveGB free on the disk, and the cache under
+// maxCacheGB when set, by deleting the copies watched longest ago (their mtime is bumped whenever
+// they're streamed).
+const reserve = () => (CONFIG.reserveGB == null ? 2 : CONFIG.reserveGB) * 1024 ** 3;
+const cacheCap = () => (CONFIG.maxCacheGB ? CONFIG.maxCacheGB * 1024 ** 3 : Infinity);
 
 async function freeBytes() {
   try {
@@ -273,7 +278,10 @@ async function freeBytes() {
 
 async function makeRoom(need, keep) {
   let free = await freeBytes();
-  if (free >= need + RESERVE) return true;
+  const cap = cacheCap();
+  let used = cap < Infinity ? await dirSize(CACHE_DIR) : 0;
+  const fits = () => free >= need + reserve() && used + need <= cap;
+  if (fits()) return true;
   const busy = new Set([...hls.values()].filter((st) => st.job).map((st) => st.dir));
   const candidates = [];
   for (const e of await fsp.readdir(CACHE_DIR, { withFileTypes: true }).catch(() => [])) {
@@ -286,15 +294,34 @@ async function makeRoom(need, keep) {
   candidates.sort((a, b) => a.used - b.used);
   const removed = new Set();
   for (const c of candidates) {
-    if (free >= need + RESERVE) break;
+    if (fits()) break;
     const size = c.dir ? await dirSize(c.p) : (await fsp.stat(c.p).catch(() => ({ size: 0 }))).size;
     await fsp.rm(c.p, { recursive: true, force: true }).catch(() => {});
     removed.add(c.p);
     free += size;
-    console.log(`Freed ${(size / 1e9).toFixed(1)} GB by removing an old converted copy`);
+    used -= size;
+    console.log(`Freed ${size >= 1e9 ? `${(size / 1e9).toFixed(1)} GB` : `${Math.round(size / 1e6)} MB`} by removing an old converted copy`);
   }
   for (const [id, st] of hls) if (removed.has(st.dir)) hls.delete(id);
-  return free >= need + RESERVE;
+  return fits();
+}
+
+// ---------- pausing conversions ----------
+// The phone app pauses converting when the phone runs hot or its battery is low; streaming files
+// that need no converting carries on. paused is the reason shown to viewers, or null.
+let paused = null;
+function setPaused(reason) {
+  reason = reason || null;
+  if (reason === paused) return;
+  paused = reason;
+  if (!reason) return console.log('Converting resumed');
+  console.log(`Converting paused: ${reason}`);
+  for (const st of hls.values()) stopHls(st);
+  for (const job of jobs.values()) {
+    if (job.state !== 'working' || !job.child) continue;
+    job.pausedBy = reason;
+    job.child.kill();
+  }
 }
 
 function touch(file) {
@@ -306,10 +333,17 @@ async function prepare(item, audio = 0) {
   const existing = jobStatus(item, audio);
   if (existing.state === 'ready' || existing.state === 'working') return existing;
   if (item.downloading) return { state: 'error', progress: 0, error: 'This file is still downloading. Try again once it finishes.' };
+  if (paused) return { state: 'error', progress: 0, code: 'paused', error: paused };
+  if (item.size * 1.02 > cacheCap()) {
+    return { state: 'error', progress: 0, code: 'toobig', error: `This movie is bigger than the ${CONFIG.maxCacheGB} GB storage limit set in the HOMEFLIX app. Raise the limit to play it.` };
+  }
   if (!(await makeRoom(item.size * 1.02))) {
-    return { state: 'error', progress: 0, code: 'nospace', error: `Not enough free space on the laptop to prepare this (needs about ${Math.ceil((item.size * 1.02 + RESERVE) / 1e9)} GB free).` };
+    return { state: 'error', progress: 0, code: 'nospace', error: `Not enough free space to prepare this (needs about ${Math.ceil((item.size * 1.02 + reserve()) / 1e9)} GB free).` };
   }
   const job = { state: 'working', progress: 0, error: null };
+  // Kept off the JSON the player gets: the ffmpeg process, and why it was stopped.
+  Object.defineProperty(job, 'child', { value: null, writable: true, enumerable: false });
+  Object.defineProperty(job, 'pausedBy', { value: null, writable: true, enumerable: false });
   jobs.set(`${item.id}:${audio}`, job);
 
   try {
@@ -329,6 +363,7 @@ async function prepare(item, audio = 0) {
 
     console.log(`Preparing "${item.title}"${track && info.audios.length > 1 ? ` in ${track.label}` : ''} (${info.mode})…`);
     const child = spawn(CONFIG.ffmpeg, args, { windowsHide: true });
+    job.child = child;
     let stderr = '';
     child.stderr.on('data', (d) => (stderr += d));
     child.stdout.on('data', (d) => {
@@ -340,6 +375,11 @@ async function prepare(item, audio = 0) {
     });
     child.on('error', (err) => Object.assign(job, { state: 'error', error: `Could not start ffmpeg: ${err.message}` }));
     child.on('close', async (code) => {
+      job.child = null;
+      if (job.pausedBy) {
+        fsp.unlink(tmp).catch(() => {});
+        return Object.assign(job, { state: 'error', code: 'paused', error: job.pausedBy });
+      }
       if (code === 0) {
         await fsp.rename(tmp, out);
         Object.assign(job, { state: 'ready', progress: 1 });
@@ -519,10 +559,18 @@ function readProgress(st, job) {
 
 async function startHls(st, info, from) {
   stopHls(st);
+  if (CONFIG.videoConvert === false) {
+    st.error = 'This movie needs converting for this device, and converting video is turned off on this server.';
+    return;
+  }
+  if (paused) {
+    st.error = paused;
+    return;
+  }
   // Room for the rest of the movie at roughly 0.35 MB per second of 1080p H.264, else at least 1 GB.
   const need = (st.total - st.done.size) * SEG * 0.35e6;
-  if (!(await makeRoom(need, st.dir)) && (await freeBytes()) < 1024 ** 3) {
-    st.error = 'The laptop is out of disk space. Free some space and try again.';
+  if (!(await makeRoom(Math.min(need, cacheCap() / 2), st.dir)) && (await freeBytes()) < 1024 ** 3) {
+    st.error = 'The server is out of disk space. Free some space and try again.';
     return;
   }
   fs.mkdirSync(st.dir, { recursive: true });
@@ -773,6 +821,7 @@ async function handle(req, res) {
       return send(res, 200, {
         ...publicItem(item), duration: info.duration, mode: info.mode, videoCodec: info.videoCodec, tenBit: info.tenBit, height: info.height,
         audios: info.audios.map(({ n, lang, label }) => ({ n, lang, label })),
+        limits: { videoConvert: CONFIG.videoConvert !== false, paused },
         subs: info.subs.map(({ key, lang, label }) => ({ key, lang, label })),
         ...jobStatus(item),
       });
@@ -887,6 +936,8 @@ function start() {
 function stop() {
   return new Promise((resolve) => {
     for (const st of hls.values()) stopHls(st);
+    for (const job of jobs.values()) if (job.child) job.child.kill();
+    if (CONFIG.clearCacheOnStop) setTimeout(() => clearCache().catch(() => {}), 500);
     if (!server) return resolve();
     server.closeAllConnections();
     server.close(() => resolve());
@@ -894,7 +945,7 @@ function stop() {
   });
 }
 
-module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT };
+module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, setPaused, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT };
 
 if (require.main === module) {
   configure(loadConfig());

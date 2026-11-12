@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">Your phone\'s movies on your TV and other devices, over your home Wi-Fi.</string>
+    <string name="qr_desc">QR code with the address to open on your TV or other device</string>
+
+    <string name="server_off">Server is off</string>
+    <string name="server_on">Streaming</string>
+    <string name="server_starting">Starting…</string>
+    <string name="start">Start streaming</string>
+    <string name="stop">Stop</string>
+    <string name="hint_off">Start it, then open the address on your TV, tablet or laptop. It keeps running with the screen off.</string>
+    <string name="hint_on">Open this on any device on the same Wi-Fi, or scan the code. Keep this phone charging for long movies.</string>
+    <string name="hint_no_wifi">Connect this phone to your home Wi-Fi first.</string>
+    <string name="hint_no_folders">Choose at least one folder below first.</string>
+
+    <string name="pin_title">Require a PIN</string>
+    <string name="pin_on">Devices enter this PIN once: %1$s</string>
+    <string name="pin_off">Off: anyone on this Wi-Fi can watch. Keep it on when you\'re not at home.</string>
+    <string name="pin_new">New PIN</string>
+
+    <string name="folders_title">Folders to share</string>
+    <string name="folders_hint">Tick the folders with your movies. Camera videos aren\'t shared unless you tick them.</string>
+    <string name="folders_none">No videos found on this phone yet.</string>
+    <string name="folders_permission">HOMEFLIX needs permission to see the videos on this phone.</string>
+    <string name="allow_videos">Allow access to videos</string>
+    <string name="folder_line">%1$s · %2$d videos · %3$s</string>
+
+    <string name="storage_title">Storage limit</string>
+    <string name="cache_used">Converted copies use %1$s of the limit. They\'re deleted when the server stops, and the oldest go first when the limit is reached.</string>
+    <string name="convert_title">Convert video (phone gets hot)</string>
+    <string name="convert_hint">Off: devices that can\'t play a movie\'s video format (often x265 on older TVs) can\'t watch it from this phone. On: the phone converts it while you watch, which heats it up and drains the battery.</string>
+
+    <string name="heat_title">Phone temperature</string>
+    <string name="heat_line">%1$s · %2$.0f °C · battery %3$d%%%4$s</string>
+    <string name="heat_charging">, charging</string>
+    <string name="heat_idle">Shown while the server is running.</string>
+
+    <string name="restarting">Restarting the server with the new settings…</string>
+    <string name="notif_channel">Streaming server</string>
+    <string name="notif_title">HOMEFLIX is streaming</string>
+    <string name="notif_starting">Starting…</string>
+    <string name="notif_serving">Open %1$s on your TV or other device.</string>
+    <string name="notif_no_wifi">Waiting for Wi-Fi.</string>
+</resources>
