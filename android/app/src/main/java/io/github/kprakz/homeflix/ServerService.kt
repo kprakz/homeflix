@@ -103,6 +103,8 @@ class ServerService : Service() {
             .put("maxCacheGB", s.cacheGb)
             .put("reserveGB", 1)
             .put("videoConvert", s.convertVideo)
+            .put("hlsEncoders", JSONArray(listOf("h264_mediacodec"))) // the phone's video chip
+            .put("cpuEncode", false) // never convert on the CPU: that's what makes phones hot
             .put("pin", if (s.pinOn) s.pin else JSONObject.NULL)
             .put("secret", s.secret)
         File(filesDir, "config.json").writeText(config.toString())

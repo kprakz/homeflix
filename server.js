@@ -15,7 +15,10 @@ const ROOT = __dirname;
 // maxCacheGB caps converted copies (null: only keep reserveGB of disk free). videoConvert: false never
 // re-encodes video (phones, to stay cool). clearCacheOnStop empties the cache when the server stops.
 let CONFIG = { port: 8080, folders: [], minSizeMB: 5, cacheDir: 'cache', ffmpeg: 'ffmpeg', ffprobe: 'ffprobe',
-  folderDepth: 6, maxCacheGB: null, reserveGB: 2, videoConvert: true, clearCacheOnStop: false };
+  folderDepth: 6, maxCacheGB: null, reserveGB: 2, videoConvert: true, clearCacheOnStop: false,
+  // hlsEncoders: the hardware H.264 encoders to use, instead of testing which work (null: test).
+  // cpuEncode: false never falls back to converting on the CPU (phones: it's what makes them hot).
+  hlsEncoders: null, cpuEncode: true };
 let CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.avi', '.webm', '.wmv', '.flv', '.ts', '.m2ts', '.mpg', '.mpeg', '.3gp']);
 const DIRECT_CONTAINERS = new Set(['.mp4', '.m4v', '.mov']);
@@ -463,6 +466,7 @@ const hls = new Map(); // id -> { item, dir, total, done: Set<number>, job, prof
 let encoderList = null;
 // Hardware encoders are ~3x faster than the CPU and keep the laptop cool; use the first that works.
 function workingEncoders() {
+  if (CONFIG.hlsEncoders) return Promise.resolve(CONFIG.hlsEncoders);
   if (!encoderList) {
     encoderList = (async () => {
       const found = [];
@@ -492,7 +496,17 @@ async function hlsProfiles(info) {
   }
   if (encoders.includes('h264_nvenc')) profiles.push({ name: 'NVIDIA NVENC', pre: [], vf: `scale=${fit}:-2,format=yuv420p`, enc: ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '23', '-b:v', '0', '-forced-idr', '1'] });
   if (encoders.includes('h264_amf')) profiles.push({ name: 'AMD AMF', pre: [], vf: `scale=${fit}:-2,format=yuv420p`, enc: ['-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'cqp', '-qp_i', '22', '-qp_p', '24', '-header_insertion_mode', 'idr'] });
-  profiles.push({ name: 'CPU', pre: [], vf: `scale=${fit}:-2,format=yuv420p`, enc: ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-forced-idr', '1'] });
+  // Android: the phone's video chip both decodes and encodes, which keeps it far cooler than the CPU.
+  // MediaCodec takes the keyframe spacing as a whole number of seconds, from gop / fps.
+  if (encoders.includes('h264_mediacodec')) {
+    const [num, den] = String((info.video && info.video.avg_frame_rate) || '24/1').split('/').map(Number);
+    const fps = num && den ? num / den : 24;
+    const enc = ['-c:v', 'h264_mediacodec', '-b:v', '6M', '-g', String(Math.round(fps * SEG))];
+    const hwDecoder = { hevc: 'hevc_mediacodec', h264: 'h264_mediacodec' }[info.videoCodec];
+    if (hwDecoder) profiles.push({ name: 'Android video chip', pre: ['-c:v', hwDecoder], vf: `scale=${fit}:-2,format=nv12`, enc });
+    profiles.push({ name: 'Android video chip (software decoding)', pre: [], vf: `scale=${fit}:-2,format=nv12`, enc });
+  }
+  if (CONFIG.cpuEncode !== false) profiles.push({ name: 'CPU', pre: [], vf: `scale=${fit}:-2,format=yuv420p`, enc: ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-forced-idr', '1'] });
   return profiles;
 }
 
@@ -577,6 +591,10 @@ async function startHls(st, info, from) {
   }
   fs.mkdirSync(st.dir, { recursive: true });
   const profiles = await hlsProfiles(info);
+  if (!profiles.length) {
+    st.error = 'This movie needs converting for this device, and this server has no way to convert video.';
+    return;
+  }
   const profile = profiles[Math.min(st.profile, profiles.length - 1)];
   const list = path.join(st.dir, 'run.m3u8');
   try {

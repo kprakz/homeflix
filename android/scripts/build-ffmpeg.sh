@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Builds ffmpeg and ffprobe for Android (arm64) from FFmpeg's own source release, with the NDK.
 # Only what HOMEFLIX's phone server needs: read every common format, convert audio to AAC, make
-# thumbnails and subtitles. No video encoders at all (the phone never re-encodes video, which is
-# what makes phones hot), so the build stays LGPL and small.
+# thumbnails and subtitles, and convert video with the phone's own video chip (Android MediaCodec,
+# through the NDK: no Java needed). No software video encoders (the CPU is what makes phones hot),
+# so the build stays LGPL and small.
 #
 #   ANDROID_NDK   path to the NDK (GitHub's Ubuntu runners: $ANDROID_NDK_LATEST_HOME)
 #   OUT           where ffmpeg and ffprobe go (default: android/build/ffmpeg/arm64-v8a)
@@ -32,7 +33,8 @@ cd "ffmpeg-$VERSION"
   --enable-pic --enable-static --disable-shared \
   --disable-doc --disable-debug --disable-ffplay \
   --disable-autodetect --disable-network --disable-avdevice --disable-devices --disable-hwaccels \
-  --disable-encoders --enable-encoder=aac,mjpeg,png,webvtt,mov_text,ass,ssa,subrip \
+  --enable-mediacodec \
+  --disable-encoders --enable-encoder=aac,mjpeg,png,webvtt,mov_text,ass,ssa,subrip,h264_mediacodec \
   --disable-muxers --enable-muxer=mp4,mov,ipod,mpegts,hls,segment,webvtt,image2,mjpeg,null \
   --disable-filters --enable-filter=scale,format,aformat,aresample,anull,null,copy,setpts,asetpts,pan,volume \
   --extra-ldflags="-Wl,-z,max-page-size=16384"

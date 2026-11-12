@@ -362,7 +362,7 @@ function renderHome() {
   html += showNames.length ? row('row-shows', 'TV Shows', showNames.map(showCard)) : '';
   for (const name of showNames) html += row('row-show-' + name.replace(/\W+/g, '-'), name, shows.get(name).map(movieCard));
   html += row('row-movies', 'Movies', films.map(movieCard));
-  $('rows').innerHTML = movies.length ? html : '<div class="empty">No movies yet. On your laptop, open the HOMEFLIX app and choose the folder where your movies are.</div>';
+  $('rows').innerHTML = movies.length ? html : '<div class="empty">No movies yet. In the HOMEFLIX app on your computer or phone, choose the folder where your movies are.</div>';
   renderHero(continuing[0] || movies.find((m) => !m.downloading));
 }
 
@@ -407,7 +407,7 @@ async function loadLibrary() {
     if (r.status === 401) return showLock(); // the PIN was turned on or changed
     movies = (await r.json()).map(parse);
   } catch {
-    $('rows').innerHTML = '<div class="empty error" style="padding-top:140px">Can’t reach the laptop. Is HOMEFLIX running?</div>';
+    $('rows').innerHTML = '<div class="empty error" style="padding-top:140px">Can’t reach HOMEFLIX. Is the computer or phone running it switched on and connected to the Wi-Fi?</div>';
     return;
   }
   shows = new Map();
@@ -550,7 +550,7 @@ async function openMovie(id, fromStart = false) {
   }
   const m = movies.find((x) => x.id === id) || parse({ ...i });
   if (i.downloading) {
-    stage.querySelector('.shade').innerHTML = `<h2>${esc(i.title)}</h2><div class="muted">Still downloading on the laptop. It’ll be ready to play once the download finishes.</div>`;
+    stage.querySelector('.shade').innerHTML = `<h2>${esc(i.title)}</h2><div class="muted">Still downloading. It’ll be ready to play once the download finishes.</div>`;
     return;
   }
   document.title = (m.show ? `${m.show} ${m.epLabel}` : i.title) + ' — HOMEFLIX';
@@ -752,7 +752,7 @@ function play(i, m, kind, startAt, audio = 0) {
       });
       h.loadSource(withKey(`/hls/${i.id}/${audio}/index.m3u8`));
       h.attachMedia(v);
-    }).catch(() => showPlayError('Couldn’t load the player. Check that the laptop is awake and HOMEFLIX is running.'));
+    }).catch(() => showPlayError('Couldn’t load the player. Check that the computer or phone running HOMEFLIX is awake and on the Wi-Fi.'));
   } else {
     v.src = withKey(kind === 'hls' ? `/hls/${i.id}/${audio}/index.m3u8` : `/video/${i.id}${audioQuery(audio)}`);
     if (resumeAt) v.addEventListener('loadedmetadata', () => { v.currentTime = resumeAt; }, { once: true });
@@ -826,7 +826,7 @@ function toCompatible() {
 
 function showPlayError(msg) {
   if (!$('stage').querySelector('.shade')) {
-    $('stage').insertAdjacentHTML('beforeend', `<div class="shade"><div class="error">${esc(msg || 'The video stopped loading. Check that the laptop is awake and HOMEFLIX is running.')}</div></div>`);
+    $('stage').insertAdjacentHTML('beforeend', `<div class="shade"><div class="error">${esc(msg || 'The video stopped loading. Check that the computer or phone running HOMEFLIX is awake and on the Wi-Fi.')}</div></div>`);
   }
 }
 

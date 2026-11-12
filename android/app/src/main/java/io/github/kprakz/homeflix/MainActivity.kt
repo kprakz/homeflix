@@ -1,7 +1,10 @@
 package io.github.kprakz.homeflix
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.PowerManager
+import android.provider.Settings as Settings_
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
@@ -49,6 +52,9 @@ class MainActivity : AppCompatActivity() {
 
         find<MaterialButton>(R.id.startStop).setOnClickListener { onStartStop() }
         find<MaterialButton>(R.id.allowVideos).setOnClickListener { requestPermissions(arrayOf(videoPermission), REQ_VIDEOS) }
+        find<MaterialButton>(R.id.batteryButton).setOnClickListener {
+            startActivity(Intent(Settings_.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
 
         val pinOn = find<MaterialSwitch>(R.id.pinOn)
         pinOn.isChecked = settings.pinOn
@@ -149,6 +155,11 @@ class MainActivity : AppCompatActivity() {
             qr.setImageBitmap(qrCode(address, 512))
         }
         shownAddress = address
+
+        // Phones that kill background apps cut the TV off mid-movie: ask to be left alone.
+        val restricted = !getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+        find<View>(R.id.batteryHint).visibility = if (restricted) View.VISIBLE else View.GONE
+        find<View>(R.id.batteryButton).visibility = if (restricted) View.VISIBLE else View.GONE
 
         val used = status?.cacheBytes ?: ServerService.cacheBytes(this)
         find<TextView>(R.id.cacheText).text = getString(R.string.cache_used, Formatter.formatShortFileSize(this, used))
