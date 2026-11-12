@@ -8,8 +8,10 @@ import java.io.File
 object Folders {
     data class Folder(val path: String, val name: String, val count: Int, val bytes: Long)
 
-    /** Camera recordings are personal: not offered unless the person picks them. */
-    fun isPersonal(path: String) = path.contains("/DCIM/", ignoreCase = true) || path.contains("/Screenshots", ignoreCase = true) || path.contains("/Screen record", ignoreCase = true)
+    private val PERSONAL = Regex("/(DCIM|Camera|Screenshots|Screen ?record\w*|WhatsApp[^/]*|Telegram Images|Snapchat|Instagram|IGSaver|InsMate[^/]*|Recordings?|Voice Recorder)(/|$)", RegexOption.IGNORE_CASE)
+
+    /** Folders that usually hold the person's own clips (camera, chats, social apps), shown with a warning. */
+    fun isPersonal(path: String) = PERSONAL.containsMatchIn(path)
 
     @Suppress("DEPRECATION") // DATA is still the file path, and Node reads files by path
     fun find(context: Context): List<Folder> {

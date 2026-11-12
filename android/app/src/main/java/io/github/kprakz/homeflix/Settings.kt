@@ -11,14 +11,13 @@ class Settings(context: Context) {
         // First run: a random PIN, so the phone server is never open to the whole Wi-Fi by default.
         if (!prefs.contains("pin")) prefs.edit().putString("pin", newPin()).putBoolean("pinOn", true).apply()
         if (!prefs.contains("secret")) prefs.edit().putString("secret", randomHex(16)).apply()
+        // The first test build ticked folders automatically, personal ones included: start over.
+        if (prefs.getInt("foldersVersion", 0) < 1) prefs.edit().remove("folders").putInt("foldersVersion", 1).apply()
     }
 
     var folders: Set<String>
         get() = prefs.getStringSet("folders", null)?.toSet() ?: emptySet()
         set(v) = prefs.edit().putStringSet("folders", v).apply()
-
-    /** True once the person has chosen folders at least once (so "none" is a real choice). */
-    val foldersChosen: Boolean get() = prefs.contains("folders")
 
     var pinOn: Boolean
         get() = prefs.getBoolean("pinOn", true)

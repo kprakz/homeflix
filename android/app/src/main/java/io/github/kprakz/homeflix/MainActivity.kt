@@ -191,12 +191,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
         hint.text = getString(R.string.folders_hint)
-        // Until the person chooses, share every folder except camera recordings.
-        if (!settings.foldersChosen) settings.folders = folders.filterNot { Folders.isPersonal(it.path) }.map { it.path }.toSet()
+        // Nothing is shared until the person ticks a folder.
         val chosen = settings.folders
         for (f in folders) {
             val box = CheckBox(this)
-            box.text = getString(R.string.folder_line, f.name, f.count, Formatter.formatShortFileSize(this, f.bytes))
+            val line = getString(R.string.folder_line, f.name, f.count, Formatter.formatShortFileSize(this, f.bytes))
+            box.text = if (Folders.isPersonal(f.path)) "$line\n${getString(R.string.folder_personal)}" else line
             box.setTextColor(getColor(R.color.text))
             box.isChecked = f.path in chosen
             box.setOnCheckedChangeListener { _, on ->

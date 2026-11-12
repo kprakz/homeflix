@@ -10,10 +10,12 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 
 const ROOT = __dirname;
+// folderDepth: how many sub-folder levels below each chosen folder are included (phones use 0: only
+// the folder itself, so a chosen "DCIM" never pulls in the camera roll).
 // maxCacheGB caps converted copies (null: only keep reserveGB of disk free). videoConvert: false never
 // re-encodes video (phones, to stay cool). clearCacheOnStop empties the cache when the server stops.
 let CONFIG = { port: 8080, folders: [], minSizeMB: 5, cacheDir: 'cache', ffmpeg: 'ffmpeg', ffprobe: 'ffprobe',
-  maxCacheGB: null, reserveGB: 2, videoConvert: true, clearCacheOnStop: false };
+  folderDepth: 6, maxCacheGB: null, reserveGB: 2, videoConvert: true, clearCacheOnStop: false };
 let CACHE_DIR = path.resolve(ROOT, CONFIG.cacheDir);
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.avi', '.webm', '.wmv', '.flv', '.ts', '.m2ts', '.mpg', '.mpeg', '.3gp']);
 const DIRECT_CONTAINERS = new Set(['.mp4', '.m4v', '.mov']);
@@ -72,7 +74,7 @@ function prettyName(file) {
 }
 
 async function walk(dir, depth, out) {
-  if (depth > 6) return;
+  if (depth > CONFIG.folderDepth) return;
   let entries;
   try {
     entries = await fsp.readdir(dir, { withFileTypes: true });

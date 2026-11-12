@@ -96,6 +96,7 @@ class ServerService : Service() {
             .put("port", s.port)
             .put("folders", JSONArray(s.folders.toList()))
             .put("minSizeMB", 5)
+            .put("folderDepth", 0) // only the ticked folders themselves, never what's inside them
             .put("cacheDir", cacheDir(this).path)
             .put("ffmpeg", "$libs/libffmpeg.so")
             .put("ffprobe", "$libs/libffprobe.so")
