@@ -14,8 +14,10 @@ import java.io.File
  * battery is low and not charging, converting pauses (plain streaming carries on). Writes the state
  * to heat.json, which the server reads and the app shows.
  *
- * Pauses at Android's "severe" thermal level or a battery at 43 °C, and resumes only once it's back
- * to "moderate" and under 40 °C, so it doesn't flip on and off.
+ * Goes mainly by the battery temperature, which every phone reports reliably: pauses at 42 °C and
+ * resumes under 39 °C, so it doesn't flip on and off. Android's own thermal status is only trusted
+ * when the battery agrees: some phones (a OnePlus 6T, for one) report "severe" at 35 °C all day.
+ * "Critical" and above always pause.
  */
 class HeatWatcher(private val context: Context, private val onChange: (State) -> Unit = {}) {
 
@@ -23,8 +25,8 @@ class HeatWatcher(private val context: Context, private val onChange: (State) ->
         /** A word for the app: Cool, Warm or Hot. */
         val label: String
             get() = when {
-                thermal >= PowerManager.THERMAL_STATUS_SEVERE || tempC >= 43f -> "Hot"
-                thermal >= PowerManager.THERMAL_STATUS_MODERATE || tempC >= 38f -> "Warm"
+                thermal >= PowerManager.THERMAL_STATUS_CRITICAL || tempC >= 42f -> "Hot"
+                tempC >= 37f -> "Warm"
                 else -> "Cool"
             }
     }
@@ -71,8 +73,9 @@ class HeatWatcher(private val context: Context, private val onChange: (State) ->
     }
 
     private fun update() {
-        hot = if (hot) thermal > PowerManager.THERMAL_STATUS_MODERATE || tempC >= 40f
-        else thermal >= PowerManager.THERMAL_STATUS_SEVERE || tempC >= 43f
+        val critical = thermal >= PowerManager.THERMAL_STATUS_CRITICAL
+        val severeAndWarm = thermal >= PowerManager.THERMAL_STATUS_SEVERE && tempC >= 38f
+        hot = critical || severeAndWarm || if (hot) tempC >= 39f else tempC >= 42f
         lowBattery = if (lowBattery) !charging && batteryPct < 20 else !charging && batteryPct <= 15
         val reason = when {
             hot -> "The phone running HOMEFLIX is hot, so converting is paused until it cools down. Movies that need no converting still play."
