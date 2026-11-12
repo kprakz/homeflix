@@ -52,9 +52,8 @@ jobs:
 
       - name: Build ffmpeg
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        env:
-          ANDROID_NDK: ${{ env.ANDROID_NDK_LATEST_HOME }}
-        run: bash android/scripts/build-ffmpeg.sh
+        # GitHub's Ubuntu machines come with the NDK; its path is a shell variable there.
+        run: ANDROID_NDK="$ANDROID_NDK_LATEST_HOME" bash android/scripts/build-ffmpeg.sh
 
       - name: Get the Node.js runtime
         run: bash android/scripts/fetch-native.sh
