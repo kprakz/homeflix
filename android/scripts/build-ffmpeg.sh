@@ -33,7 +33,7 @@ cd "ffmpeg-$VERSION"
   --enable-pic --enable-static --disable-shared \
   --disable-doc --disable-debug --disable-ffplay \
   --disable-autodetect --disable-network --disable-avdevice --disable-devices --disable-hwaccels \
-  --enable-mediacodec \
+  --enable-jni --enable-mediacodec \
   --disable-encoders --enable-encoder=aac,mjpeg,png,webvtt,mov_text,ass,ssa,subrip,h264_mediacodec \
   --disable-muxers --enable-muxer=mp4,mov,ipod,mpegts,hls,segment,webvtt,image2,mjpeg,null \
   --disable-filters --enable-filter=scale,format,aformat,aresample,anull,null,copy,setpts,asetpts,pan,volume \
