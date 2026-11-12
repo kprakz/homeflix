@@ -8,7 +8,7 @@ import java.io.File
 object Folders {
     data class Folder(val path: String, val name: String, val count: Int, val bytes: Long)
 
-    private val PERSONAL = Regex("/(DCIM|Camera|Screenshots|Screen ?record\w*|WhatsApp[^/]*|Telegram Images|Snapchat|Instagram|IGSaver|InsMate[^/]*|Recordings?|Voice Recorder)(/|$)", RegexOption.IGNORE_CASE)
+    private val PERSONAL = Regex("/(DCIM|Camera|Screenshots|Screen ?record[a-z]*|WhatsApp[^/]*|Telegram Images|Snapchat|Instagram|IGSaver|InsMate[^/]*|Recordings?|Voice Recorder)(/|$)", RegexOption.IGNORE_CASE)
 
     /** Folders that usually hold the person's own clips (camera, chats, social apps), shown with a warning. */
     fun isPersonal(path: String) = PERSONAL.containsMatchIn(path)
