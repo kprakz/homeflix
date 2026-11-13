@@ -817,6 +817,10 @@
     z-index: 100;
     font-family: inherit;
   }
+  body.watching .conv-widget,
+  body:has(#watch.on) .conv-widget {
+    display: none !important;
+  }
   .conv-pill {
     display: inline-flex;
     align-items: center;
@@ -1694,7 +1698,8 @@ async function openMovie(id, fromStart = false) {
   closeModal(true);
   $('watch').classList.add('on');
   $('watch').classList.remove('playing', 'waiting', 'osd-hidden');
-  document.body.classList.add('lock');
+  document.body.classList.add('lock', 'watching');
+  if ($('convWidget')) $('convWidget').style.display = 'none';
   const stage = $('stage');
   stage.innerHTML = `<div class="stage" style="background-image:url('/thumb/${id}?size=hero')"><div class="shade"><div class="spinner"></div></div></div>`;
   if (usingKeys) document.querySelector('#watch .back').focus({ preventScroll: true });
@@ -2505,7 +2510,8 @@ function closePlayer() {
   teardownVideo();
   $('stage').innerHTML = '';
   $('watch').classList.remove('on', 'playing', 'waiting', 'osd-hidden', 'hud-hidden', 'player-active');
-  document.body.classList.remove('lock');
+  document.body.classList.remove('lock', 'watching');
+  if ($('convWidget')) $('convWidget').style.display = '';
   document.title = 'HOMEFLIX';
 }
 
