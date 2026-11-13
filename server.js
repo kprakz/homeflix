@@ -64,16 +64,71 @@ function idFor(file) {
   return crypto.createHash('sha1').update(file.toLowerCase()).digest('hex').slice(0, 16);
 }
 
-// "Insidious.Chapter.2.2013.1080p.10bit.BluRay.x265.mkv" -> { title: "Insidious Chapter 2", year: "2013" }
+// "Insidious.Chapter.2.2013.1080p.10bit.BluRay.x265.mkv" -> { title: "Insidious Chapter 2", year: "2013", type: "movie" }
+// "Breaking.Bad.S01E05.720p.mkv" -> { title: "Breaking Bad S01:E05", cleanTitle: "Episode 5", type: "series", show: "Breaking Bad", season: 1, ep: 5, epLabel: "S01:E05" }
 function prettyName(file) {
   let base = path.basename(file, path.extname(file)).replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim();
   // Leading channel and site tags from Telegram/torrent names: "@WMR ", "[TamilMV] ", "www site com - "
   base = base.replace(/^(?:(?:@\S+|\[[^\]]*\]|www \S+ (?:com|net|org|in|me|to)\b)\s*-?\s*)+/i, '').trim() || base;
+
+  // Check for S01E02 or s1e2 or 1x02 or EP02
+  let mSeries = base.match(/^(.*?)[-_\s.]+S(\d{1,2})[-_\s.]*E(\d{1,3})(?:[-_\s.]+(.*))?$/i);
+  if (!mSeries) mSeries = base.match(/^(.*?)[-_\s.]+(\d{1,2})x(\d{1,3})(?:[-_\s.]+(.*))?$/i);
+  if (!mSeries) {
+    const epMatch = base.match(/^(.*?)[-_\s.]+(?:EP|Episode)[-_\s.]*(\d{1,3})(?:[-_\s.]+(.*))?$/i);
+    if (epMatch) {
+      const parentDir = path.basename(path.dirname(file));
+      const sMatch = parentDir.match(/Season\s*(\d{1,2})/i);
+      const sNum = sMatch ? Number(sMatch[1]) : 1;
+      mSeries = [epMatch[0], epMatch[1], String(sNum), epMatch[2], epMatch[3]];
+    }
+  }
+  if (!mSeries) {
+    const parentDir = path.basename(path.dirname(file));
+    const grandDir = path.basename(path.dirname(path.dirname(file)));
+    const sMatch = parentDir.match(/^(?:Season|Series)\s*(\d{1,2})$/i);
+    if (sMatch) {
+      const epMatch = base.match(/^(?:EP|Episode)?\s*(\d{1,3})(?:[-_\s.]+(.*))?$/i);
+      if (epMatch) {
+        mSeries = [base, grandDir, sMatch[1], epMatch[1], epMatch[2]];
+      }
+    }
+  }
+
+  if (mSeries) {
+    let show = mSeries[1].replace(/[._]+/g, ' ').trim();
+    const season = Number(mSeries[2]);
+    const ep = Number(mSeries[3]);
+    const epLabel = `S${String(season).padStart(2, '0')}:E${String(ep).padStart(2, '0')}`;
+    let epTitle = mSeries[4] ? mSeries[4].trim() : '';
+
+    const junkIdx = epTitle.search(/\b(480p|720p|1080p|2160p|4k|bluray|brrip|webrip|web dl|hdrip|dvdrip|x264|x265|hevc|10bit)\b/i);
+    if (junkIdx !== -1) epTitle = epTitle.slice(0, junkIdx).trim();
+    const showJunk = show.search(/\b(480p|720p|1080p|2160p|4k|bluray|brrip|webrip|web dl|hdrip|dvdrip|x264|x265|hevc|10bit)\b/i);
+    if (showJunk !== -1) show = show.slice(0, showJunk).trim();
+
+    return {
+      title: epTitle ? `${show} ${epLabel} - ${epTitle}` : `${show} ${epLabel}`,
+      cleanTitle: epTitle || `Episode ${ep}`,
+      year: null,
+      type: 'series',
+      show,
+      season,
+      ep,
+      epLabel
+    };
+  }
+
   const yearMatch = base.match(/^(.+?)[\s(\[]+((?:19|20)\d{2})(?:[\s)\]]|$)/);
-  if (yearMatch && yearMatch[1].length > 1) return { title: yearMatch[1].trim(), year: yearMatch[2] };
+  if (yearMatch && yearMatch[1].length > 1) {
+    let t = yearMatch[1].trim();
+    const junk = t.search(/\b(480p|720p|1080p|2160p|4k|bluray|brrip|webrip|web dl|hdrip|dvdrip|x264|x265|hevc|10bit)\b/i);
+    if (junk > 1) t = t.slice(0, junk).trim();
+    return { title: t, cleanTitle: t, year: yearMatch[2], type: 'movie', show: null, season: null, ep: null, epLabel: null };
+  }
   const junk = base.search(/\b(480p|720p|1080p|2160p|4k|bluray|brrip|webrip|web dl|hdrip|dvdrip|x264|x265|hevc|10bit)\b/i);
   if (junk > 1) base = base.slice(0, junk).trim();
-  return { title: base, year: null };
+  return { title: base, cleanTitle: base, year: null, type: 'movie', show: null, season: null, ep: null, epLabel: null };
 }
 
 async function walk(dir, depth, out) {
@@ -243,6 +298,16 @@ function videoCopyable(video) {
 
 const jobs = new Map(); // "id:audio" -> { state, progress, error }
 
+// Background conversion queue state
+let bgQueueActive = null;    // { item, audio, progress, speed, eta, mode, startTime, child, tmpFile }
+let preemptedItem = null;    // { item, audio } — interrupted when user opened another file; becomes next!
+let userPrioritizedId = null;// file user explicitly opened/clicked
+let focusedSeries = null;    // series user clicked; all episodes convert before movies
+let bgQueuePaused = false;
+let bgWorkerActive = false;
+let bgWorkerTimer = null;
+const directItems = new Set();
+
 // One copy per audio language, made when a device asks for that language. Browsers on Android and
 // TVs can't switch between audio tracks in a file, so each copy carries just one.
 function cachedMp4(item, audio = 0) {
@@ -253,10 +318,375 @@ function cachedMp4(item, audio = 0) {
 
 function jobStatus(item, audio = 0) {
   if (fs.existsSync(cachedMp4(item, audio))) return { state: 'ready', progress: 1 };
+  if (bgQueueActive && bgQueueActive.item.id === item.id) {
+    return { state: 'working', progress: bgQueueActive.progress, speed: bgQueueActive.speed, eta: bgQueueActive.eta };
+  }
   const key = `${item.id}:${audio}`;
   const job = jobs.get(key);
-  if (job && job.state === 'ready') jobs.delete(key); // its copy was removed to free space
+  if (job && job.state === 'ready') jobs.delete(key);
   return jobs.get(key) || { state: 'idle', progress: 0 };
+}
+
+// ?audio=N from a request: which audio track (0 = the file's first).
+function audioParam(url) {
+  const n = Number(url.searchParams.get('audio'));
+  return Number.isInteger(n) && n > 0 && n < 64 ? n : 0;
+}
+
+// ---------- background priority queue engine ----------
+
+function preemptActiveConversion() {
+  if (!bgQueueActive) return;
+  const active = bgQueueActive;
+  console.log(`[Queue] Preempting conversion of "${active.item.title}" for higher-priority request`);
+  preemptedItem = { item: active.item, audio: active.audio };
+  const child = active.child;
+  active.child = null;
+  bgQueueActive = null;
+  const key = `${active.item.id}:${active.audio}`;
+  const job = jobs.get(key);
+  if (job) job.preempted = true;
+  if (child) {
+    try {
+      child.kill('SIGTERM');
+      setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 1200);
+    } catch {}
+  }
+  if (active.tmpFile) {
+    fsp.unlink(active.tmpFile).catch(() => {});
+  }
+  jobs.delete(key);
+}
+
+async function prioritizeItem(targetItem, series = false) {
+  if (!targetItem) return;
+  // If target already has cached mp4 or is known direct, it's playable immediately - don't preempt anything
+  if (fs.existsSync(cachedMp4(targetItem, 0)) || directItems.has(targetItem.id)) {
+    if (userPrioritizedId === targetItem.id) userPrioritizedId = null;
+    return;
+  }
+  if (bgQueueActive && bgQueueActive.item.id === targetItem.id) {
+    userPrioritizedId = targetItem.id;
+    return;
+  }
+  const info = await probe(targetItem).catch(() => null);
+  if (info && info.mode === 'direct') {
+    directItems.add(targetItem.id);
+    if (userPrioritizedId === targetItem.id) userPrioritizedId = null;
+    return;
+  }
+
+  userPrioritizedId = targetItem.id;
+  if (series && targetItem.show) {
+    focusedSeries = targetItem.show;
+  }
+  if (bgQueueActive && bgQueueActive.item.id !== targetItem.id) {
+    preemptActiveConversion();
+    setImmediate(runBackgroundQueue);
+  } else if (!bgQueueActive) {
+    setImmediate(runBackgroundQueue);
+  }
+}
+
+function getConversionQueue() {
+  const allItems = [...library.values()].filter((item) => !item.downloading && !directItems.has(item.id));
+  const pending = [];
+  for (const item of allItems) {
+    if (fs.existsSync(cachedMp4(item, 0))) continue;
+    pending.push(item);
+  }
+
+  pending.sort((a, b) => {
+    // 1. User clicked/opened item takes absolute #1 priority
+    if (userPrioritizedId) {
+      if (a.id === userPrioritizedId) return -1;
+      if (b.id === userPrioritizedId) return 1;
+    }
+
+    // 2. If user clicked a series: convert all episodes of this series before resuming movies
+    if (focusedSeries) {
+      const aIsFocused = a.type === 'series' && a.show && a.show.toLowerCase() === focusedSeries.toLowerCase();
+      const bIsFocused = b.type === 'series' && b.show && b.show.toLowerCase() === focusedSeries.toLowerCase();
+      if (aIsFocused && !bIsFocused) return -1;
+      if (!aIsFocused && bIsFocused) return 1;
+      if (aIsFocused && bIsFocused) {
+        return (a.season || 0) - (b.season || 0) || (a.ep || 0) - (b.ep || 0);
+      }
+    }
+
+    // 3. The preempted item (interrupted file) is next in line
+    if (preemptedItem) {
+      if (a.id === preemptedItem.item.id) return -1;
+      if (b.id === preemptedItem.item.id) return 1;
+    }
+
+    // 4. Movies first!
+    if (a.type === 'movie' && b.type !== 'movie') return -1;
+    if (a.type !== 'movie' && b.type === 'movie') return 1;
+
+    // Both are movies -> newest added first
+    if (a.type === 'movie' && b.type === 'movie') {
+      return (b.mtime || 0) - (a.mtime || 0);
+    }
+
+    // Both are series -> order by show name, then season, then episode number (S01E01, S01E02...)
+    if (a.show !== b.show) {
+      return String(a.show || '').localeCompare(String(b.show || ''));
+    }
+    return (a.season || 0) - (b.season || 0) || (a.ep || 0) - (b.ep || 0);
+  });
+
+  return pending;
+}
+
+function executeConversion(item, audio = 0) {
+  return new Promise(async (resolve) => {
+    if (fs.existsSync(cachedMp4(item, audio))) {
+      return resolve({ state: 'ready', progress: 1 });
+    }
+    if (item.downloading || paused || bgQueuePaused) {
+      return resolve({ state: 'idle', progress: 0 });
+    }
+    if (item.size * 1.02 > cacheCap()) {
+      return resolve({ state: 'error', progress: 0, code: 'toobig', error: `Exceeds cache limit` });
+    }
+    if (!(await makeRoom(item.size * 1.02))) {
+      return resolve({ state: 'error', progress: 0, code: 'nospace', error: `Not enough free space` });
+    }
+
+    const key = `${item.id}:${audio}`;
+    const job = { state: 'working', progress: 0, error: null };
+    Object.defineProperty(job, 'child', { value: null, writable: true, enumerable: false });
+    Object.defineProperty(job, 'pausedBy', { value: null, writable: true, enumerable: false });
+    jobs.set(key, job);
+
+    let info;
+    try {
+      info = await probe(item);
+    } catch (err) {
+      job.state = 'error';
+      job.error = err.message;
+      return resolve(job);
+    }
+
+    const out = cachedMp4(item, audio);
+    const tmp = `${out}.part`;
+
+    bgQueueActive = {
+      item,
+      audio,
+      progress: 0,
+      speed: '0x',
+      eta: null,
+      mode: info.mode,
+      startTime: Date.now(),
+      child: null,
+      tmpFile: tmp
+    };
+
+    const track = info.audios[audio] || info.audios[0];
+    const args = ['-hide_banner', '-v', 'error', '-y', '-i', item.path];
+    if (info.video) args.push('-map', `0:${info.video.index}`);
+    if (track) args.push('-map', `0:${track.index}`);
+    else args.push('-map', '0:a:0?');
+
+    if (info.mode === 'transcode') {
+      const profiles = await hlsProfiles(info);
+      const profile = profiles[0] || { pre: [], vf: "scale='min(iw,1920)':-2,format=yuv420p", enc: ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-forced-idr', '1'] };
+      args.splice(4, 0, ...profile.pre);
+      args.push('-vf', profile.vf, ...profile.enc);
+    } else {
+      args.push('-c:v', 'copy');
+      if (info.video && info.video.codec_name === 'hevc') args.push('-tag:v', 'hvc1');
+    }
+
+    if (track && UNIVERSAL_AUDIO.has(track.codec)) args.push('-c:a', 'copy');
+    else args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
+
+    args.push('-movflags', '+faststart', '-f', 'mp4', '-progress', 'pipe:1', '-nostats', tmp);
+
+    console.log(`[Queue] Converting "${item.title}" [${info.mode}] into cache…`);
+    const child = spawn(CONFIG.ffmpeg, args, { windowsHide: true });
+    job.child = child;
+    if (bgQueueActive) bgQueueActive.child = child;
+
+    let stderr = '';
+    child.stderr.on('data', (d) => (stderr += d));
+    child.stdout.on('data', (d) => {
+      const text = String(d);
+      const m = text.match(/out_time_us=(\d+)/g);
+      if (m && info.duration) {
+        const us = Number(m[m.length - 1].split('=')[1]);
+        const p = Math.min(0.99, us / 1e6 / info.duration);
+        job.progress = p;
+        if (bgQueueActive && bgQueueActive.item.id === item.id) {
+          bgQueueActive.progress = p;
+          const elapsed = (Date.now() - bgQueueActive.startTime) / 1000;
+          if (elapsed > 1 && p > 0.01) {
+            const totalEst = elapsed / p;
+            bgQueueActive.eta = Math.max(0, Math.round(totalEst - elapsed));
+          }
+        }
+      }
+      const mSpeed = text.match(/speed=\s*([\d.]+x)/g);
+      if (mSpeed && bgQueueActive && bgQueueActive.item.id === item.id) {
+        bgQueueActive.speed = mSpeed[mSpeed.length - 1].replace('speed=', '').trim();
+      }
+    });
+
+    child.on('error', (err) => {
+      Object.assign(job, { state: 'error', error: `Could not start ffmpeg: ${err.message}` });
+      if (bgQueueActive && bgQueueActive.item.id === item.id) bgQueueActive = null;
+      resolve(job);
+    });
+
+    child.on('close', async (code) => {
+      job.child = null;
+      const wasActive = bgQueueActive && bgQueueActive.item.id === item.id;
+      if (wasActive) bgQueueActive = null;
+
+      if (code === 0) {
+        await fsp.rename(tmp, out).catch(() => {});
+        Object.assign(job, { state: 'ready', progress: 1 });
+        console.log(`[Queue] Ready in cache: "${item.title}"`);
+        if (userPrioritizedId === item.id) userPrioritizedId = null;
+        if (preemptedItem && preemptedItem.item.id === item.id) preemptedItem = null;
+      } else {
+        await fsp.unlink(tmp).catch(() => {});
+        if (job.pausedBy) {
+          Object.assign(job, { state: 'error', code: 'paused', error: job.pausedBy });
+        } else if (job.preempted) {
+          Object.assign(job, { state: 'idle', progress: 0 });
+        } else {
+          Object.assign(job, { state: 'error', error: stderr.trim().split('\n').pop() || `ffmpeg exited ${code}` });
+          console.error(`[Queue] Failed to prepare "${item.title}": ${job.error}`);
+        }
+      }
+      resolve(job);
+    });
+  });
+}
+
+async function runBackgroundQueue() {
+  if (bgWorkerActive || bgQueuePaused || paused) return;
+  bgWorkerActive = true;
+  try {
+    const queue = getConversionQueue();
+    const nextItem = queue.find((item) => !bgQueueActive || item.id !== bgQueueActive.item.id);
+    if (!nextItem) {
+      bgWorkerActive = false;
+      return;
+    }
+
+    const info = await probe(nextItem).catch(() => null);
+    if (!info) {
+      bgWorkerActive = false;
+      return;
+    }
+
+    if (info.mode === 'direct') {
+      directItems.add(nextItem.id);
+      if (userPrioritizedId === nextItem.id) userPrioritizedId = null;
+      bgWorkerActive = false;
+      setImmediate(runBackgroundQueue);
+      return;
+    }
+
+    if (fs.existsSync(cachedMp4(nextItem, 0))) {
+      bgWorkerActive = false;
+      setTimeout(runBackgroundQueue, 500);
+      return;
+    }
+
+    if (!(await makeRoom(nextItem.size * 1.05))) {
+      bgWorkerActive = false;
+      return;
+    }
+
+    await executeConversion(nextItem, 0);
+  } catch (err) {
+    console.error('[Queue] Background worker error:', err);
+  } finally {
+    bgWorkerActive = false;
+    if (!bgQueuePaused && !paused) {
+      setTimeout(runBackgroundQueue, 1500);
+    }
+  }
+}
+
+function startBackgroundQueue() {
+  if (bgWorkerTimer) clearInterval(bgWorkerTimer);
+  bgWorkerTimer = setInterval(() => {
+    if (!bgQueueActive && !bgQueuePaused && !paused) {
+      runBackgroundQueue();
+    }
+  }, 20000);
+  setTimeout(runBackgroundQueue, 2500);
+}
+
+function stopBackgroundQueue() {
+  if (bgWorkerTimer) {
+    clearInterval(bgWorkerTimer);
+    bgWorkerTimer = null;
+  }
+  preemptActiveConversion();
+}
+
+function toggleBackgroundQueue(pause) {
+  bgQueuePaused = typeof pause === 'boolean' ? pause : !bgQueuePaused;
+  if (bgQueuePaused && bgQueueActive && bgQueueActive.child) {
+    preemptActiveConversion();
+  } else if (!bgQueuePaused) {
+    setTimeout(runBackgroundQueue, 200);
+  }
+}
+
+async function getQueueStatus() {
+  const queue = getConversionQueue();
+  const diskFree = await freeBytes();
+  const diskCap = cacheCap();
+  let diskUsed = 0;
+  try { diskUsed = await dirSize(CACHE_DIR); } catch {}
+
+  const activeItem = bgQueueActive ? {
+    id: bgQueueActive.item.id,
+    title: bgQueueActive.item.title,
+    cleanTitle: bgQueueActive.item.cleanTitle,
+    type: bgQueueActive.item.type,
+    show: bgQueueActive.item.show,
+    season: bgQueueActive.item.season,
+    ep: bgQueueActive.item.ep,
+    epLabel: bgQueueActive.item.epLabel,
+    progress: bgQueueActive.progress,
+    speed: bgQueueActive.speed,
+    eta: bgQueueActive.eta,
+    mode: bgQueueActive.mode
+  } : null;
+
+  return {
+    active: activeItem,
+    queue: queue.slice(0, 50).map((m, idx) => ({
+      id: m.id,
+      title: m.title,
+      cleanTitle: m.cleanTitle,
+      type: m.type,
+      show: m.show,
+      season: m.season,
+      ep: m.ep,
+      epLabel: m.epLabel,
+      size: m.size,
+      status: (preemptedItem && m.id === preemptedItem.item.id) ? 'next' : (idx === 0 && !activeItem ? 'next' : 'queued')
+    })),
+    preempted: preemptedItem ? preemptedItem.item.title : null,
+    focusedSeries,
+    paused: bgQueuePaused || !!paused,
+    pausedReason: paused || (bgQueuePaused ? 'User paused' : null),
+    disk: {
+      free: diskFree,
+      used: diskUsed,
+      cap: diskCap === Infinity ? null : diskCap
+    }
+  };
 }
 
 // ?audio=N from a request: which audio track (0 = the file's first).
@@ -319,9 +749,16 @@ function setPaused(reason) {
   reason = reason || null;
   if (reason === paused) return;
   paused = reason;
-  if (!reason) return console.log('Converting resumed');
+  if (!reason) {
+    console.log('Converting resumed');
+    setTimeout(runBackgroundQueue, 500);
+    return;
+  }
   console.log(`Converting paused: ${reason}`);
   for (const st of hls.values()) stopHls(st);
+  if (bgQueueActive && bgQueueActive.child) {
+    preemptActiveConversion();
+  }
   for (const job of jobs.values()) {
     if (job.state !== 'working' || !job.child) continue;
     job.pausedBy = reason;
@@ -336,69 +773,14 @@ function touch(file) {
 
 async function prepare(item, audio = 0) {
   const existing = jobStatus(item, audio);
-  if (existing.state === 'ready' || existing.state === 'working') return existing;
-  if (item.downloading) return { state: 'error', progress: 0, error: 'This file is still downloading. Try again once it finishes.' };
-  if (paused) return { state: 'error', progress: 0, code: 'paused', error: paused };
-  if (item.size * 1.02 > cacheCap()) {
-    return { state: 'error', progress: 0, code: 'toobig', error: `This movie is bigger than the ${CONFIG.maxCacheGB} GB storage limit set in the HOMEFLIX app. Raise the limit to play it.` };
+  if (existing.state === 'ready') return existing;
+  if (bgQueueActive && bgQueueActive.item.id === item.id) {
+    return jobs.get(`${item.id}:${audio}`) || { state: 'working', progress: bgQueueActive.progress };
   }
-  if (!(await makeRoom(item.size * 1.02))) {
-    return { state: 'error', progress: 0, code: 'nospace', error: `Not enough free space to prepare this (needs about ${Math.ceil((item.size * 1.02 + reserve()) / 1e9)} GB free).` };
-  }
-  const job = { state: 'working', progress: 0, error: null };
-  // Kept off the JSON the player gets: the ffmpeg process, and why it was stopped.
-  Object.defineProperty(job, 'child', { value: null, writable: true, enumerable: false });
-  Object.defineProperty(job, 'pausedBy', { value: null, writable: true, enumerable: false });
-  jobs.set(`${item.id}:${audio}`, job);
-
-  try {
-    const info = await probe(item);
-    if (info.mode === 'transcode') throw new Error('This video needs converting while it plays; the player uses the compatible stream for it.');
-    const track = info.audios[audio] || info.audios[0];
-    const out = cachedMp4(item, audio);
-    const tmp = `${out}.part`;
-    // Map the real video stream: some files carry cover art as an extra "video" stream.
-    const args = ['-hide_banner', '-v', 'error', '-y', '-i', item.path, '-map', `0:${info.video.index}`, '-map', track ? `0:${track.index}` : '0:a:0?'];
-    args.push('-c:v', 'copy');
-    if (info.video.codec_name === 'hevc') args.push('-tag:v', 'hvc1');
-    // Copying audio every device plays is far faster than re-encoding it; otherwise make stereo AAC.
-    if (track && UNIVERSAL_AUDIO.has(track.codec)) args.push('-c:a', 'copy');
-    else args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
-    args.push('-movflags', '+faststart', '-f', 'mp4', '-progress', 'pipe:1', '-nostats', tmp);
-
-    console.log(`Preparing "${item.title}"${track && info.audios.length > 1 ? ` in ${track.label}` : ''} (${info.mode})…`);
-    const child = spawn(CONFIG.ffmpeg, args, { windowsHide: true });
-    job.child = child;
-    let stderr = '';
-    child.stderr.on('data', (d) => (stderr += d));
-    child.stdout.on('data', (d) => {
-      const m = String(d).match(/out_time_us=(\d+)/g);
-      if (m && info.duration) {
-        const us = Number(m[m.length - 1].split('=')[1]);
-        job.progress = Math.min(0.99, us / 1e6 / info.duration);
-      }
-    });
-    child.on('error', (err) => Object.assign(job, { state: 'error', error: `Could not start ffmpeg: ${err.message}` }));
-    child.on('close', async (code) => {
-      job.child = null;
-      if (job.pausedBy) {
-        fsp.unlink(tmp).catch(() => {});
-        return Object.assign(job, { state: 'error', code: 'paused', error: job.pausedBy });
-      }
-      if (code === 0) {
-        await fsp.rename(tmp, out);
-        Object.assign(job, { state: 'ready', progress: 1 });
-        console.log(`Ready: "${item.title}"`);
-      } else {
-        fsp.unlink(tmp).catch(() => {});
-        Object.assign(job, { state: 'error', error: stderr.trim().split('\n').pop() || `ffmpeg exited ${code}` });
-        console.error(`Failed to prepare "${item.title}": ${job.error}`);
-      }
-    });
-  } catch (err) {
-    Object.assign(job, { state: 'error', error: err.message });
-  }
-  return job;
+  // Elevate priority immediately (preempts currently converting file, making it next)
+  await prioritizeItem(item, !!item.show);
+  await sleep(150);
+  return jobStatus(item, audio);
 }
 
 // ---------- subtitles & thumbnails (cached) ----------
@@ -823,7 +1205,7 @@ async function handle(req, res) {
   // /api/<action>/<id>  or  /video|thumb|subs|hls/<id>/...
   const id = parts[0] === 'api' ? parts[2] : parts[1];
   // Unknown movie (just added, or a device resuming right after a restart): look again before giving up.
-  const movieRoute = ['api', 'video', 'thumb', 'subs', 'hls'].includes(parts[0]) && parts[1] !== 'library';
+  const movieRoute = ['api', 'video', 'thumb', 'subs', 'hls'].includes(parts[0]) && !['library', 'queue'].includes(parts[1]);
   if (movieRoute && id && !library.has(id)) await scanLibrary();
   const item = library.get(id) || null;
 
@@ -834,6 +1216,21 @@ async function handle(req, res) {
 
   if (parts[0] === 'api') {
     if (parts[1] === 'library') return send(res, 200, (await scanLibrary()).map(({ path: _p, ...rest }) => ({ ...rest, ...jobStatus(rest) })));
+    if (parts[1] === 'queue') {
+      if (parts[2] === 'prioritize' && req.method === 'POST') {
+        const { id: reqId, series } = await readBody(req);
+        const target = library.get(reqId);
+        if (!target) return send(res, 404, { error: 'Unknown item' });
+        await prioritizeItem(target, !!series);
+        return send(res, 200, { ok: true, id: reqId, series: !!series });
+      }
+      if (parts[2] === 'toggle' && req.method === 'POST') {
+        const { pause } = await readBody(req);
+        toggleBackgroundQueue(pause);
+        return send(res, 200, { ok: true, paused: bgQueuePaused });
+      }
+      return send(res, 200, await getQueueStatus());
+    }
     if (!item) return send(res, 404, { error: 'Unknown movie — refresh the library.' });
     const info = await probe(item);
     const audio = Math.min(audioParam(url), Math.max(0, info.audios.length - 1));
@@ -948,6 +1345,7 @@ function start() {
     server.once('error', reject);
     server.listen(CONFIG.port, '0.0.0.0', () => {
       server.off('error', reject);
+      startBackgroundQueue();
       resolve(server.address().port);
     });
   });
@@ -955,6 +1353,7 @@ function start() {
 
 function stop() {
   return new Promise((resolve) => {
+    stopBackgroundQueue();
     for (const st of hls.values()) stopHls(st);
     for (const job of jobs.values()) if (job.child) job.child.kill();
     if (CONFIG.clearCacheOnStop) setTimeout(() => clearCache().catch(() => {}), 500);
@@ -965,7 +1364,24 @@ function stop() {
   });
 }
 
-module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, setPaused, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT };
+module.exports = {
+  configure,
+  start,
+  stop,
+  scanLibrary,
+  lanAddresses,
+  clearCache,
+  cacheSize,
+  setPaused,
+  hashPin,
+  deviceKey,
+  isLocalAddress,
+  isLocalHost,
+  VIDEO_EXT,
+  getQueueStatus,
+  prioritizeItem,
+  toggleBackgroundQueue,
+};
 
 if (require.main === module) {
   configure(loadConfig());

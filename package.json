@@ -12,6 +12,7 @@
   "repository": "github:kprakz/homeflix",
   "main": "electron/main.js",
   "scripts": {
+    "dev": "node server.js",
     "start": "electron .",
     "serve": "node server.js",
     "ffmpeg": "node scripts/get-ffmpeg.mjs",
