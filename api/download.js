@@ -15,6 +15,7 @@ function platformOf(url) {
   if (/\.exe$/i.test(url)) return 'windows';
   if (/\.dmg$/i.test(url)) return 'mac';
   if (/\.(AppImage|deb)$/i.test(url)) return 'linux';
+  if (/\.apk$/i.test(url)) return 'android';
   return 'other';
 }
 

@@ -11,8 +11,6 @@ name: Android build
 on:
   release:
     types: [published]
-  push:
-    branches: [android-app]
   workflow_dispatch:
     inputs:
       tag:
