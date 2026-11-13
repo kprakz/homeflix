@@ -306,6 +306,7 @@ let focusedSeries = null;    // series user clicked; all episodes convert before
 let bgQueuePaused = false;
 let bgWorkerActive = false;
 let bgWorkerTimer = null;
+const directItems = new Set();
 
 // One copy per audio language, made when a device asks for that language. Browsers on Android and
 // TVs can't switch between audio tracks in a file, so each copy carries just one.
@@ -342,6 +343,9 @@ function preemptActiveConversion() {
   const child = active.child;
   active.child = null;
   bgQueueActive = null;
+  const key = `${active.item.id}:${active.audio}`;
+  const job = jobs.get(key);
+  if (job) job.preempted = true;
   if (child) {
     try {
       child.kill('SIGTERM');
@@ -351,11 +355,27 @@ function preemptActiveConversion() {
   if (active.tmpFile) {
     fsp.unlink(active.tmpFile).catch(() => {});
   }
-  jobs.delete(`${active.item.id}:${active.audio}`);
+  jobs.delete(key);
 }
 
-function prioritizeItem(targetItem, series = false) {
+async function prioritizeItem(targetItem, series = false) {
   if (!targetItem) return;
+  // If target already has cached mp4 or is known direct, it's playable immediately - don't preempt anything
+  if (fs.existsSync(cachedMp4(targetItem, 0)) || directItems.has(targetItem.id)) {
+    if (userPrioritizedId === targetItem.id) userPrioritizedId = null;
+    return;
+  }
+  if (bgQueueActive && bgQueueActive.item.id === targetItem.id) {
+    userPrioritizedId = targetItem.id;
+    return;
+  }
+  const info = await probe(targetItem).catch(() => null);
+  if (info && info.mode === 'direct') {
+    directItems.add(targetItem.id);
+    if (userPrioritizedId === targetItem.id) userPrioritizedId = null;
+    return;
+  }
+
   userPrioritizedId = targetItem.id;
   if (series && targetItem.show) {
     focusedSeries = targetItem.show;
@@ -369,7 +389,7 @@ function prioritizeItem(targetItem, series = false) {
 }
 
 function getConversionQueue() {
-  const allItems = [...library.values()].filter((item) => !item.downloading);
+  const allItems = [...library.values()].filter((item) => !item.downloading && !directItems.has(item.id));
   const pending = [];
   for (const item of allItems) {
     if (fs.existsSync(cachedMp4(item, 0))) continue;
@@ -535,6 +555,8 @@ function executeConversion(item, audio = 0) {
         await fsp.unlink(tmp).catch(() => {});
         if (job.pausedBy) {
           Object.assign(job, { state: 'error', code: 'paused', error: job.pausedBy });
+        } else if (job.preempted) {
+          Object.assign(job, { state: 'idle', progress: 0 });
         } else {
           Object.assign(job, { state: 'error', error: stderr.trim().split('\n').pop() || `ffmpeg exited ${code}` });
           console.error(`[Queue] Failed to prepare "${item.title}": ${job.error}`);
@@ -563,8 +585,10 @@ async function runBackgroundQueue() {
     }
 
     if (info.mode === 'direct') {
+      directItems.add(nextItem.id);
+      if (userPrioritizedId === nextItem.id) userPrioritizedId = null;
       bgWorkerActive = false;
-      setTimeout(runBackgroundQueue, 500);
+      setImmediate(runBackgroundQueue);
       return;
     }
 
@@ -754,7 +778,7 @@ async function prepare(item, audio = 0) {
     return jobs.get(`${item.id}:${audio}`) || { state: 'working', progress: bgQueueActive.progress };
   }
   // Elevate priority immediately (preempts currently converting file, making it next)
-  prioritizeItem(item, !!item.show);
+  await prioritizeItem(item, !!item.show);
   await sleep(150);
   return jobStatus(item, audio);
 }
@@ -1197,7 +1221,7 @@ async function handle(req, res) {
         const { id: reqId, series } = await readBody(req);
         const target = library.get(reqId);
         if (!target) return send(res, 404, { error: 'Unknown item' });
-        prioritizeItem(target, !!series);
+        await prioritizeItem(target, !!series);
         return send(res, 200, { ok: true, id: reqId, series: !!series });
       }
       if (parts[2] === 'toggle' && req.method === 'POST') {
