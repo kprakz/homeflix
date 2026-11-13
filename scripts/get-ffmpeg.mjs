@@ -36,7 +36,8 @@ function findSources() {
   if (isWin) {
     let ffmpeg;
     try {
-      ffmpeg = execFileSync('where', ['ffmpeg'], { encoding: 'utf8' }).split(/\r?\n/)[0].trim();
+      const candidates = execFileSync('where', ['ffmpeg'], { encoding: 'utf8' }).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      ffmpeg = candidates.find((c) => !c.toLowerCase().includes('\\chocolatey\\bin\\')) || candidates[0];
     } catch {
       fail('ffmpeg was not found on PATH. Install it with:\n  winget install Gyan.FFmpeg.Essentials\nthen open a new terminal and run this again.');
     }
