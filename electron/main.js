@@ -118,6 +118,15 @@ function address() {
   return port ? `http://${ip || 'localhost'}:${port}` : null;
 }
 
+function safeOpenExternal(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return shell.openExternal(rawUrl);
+    }
+  } catch {}
+}
+
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(TRAY_ICON));
   tray.setToolTip('HOMEFLIX');
@@ -125,7 +134,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open HOMEFLIX', click: showWindow },
-      { label: IS_LINUX ? 'Watch on this computer' : 'Watch on this laptop', click: () => port && shell.openExternal(localUrl()) },
+      { label: IS_LINUX ? 'Watch on this computer' : 'Watch on this laptop', click: () => port && safeOpenExternal(localUrl()) },
       { type: 'separator' },
       { label: 'Quit HOMEFLIX', click: () => { quitting = true; app.quit(); } },
     ])
@@ -149,13 +158,29 @@ function showWindow() {
     backgroundColor: '#141414',
     autoHideMenuBar: true,
     show: false,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      devTools: !app.isPackaged,
+    },
   });
+  win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   win.loadFile(path.join(__dirname, 'control.html'));
   win.once('ready-to-show', () => win.show());
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    safeOpenExternal(url);
     return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, navigationUrl) => {
+    const isControl = navigationUrl.startsWith('file://') && navigationUrl.includes('control.html');
+    if (!isControl) {
+      event.preventDefault();
+      safeOpenExternal(navigationUrl);
+    }
   });
   // Closing the window keeps the server running in the tray; Quit is in the tray menu.
   win.on('close', (e) => {
@@ -194,7 +219,7 @@ function networkStatus() {
     '@{ categories = $cats; rules = $rules } | ConvertTo-Json -Compress -Depth 3',
   ].join('\n');
   return new Promise((resolve) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 15000 }, (err, stdout) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true, timeout: 15000 }, (err, stdout) => {
       let value = null;
       try {
         const data = JSON.parse(stdout);
@@ -221,9 +246,9 @@ function allowOnHomeNetworks() {
     `New-NetFirewallRule -DisplayName 'HOMEFLIX (home networks)' -Description 'Lets phones and TVs on your home Wi-Fi watch movies from HOMEFLIX.' -Direction Inbound -Action Allow -Program ${exe} -Protocol TCP -Profile Private | Out-Null`,
   ].join('\n');
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
-  const launcher = `try { $p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','${encoded}'; exit $p.ExitCode } catch { exit 1223 }`;
+  const launcher = `try { $p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'; exit $p.ExitCode } catch { exit 1223 }`;
   return new Promise((resolve) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', launcher], { windowsHide: true, timeout: 180000 }, (err) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', launcher], { windowsHide: true, timeout: 180000 }, (err) => {
       networkCheck.at = 0;
       resolve(err ? (err.code === 1223 ? 'cancelled' : 'failed') : 'ok');
     });
@@ -271,20 +296,35 @@ ipcMain.handle('add-folder', async () => {
 });
 
 ipcMain.handle('remove-folder', async (_e, folder) => {
+  if (typeof folder !== 'string') return state();
   settings.folders = settings.folders.filter((f) => f !== folder);
   saveSettings();
   applyConfig();
   return state();
 });
 
-ipcMain.handle('open-folder', (_e, folder) => shell.openPath(folder));
-ipcMain.handle('open-browser', () => port && shell.openExternal(localUrl()));
+ipcMain.handle('open-folder', (_e, folder) => {
+  if (typeof folder !== 'string') return false;
+  const resolved = path.resolve(folder);
+  const exists = settings.folders.some((f) => path.resolve(f).toLowerCase() === resolved.toLowerCase());
+  if (!exists) return false;
+  try {
+    if (!fs.statSync(resolved).isDirectory()) return false;
+  } catch {
+    return false;
+  }
+  return shell.openPath(resolved);
+});
+ipcMain.handle('open-browser', () => port && safeOpenExternal(localUrl()));
 ipcMain.handle('open-wifi-settings', () => {
   networkCheck.at = 0; // look again when the user comes back
   return shell.openExternal(IS_WIN ? 'ms-settings:network-status' : 'x-apple.systempreferences:com.apple.Network-Settings.extension');
 });
 ipcMain.handle('allow-firewall', async () => ({ result: await allowOnHomeNetworks(), state: await state() }));
-ipcMain.handle('copy', (_e, text) => clipboard.writeText(String(text)));
+ipcMain.handle('copy', (_e, text) => {
+  if (typeof text !== 'string') return;
+  clipboard.writeText(text.slice(0, 2048));
+});
 
 ipcMain.handle('set-open-at-login', (_e, on) => {
   settings.openAtLogin = !!on;
@@ -301,8 +341,12 @@ function setLinuxAutostart(on) {
   try {
     if (!on) return fs.rmSync(file, { force: true });
     const exe = process.env.APPIMAGE || process.execPath;
+    if (typeof exe !== 'string' || /[\r\n\0]/.test(exe)) return;
+    const resolvedExe = path.resolve(exe);
+    if (!fs.existsSync(resolvedExe)) return;
+    const escaped = resolvedExe.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, ['[Desktop Entry]', 'Type=Application', 'Name=HOMEFLIX', `Exec="${exe.replace(/"/g, '\\"')}" --hidden`, 'X-GNOME-Autostart-enabled=true', ''].join('\n'));
+    fs.writeFileSync(file, ['[Desktop Entry]', 'Type=Application', 'Name=HOMEFLIX', `Exec="${escaped}" --hidden`, 'X-GNOME-Autostart-enabled=true', ''].join('\n'));
   } catch (err) {
     console.error(`Couldn't change start at login: ${err.message}`);
   }
@@ -310,8 +354,8 @@ function setLinuxAutostart(on) {
 
 // PIN: 4 to 8 digits, or null to turn it off. Every device has to enter the new one.
 ipcMain.handle('set-pin', (_e, pin) => {
-  if (pin !== null && !/^\d{4,8}$/.test(String(pin))) return { error: 'The PIN must be 4 to 8 digits.' };
-  settings.pin = pin === null ? null : homeflix.hashPin(String(pin));
+  if (!(pin === null || (typeof pin === 'string' && /^\d{4,8}$/.test(pin)))) return { error: 'The PIN must be 4 to 8 digits.' };
+  settings.pin = pin === null ? null : homeflix.hashPin(pin);
   saveSettings();
   applyConfig();
   return state();

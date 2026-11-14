@@ -6,6 +6,7 @@
 //   (npm install --no-save ffmpeg-static ffprobe-static). Note ffprobe-static's Mac build is Intel-only.
 
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -61,12 +62,22 @@ function findSources() {
   return { ffmpeg, ffprobe, license, origin: 'Builds from https://github.com/eugeneware/ffmpeg-static and https://github.com/joshwnj/ffprobe-static' };
 }
 
+function sha256(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
 const src = findSources();
 fs.mkdirSync(dest, { recursive: true });
 for (const [name, from] of [['ffmpeg', src.ffmpeg], ['ffprobe', src.ffprobe]]) {
   if (!from || !fs.existsSync(from)) fail(`${name} not found (looked at ${from})`);
   const to = path.join(dest, name + exe);
-  if (!fs.existsSync(to) || fs.statSync(to).size !== fs.statSync(from).size) fs.copyFileSync(from, to);
+  const srcHash = sha256(from);
+  if (!fs.existsSync(to) || sha256(to) !== srcHash) {
+    fs.copyFileSync(from, to);
+    if (sha256(to) !== srcHash) {
+      fail(`Integrity check failed: ${name} hash mismatch after copy`);
+    }
+  }
   if (!isWin) fs.chmodSync(to, 0o755);
 }
 

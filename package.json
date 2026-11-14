@@ -1,7 +1,8 @@
 {
   "name": "homeflix",
   "productName": "HOMEFLIX",
-  "version": "1.5.0",
+  "version": "1.4.1",
+  "packageManager": "npm@10.8.2",
   "description": "Stream the movies on your laptop to your iPad, phone or TV over your home Wi-Fi.",
   "author": {
     "name": "HOMEFLIX",
@@ -12,6 +13,7 @@
   "repository": "github:kprakz/homeflix",
   "main": "electron/main.js",
   "scripts": {
+    "test": "node scripts/test.js",
     "start": "electron .",
     "serve": "node server.js",
     "ffmpeg": "node scripts/get-ffmpeg.mjs",
@@ -83,8 +85,10 @@
       "category": "public.app-category.video",
       "icon": "build/icon.png",
       "identity": "-",
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "notarize": false,
       "artifactName": "HOMEFLIX-${version}-mac-${arch}.${ext}"
     },

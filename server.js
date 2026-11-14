@@ -172,7 +172,7 @@ function trackLabel(s, fallback) {
 function probe(item) {
   const key = `${item.id}-${item.size}-${item.mtime}`; // re-probe once a download grows
   if (!probes.has(key)) {
-    const p = run(CONFIG.ffprobe, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', item.path]).then((out) => {
+    const p = run(CONFIG.ffprobe, ['-v', 'error', '-protocol_whitelist', 'file,crypto,data', '-print_format', 'json', '-show_format', '-show_streams', '-i', item.path]).then((out) => {
       const data = JSON.parse(out);
       const streams = data.streams || [];
       const video = streams.find((s) => s.codec_type === 'video' && !(s.disposition && s.disposition.attached_pic));
@@ -358,7 +358,7 @@ async function prepare(item, audio = 0) {
     const out = cachedMp4(item, audio);
     const tmp = `${out}.part`;
     // Map the real video stream: some files carry cover art as an extra "video" stream.
-    const args = ['-hide_banner', '-v', 'error', '-y', '-i', item.path, '-map', `0:${info.video.index}`, '-map', track ? `0:${track.index}` : '0:a:0?'];
+    const args = ['-hide_banner', '-v', 'error', '-protocol_whitelist', 'file,crypto,data', '-y', '-i', item.path, '-map', `0:${info.video.index}`, '-map', track ? `0:${track.index}` : '0:a:0?'];
     args.push('-c:v', 'copy');
     if (info.video.codec_name === 'hevc') args.push('-tag:v', 'hvc1');
     // Copying audio every device plays is far faster than re-encoding it; otherwise make stereo AAC.
@@ -421,7 +421,7 @@ async function subtitleFile(item, key) {
   const out = path.join(CACHE_DIR, `${item.id}-${Math.floor(item.mtime)}-${key}.vtt`);
   const input = sub.file || item.path;
   const map = sub.file ? '0:s:0' : `0:${sub.stream}`;
-  return once(out, () => run(CONFIG.ffmpeg, ['-hide_banner', '-v', 'error', '-y', '-i', input, '-map', map, '-f', 'webvtt', out]));
+  return once(out, () => run(CONFIG.ffmpeg, ['-hide_banner', '-v', 'error', '-protocol_whitelist', 'file,crypto,data', '-y', '-i', input, '-map', map, '-f', 'webvtt', out]));
 }
 
 // Thumbnails decode real video frames, so only make two at a time.
@@ -448,7 +448,7 @@ async function thumbnail(item, hero = false) {
       const info = await probe(item);
       const at = info.duration ? Math.min(info.duration * 0.2, 600) : 5;
       const scale = hero ? 'scale=1600:-2' : 'scale=480:-2';
-      await run(CONFIG.ffmpeg, ['-hide_banner', '-v', 'error', '-y', '-ss', at.toFixed(1), '-i', item.path, '-frames:v', '1', '-vf', scale, '-q:v', hero ? '3' : '4', out]);
+      await run(CONFIG.ffmpeg, ['-hide_banner', '-v', 'error', '-protocol_whitelist', 'file,crypto,data', '-y', '-ss', at.toFixed(1), '-i', item.path, '-frames:v', '1', '-vf', scale, '-q:v', hero ? '3' : '4', out]);
     })
   );
 }
@@ -601,7 +601,7 @@ async function startHls(st, info, from) {
     fs.unlinkSync(list);
   } catch {}
   const at = String(from * SEG);
-  const args = ['-hide_banner', '-v', 'error', '-y', ...profile.pre, '-ss', at, '-i', st.item.path, '-map', `0:${info.video.index}`];
+  const args = ['-hide_banner', '-v', 'error', '-protocol_whitelist', 'file,crypto,data', '-y', ...profile.pre, '-ss', at, '-i', st.item.path, '-map', `0:${info.video.index}`];
   const track = info.audios[st.audio] || info.audios[0];
   if (track) args.push('-map', `0:${track.index}`);
   args.push('-vf', profile.vf, ...profile.enc, '-force_key_frames', `expr:gte(t,n_forced*${SEG})`);
@@ -641,7 +641,10 @@ async function hlsSegment(req, res, item, n, audio) {
   if (!(n >= 0 && n < st.total)) return send(res, 404, { error: 'No such segment' });
   const deadline = Date.now() + 45000;
   while (!st.done.has(n)) {
-    if (st.error && !st.job) return send(res, 500, { error: st.error });
+    if (st.error && !st.job) {
+      console.error(`HLS segment error for "${st.item.title}": ${st.error}`);
+      return send(res, 500, { error: 'Internal server error' });
+    }
     const job = st.job;
     const inReach = job && n >= job.from && n <= job.next + AHEAD;
     if (!inReach && !st.starting) st.starting = startHls(st, info, n).finally(() => (st.starting = null));
@@ -667,9 +670,18 @@ async function dirSize(dir) {
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const VIDEO_MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime' };
 
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; media-src 'self' blob:; connect-src 'self';",
+};
+
 function send(res, status, body, type = 'application/json') {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
-  res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' });
+  res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS });
   res.end(data);
 }
 
@@ -683,24 +695,36 @@ async function streamFile(req, res, file, type) {
   }
   const size = stat.size;
   const range = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
-  const headers = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' };
+  const headers = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache', ...SECURITY_HEADERS };
   if (!range) {
     res.writeHead(200, { ...headers, 'Content-Length': size });
     if (req.method === 'HEAD') return res.end();
-    return fs.createReadStream(file).pipe(res);
+    const stream = fs.createReadStream(file);
+    stream.on('error', (err) => {
+      console.error('File stream error:', err.message);
+      if (!res.headersSent) send(res, 500, { error: 'Internal server error' });
+      else res.destroy();
+    });
+    res.on('close', () => stream.destroy());
+    return stream.pipe(res);
   }
   let start = range[1] === '' ? size - Number(range[2]) : Number(range[1]);
   let end = range[1] !== '' && range[2] !== '' ? Number(range[2]) : size - 1;
   end = Math.min(end, size - 1);
   if (start < 0 || start > end || start >= size) {
-    res.writeHead(416, { 'Content-Range': `bytes */${size}` });
+    res.writeHead(416, { 'Content-Range': `bytes */${size}`, ...SECURITY_HEADERS });
     return res.end();
   }
   res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1 });
   if (req.method === 'HEAD') return res.end();
   const stream = fs.createReadStream(file, { start, end });
-  stream.pipe(res);
+  stream.on('error', (err) => {
+    console.error('File stream error:', err.message);
+    if (!res.headersSent) send(res, 500, { error: 'Internal server error' });
+    else res.destroy();
+  });
   res.on('close', () => stream.destroy());
+  stream.pipe(res);
 }
 
 // ---------- who may watch ----------
@@ -710,9 +734,10 @@ async function streamFile(req, res, file, type) {
 function isLocalAddress(ip) {
   ip = String(ip || '').toLowerCase().replace(/^::ffff:/, '');
   if (ip === '::1') return true;
-  const v4 = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(ip);
+  const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(ip);
   if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    const [a, b, c, d] = [Number(v4[1]), Number(v4[2]), Number(v4[3]), Number(v4[4])];
+    if (a > 255 || b > 255 || c > 255 || d > 255) return false;
     return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
   }
   return /^f[cd][0-9a-f]{2}:/.test(ip) || /^fe[89ab][0-9a-f]:/.test(ip); // IPv6 private and link-local
@@ -721,9 +746,55 @@ function isLocalAddress(ip) {
 // The page must be opened by address (192.168.1.20:8080, localhost) or a home name (laptop.local), not
 // through some website's domain: that stops a web page on a phone from reading the library through it.
 function isLocalHost(host) {
-  const name = String(host || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
-  return !name || name === 'localhost' || /^[\d.]+$/.test(name) || name.includes(':') || !name.includes('.') ||
-    /\.(local|lan|home|internal|localhost|home\.arpa)$/.test(name);
+  if (!host || typeof host !== 'string') return false;
+  let parsed;
+  try {
+    parsed = new URL(`http://${host}`);
+  } catch {
+    return false;
+  }
+  if (parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+    return false;
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (!hostname) return false;
+  if (/(^|\.)(localhost|local|lan|home|internal|home\.arpa)$/i.test(hostname)) return true;
+  const rawIp = hostname.replace(/^\[|\]$/g, '');
+  return isLocalAddress(rawIp);
+}
+
+// CSRF & origin check for state-changing requests
+function isSameOriginRequest(req) {
+  const host = req.headers.host;
+  if (!host) return false;
+
+  const secFetchSite = req.headers['sec-fetch-site'];
+  if (secFetchSite && secFetchSite !== 'same-origin' && secFetchSite !== 'none') {
+    return false;
+  }
+
+  const origin = req.headers.origin;
+  if (origin) {
+    if (origin === 'null') return false;
+    try {
+      const u = new URL(origin);
+      if (u.host.toLowerCase() !== host.toLowerCase()) return false;
+    } catch {
+      return false;
+    }
+  }
+
+  const referer = req.headers.referer;
+  if (!origin && referer) {
+    try {
+      const u = new URL(referer);
+      if (u.host.toLowerCase() !== host.toLowerCase()) return false;
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // Optional PIN. CONFIG.pin is { salt, hash } (scrypt) or null; CONFIG.secret signs the device cookie,
@@ -731,6 +802,14 @@ function isLocalHost(host) {
 const PIN_COOKIE = 'homeflix_key';
 function hashPin(pin, salt = crypto.randomBytes(16).toString('hex')) {
   return { salt, hash: crypto.scryptSync(String(pin), salt, 32).toString('hex') };
+}
+function hashPinAsync(pin, salt = crypto.randomBytes(16).toString('hex')) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(String(pin), salt, 32, (err, derivedKey) => {
+      if (err) return reject(err);
+      resolve({ salt, hash: derivedKey.toString('hex') });
+    });
+  });
 }
 function deviceKey() {
   return CONFIG.pin ? crypto.createHmac('sha256', String(CONFIG.secret || '')).update(CONFIG.pin.hash).digest('hex').slice(0, 32) : null;
@@ -747,18 +826,48 @@ function hasKey(req, url) {
 }
 
 // Wrong PINs: 5 free tries, then each try waits longer (30 s, 1 min, 2 min … up to an hour).
+const MAX_PIN_TRIES = 5000;
 const pinTries = new Map(); // ip -> { fails, until }
+function cleanupPinTries() {
+  const now = Date.now();
+  for (const [ip, t] of pinTries) {
+    if (t.until <= now && (t.until > 0 || t.fails === 0)) pinTries.delete(ip);
+    else if (t.until + 3600000 <= now) pinTries.delete(ip);
+  }
+}
+const pinCleanupTimer = setInterval(cleanupPinTries, 10 * 60 * 1000);
+if (pinCleanupTimer.unref) pinCleanupTimer.unref();
+
 function pinWait(ip) {
   const t = pinTries.get(ip);
   return t && t.until > Date.now() ? Math.ceil((t.until - Date.now()) / 1000) : 0;
 }
-function checkPin(ip, pin) {
+async function checkPin(ip, pin) {
+  if (!CONFIG.pin || !CONFIG.pin.salt || !CONFIG.pin.hash) return false;
   const t = pinTries.get(ip) || { fails: 0, until: 0 };
-  const ok = /^\d{4,8}$/.test(String(pin)) && crypto.timingSafeEqual(Buffer.from(hashPin(pin, CONFIG.pin.salt).hash, 'hex'), Buffer.from(CONFIG.pin.hash, 'hex'));
-  if (ok) pinTries.delete(ip);
-  else {
+  let ok = false;
+  if (/^\d{4,8}$/.test(String(pin))) {
+    try {
+      const hashed = await hashPinAsync(pin, CONFIG.pin.salt);
+      const a = Buffer.from(hashed.hash, 'hex');
+      const b = Buffer.from(CONFIG.pin.hash, 'hex');
+      ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+    } catch {
+      ok = false;
+    }
+  }
+  if (ok) {
+    pinTries.delete(ip);
+  } else {
     t.fails++;
     if (t.fails >= 5) t.until = Date.now() + Math.min(3600, 30 * 2 ** (t.fails - 5)) * 1000;
+    if (pinTries.size >= MAX_PIN_TRIES) {
+      cleanupPinTries();
+      if (pinTries.size >= MAX_PIN_TRIES) {
+        const oldest = pinTries.keys().next().value;
+        if (oldest) pinTries.delete(oldest);
+      }
+    }
     pinTries.set(ip, t);
   }
   return ok;
@@ -783,7 +892,7 @@ const NOT_HOME = `<!doctype html><meta charset="utf-8"><meta name="viewport" con
 async function gate(req, res, url, parts) {
   const ip = req.socket.remoteAddress;
   if (!isLocalAddress(ip)) {
-    res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS });
     res.end(NOT_HOME);
     return false;
   }
@@ -791,17 +900,19 @@ async function gate(req, res, url, parts) {
     send(res, 403, 'Open HOMEFLIX by its address, like http://192.168.1.20:8080', 'text/plain; charset=utf-8');
     return false;
   }
-  if (parts[0] === 'api' && parts[1] === 'unlock' && req.method === 'POST') {
+  if (parts[0] === 'api' && parts[1] === 'unlock') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' }), false;
+    if (!isSameOriginRequest(req)) return send(res, 403, { error: 'Forbidden' }), false;
     if (!CONFIG.pin) return send(res, 200, { ok: true }), false;
     const wait = pinWait(ip);
     if (wait) return send(res, 429, { error: `Too many tries. Wait ${wait} seconds.`, wait }), false;
     const { pin } = await readBody(req);
-    if (!checkPin(ip, pin)) {
+    if (!await checkPin(ip, pin)) {
       const next = pinWait(ip);
       return send(res, 401, { error: next ? `Wrong PIN. Wait ${next} seconds before trying again.` : 'Wrong PIN. Try again.', wait: next }), false;
     }
     const key = deviceKey();
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': keyCookie(key) });
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': keyCookie(key), ...SECURITY_HEADERS });
     res.end(JSON.stringify({ ok: true, key }));
     return false;
   }
@@ -828,12 +939,26 @@ async function handle(req, res) {
   const item = library.get(id) || null;
 
   if (url.pathname === '/vendor/hls.min.js') {
-    res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'max-age=86400' });
-    return fs.createReadStream(require.resolve('hls.js/dist/hls.min.js')).pipe(res);
+    res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'max-age=86400', ...SECURITY_HEADERS });
+    const stream = fs.createReadStream(require.resolve('hls.js/dist/hls.min.js'));
+    stream.on('error', (err) => {
+      console.error('Vendor stream error:', err.message);
+      res.destroy();
+    });
+    res.on('close', () => stream.destroy());
+    return stream.pipe(res);
   }
 
   if (parts[0] === 'api') {
     if (parts[1] === 'library') return send(res, 200, (await scanLibrary()).map(({ path: _p, ...rest }) => ({ ...rest, ...jobStatus(rest) })));
+    if (parts[1] === 'prepare') {
+      if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
+      if (!isSameOriginRequest(req)) return send(res, 403, { error: 'Forbidden' });
+      if (!item) return send(res, 404, { error: 'Unknown movie — refresh the library.' });
+      const info = await probe(item);
+      const audio = Math.min(audioParam(url), Math.max(0, info.audios.length - 1));
+      return send(res, 200, await prepare(item, audio));
+    }
     if (!item) return send(res, 404, { error: 'Unknown movie — refresh the library.' });
     const info = await probe(item);
     const audio = Math.min(audioParam(url), Math.max(0, info.audios.length - 1));
@@ -846,7 +971,6 @@ async function handle(req, res) {
         ...jobStatus(item),
       });
     }
-    if (parts[1] === 'prepare' && req.method === 'POST') return send(res, 200, await prepare(item, audio));
     if (parts[1] === 'status') return send(res, 200, jobStatus(item, audio));
     if (parts[1] === 'hls') {
       const st = hls.get(`${item.id}:${audio}`);
@@ -882,15 +1006,29 @@ async function handle(req, res) {
   if (parts[0] === 'thumb' && item) {
     if (item.downloading) return send(res, 404, { error: 'Still downloading' });
     const file = await thumbnail(item, url.searchParams.get('size') === 'hero');
-    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'max-age=604800' });
-    return fs.createReadStream(file).pipe(res);
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'max-age=604800', ...SECURITY_HEADERS });
+    const stream = fs.createReadStream(file);
+    stream.on('error', (err) => {
+      console.error('Thumb stream error:', err.message);
+      res.destroy();
+    });
+    res.on('close', () => stream.destroy());
+    return stream.pipe(res);
   }
 
   // Static files from ./public
-  const rel = url.pathname === '/' || parts[0] === 'watch' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
-  const file = path.join(ROOT, 'public', path.normalize(rel));
-  if (!file.startsWith(path.join(ROOT, 'public'))) return send(res, 403, { error: 'Forbidden' });
+  let rel;
   try {
+    rel = url.pathname === '/' || parts[0] === 'watch' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
+  } catch {
+    return send(res, 400, { error: 'Bad request' });
+  }
+  const publicDir = path.resolve(ROOT, 'public');
+  const file = path.resolve(publicDir, rel);
+  if (file !== publicDir && !file.startsWith(publicDir + path.sep)) return send(res, 403, { error: 'Forbidden' });
+  try {
+    const stat = await fsp.stat(file);
+    if (stat.isDirectory()) return send(res, 404, 'Not found', 'text/plain');
     return send(res, 200, await fsp.readFile(file), MIME[path.extname(file)] || 'application/octet-stream');
   } catch {
     return send(res, 404, 'Not found', 'text/plain');
@@ -941,7 +1079,7 @@ function start() {
     server = http.createServer((req, res) => {
       handle(req, res).catch((err) => {
         console.error(`${req.method} ${req.url}: ${err.message}`);
-        if (!res.headersSent) send(res, 500, { error: err.message });
+        if (!res.headersSent) send(res, 500, { error: 'Internal server error' });
         else res.destroy();
       });
     });
@@ -956,8 +1094,7 @@ function start() {
 function stop() {
   return new Promise((resolve) => {
     for (const st of hls.values()) stopHls(st);
-    for (const job of jobs.values()) if (job.child) job.child.kill();
-    if (CONFIG.clearCacheOnStop) setTimeout(() => clearCache().catch(() => {}), 500);
+    if (pinCleanupTimer) clearInterval(pinCleanupTimer);
     if (!server) return resolve();
     server.closeAllConnections();
     server.close(() => resolve());
@@ -965,7 +1102,7 @@ function stop() {
   });
 }
 
-module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, setPaused, hashPin, deviceKey, isLocalAddress, isLocalHost, VIDEO_EXT };
+module.exports = { configure, start, stop, scanLibrary, lanAddresses, clearCache, cacheSize, hashPin, hashPinAsync, deviceKey, isLocalAddress, isLocalHost, isSameOriginRequest, VIDEO_EXT };
 
 if (require.main === module) {
   configure(loadConfig());
