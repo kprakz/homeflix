@@ -8,7 +8,7 @@
 <meta name="description" content="HOMEFLIX turns your Windows PC, Mac or Linux computer into a private Netflix for your home. Watch the movies on your computer from your iPhone, iPad, Android phone or smart TV over your own Wi-Fi. Free, no account, nothing uploaded.">
 <meta name="theme-color" content="#0b0b0b">
 <meta property="og:title" content="HOMEFLIX: your movies on every screen in the house">
-<meta property="og:description" content="A private Netflix for your home. Watch the movies on your computer from your phone, iPad or TV. Free for Windows, Mac and Linux.">
+<meta property="og:description" content="A private Netflix for your home. Watch the movies on your computer from your phone, iPad or TV. Free for Windows, Mac, Linux and Android.">
 <meta property="og:image" content="icon.png">
 <meta property="og:type" content="website">
 <link rel="icon" href="icon.png">
@@ -154,11 +154,9 @@
   .screen p { margin: 0; color: var(--muted); font-size: 14.5px; }
 
   /* download */
-  .download { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(28px, 4vw, 56px); align-items: start; }
-  @media (max-width: 1060px) { .download { grid-template-columns: 1fr 1fr; } }
+  .download { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(28px, 4vw, 56px); align-items: start; }
   @media (max-width: 880px) { .download { grid-template-columns: 1fr; } }
-  .platforms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-  @media (max-width: 1060px) { .platforms { grid-template-columns: 1fr 1fr; } .platforms > :last-child { grid-column: 1 / -1; } }
+  .platforms { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
   @media (max-width: 760px) { .platforms { grid-template-columns: 1fr; } }
   .dl-head { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
   .dl-head .os { width: 34px; height: 34px; color: #fff; }
@@ -241,7 +239,7 @@
   <section class="hero">
     <div class="wrap">
       <div>
-        <span class="eyebrow"><b></b>Free for Windows, Mac &amp; Linux · No account</span>
+        <span class="eyebrow"><b></b>Free for Windows, Mac, Linux &amp; Android · No account</span>
         <h1 class="display">Your movies.<br><em>Every screen</em><br>in the house.</h1>
         <p class="lead">HOMEFLIX turns your Windows PC, Mac or Linux computer into a private Netflix for your home. Watch the films already on your computer from your iPhone, iPad, Android phone or smart TV, over your own Wi-Fi.</p>
         <!-- One button per system. The script at the end points them at the latest release and makes the
@@ -276,8 +274,12 @@
               <a role="menuitem" data-asset="linux-appimage-arm64" href="#download"><b>ARM AppImage</b><span class="sub">Raspberry Pi 4/5 and ARM boards</span></a>
             </div>
           </div>
+          <a class="btn btn-ghost" id="heroAndroid" data-asset="android" href="#download">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.86 3.22A11.4 11.4 0 0 0 12 8.2c-1.77 0-3.43.38-4.92.94L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52ZM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"/></svg>
+            Android
+          </a>
         </div>
-        <div class="dl-meta" id="heroMeta"><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Linux</span><span>Free</span></div>
+        <div class="dl-meta" id="heroMeta"><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Linux</span><span>Android 10+</span><span>Free</span></div>
         <div class="dl-alt" id="heroAlt"></div>
       </div>
 
@@ -359,7 +361,7 @@
     <div class="wrap">
       <div class="section-head">
         <div class="kicker">Download</div>
-        <h2>Free for Windows, Mac and Linux.</h2>
+        <h2>Free for Windows, Mac, Linux and Android.</h2>
         <p>Install it on the computer that has your movies. Your phone, iPad and TV need nothing installed.</p>
       </div>
       <div class="platforms">
@@ -391,6 +393,15 @@
           </a>
           <a class="btn btn-ghost" data-asset="linux-appimage-x64" href="https://github.com/kprakz/homeflix/releases/latest" style="margin-top:10px">AppImage (any distro)</a>
           <div class="small">On a Raspberry Pi or other ARM computer? Pick the ARM version from the <b>Linux</b> menu at the top, or from <a href="https://github.com/kprakz/homeflix/releases/latest">the release page</a>.</div>
+        </div>
+        <div class="dl-card" id="androidCard">
+          <div class="dl-head"><svg class="os" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.86 3.22A11.4 11.4 0 0 0 12 8.2c-1.77 0-3.43.38-4.92.94L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52ZM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"/></svg><h3>Android</h3></div>
+          <p>Turns an Android phone (Android 10 or later) into the server: the movies on the phone, on your TV. No computer needed.</p>
+          <a class="btn btn-red" data-asset="android" href="https://github.com/kprakz/homeflix/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+            Download for Android (.apk)
+          </a>
+          <div class="small">Not on Google Play yet: Android asks once to allow installing apps from your browser.</div>
         </div>
       </div>
       <div class="small" style="margin-top:16px"><span data-detail="version"></span><a href="https://github.com/kprakz/homeflix/releases">All versions &amp; what's new</a> · <a href="https://github.com/kprakz/homeflix">Source code</a></div>
@@ -433,6 +444,16 @@
           </ol>
           <div class="note"><b>Something not working?</b> <code>libasound.so.2</code> error: run the second command above. AppImage won't start on Ubuntu 22.04+: <code>sudo apt install libfuse2t64</code>. In <b>WSL</b> on Windows it runs, but phones only reach it after <a href="https://github.com/kprakz/homeflix#watch-from-your-phone-when-homeflix-runs-in-wsl">a few extra steps</a> (Windows 11); the Windows version is easier. More fixes in the <a href="https://github.com/kprakz/homeflix#install-on-linux">full guide</a>.</div>
         </div>
+        <div>
+          <div class="kicker">Installing on Android</div>
+          <ol class="install" style="margin-top:18px">
+            <li><b>Download and open the .apk</b><span>On the phone, tap <b>Download for Android</b> and open the file. If Android asks, allow your browser to <b>install unknown apps</b>, then tap <b>Install</b>.</span></li>
+            <li><b>Tick only your movie folders</b><span>Nothing is shared until you do. Folders marked <b>(personal)</b> hold camera or chat videos: leave them unticked.</span></li>
+            <li><b>Let it run in the background</b><span>If HOMEFLIX shows a battery note, tap <b>Battery settings</b> → HOMEFLIX → <b>Don't optimise</b>, or the phone may stop it mid-movie.</span></li>
+            <li><b>Start streaming and watch</b><span>Tap <b>Start streaming</b> and open the address on your TV. A PIN is on from the start; the TV asks for it once.</span></li>
+          </ol>
+          <div class="note"><b>Keep it cool:</b> the phone streams movies as they are. Converting video (for TVs that can't play x265) is off by default; switched on, it uses the phone's video chip and pauses by itself if the phone gets hot. Keep it charging for long movies.</div>
+        </div>
       </div>
     </div>
   </section>
@@ -468,6 +489,7 @@
       <details><summary>Can I watch when I'm away from home?</summary><p>No. HOMEFLIX only works inside your home network. That's what keeps it simple and private.</p></details>
       <details><summary>What do I need?</summary><p>A Windows 10/11 PC, a Mac (macOS 12 or later) or a Linux computer with your movies on it, and your devices on the same Wi-Fi. Keep the computer awake and plugged in while you watch. The movie plays on your phone or TV, not on the computer.</p></details>
       <details><summary>Which file formats work?</summary><p>MP4, MKV, MOV, AVI, WebM, TS and more, including HEVC (x265). If a device can't play a file directly, HOMEFLIX converts it as it plays. Subtitles inside the file, or a .srt or .vtt file next to it, show up in the player.</p></details>
+      <details><summary>Can my Android phone be the server?</summary><p>Yes. Install HOMEFLIX for Android, tick the folders with your movies and tap Start streaming: your TV and other devices then watch from the phone, no computer needed. It never shares camera or chat folders unless you tick them, a PIN is on from the start, and converting pauses by itself if the phone gets hot. Keep the phone charging for long movies.</p></details>
       <details><summary>Does it work on Mac or Linux?</summary><p>Yes. There are versions for Apple Silicon and Intel Macs (macOS 12 or later), and for Linux as a .deb (Ubuntu, Debian, Mint) or an AppImage that runs on most distros, on 64-bit PCs and ARM computers like the Raspberry Pi 4/5. The devices you watch on can be anything with a modern browser.</p></details>
       <details><summary>Why does my computer warn me when I install it?</summary><p>Windows and macOS warn about apps that haven't paid for a code-signing certificate. On Windows click <b>More info</b> → <b>Run anyway</b>. On a Mac open System Settings → <b>Privacy &amp; Security</b> → <b>Open Anyway</b>. Both are only needed the first time.</p></details>
     </div>
@@ -494,7 +516,8 @@ window.releaseReady = (async () => {
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   const isMac = /mac/i.test(platform) && !(navigator.maxTouchPoints > 1);
   const isWin = /win/i.test(platform);
-  const isLinux = /linux/i.test(platform) && !/android/i.test(navigator.userAgent);
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const isLinux = /linux/i.test(platform) && !isAndroid;
   // Intel Macs report an Intel graphics chip here. Anything else, including Macs that don't say,
   // gets the Apple Silicon build (every Mac sold since 2021).
   let macArch = 'arm64';
@@ -505,7 +528,7 @@ window.releaseReady = (async () => {
       if (ext && /intel/i.test(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL))) macArch = 'x64';
     } catch {}
   }
-  if (isMac || isWin || isLinux) $(isMac ? 'macCard' : isLinux ? 'linuxCard' : 'winCard').classList.add('suggested');
+  if (isMac || isWin || isLinux || isAndroid) $(isMac ? 'macCard' : isLinux ? 'linuxCard' : isAndroid ? 'androidCard' : 'winCard').classList.add('suggested');
 
   let release = null;
   try {
@@ -518,6 +541,7 @@ window.releaseReady = (async () => {
     win: find(/\.exe$/i), 'mac-arm64': find(/mac-arm64\.dmg$/i), 'mac-x64': find(/mac-x64\.dmg$/i),
     'linux-deb-x64': find(/linux-(amd64|x64)\.deb$/i), 'linux-appimage-x64': find(/linux-(x86_64|x64)\.AppImage$/i),
     'linux-deb-arm64': find(/linux-arm64\.deb$/i), 'linux-appimage-arm64': find(/linux-arm64\.AppImage$/i),
+    android: find(/android-arm64\.apk$/i),
   };
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const rawVersion = release ? String(release.tag_name || '').replace(/^v/, '') : '';
@@ -556,7 +580,8 @@ window.releaseReady = (async () => {
   }
   if (version) $('heroMeta').innerHTML = `<span>Version ${esc(version)}</span><span>Windows 10 &amp; 11</span><span>macOS 12 or later</span><span>Linux</span><span>Free</span>`;
   // A phone or tablet: HOMEFLIX goes on the computer with the movies.
-  if (!isMac && !isWin && !isLinux) $('heroAlt').textContent = 'Install it on your Windows PC, Mac or Linux computer, then watch on this device.';
+  if (isAndroid) $('heroAlt').textContent = 'Install it on this phone to stream its movies to your TV, or on your computer to watch its movies here.';
+  else if (!isMac && !isWin && !isLinux) $('heroAlt').textContent = 'Install it on your Windows PC, Mac or Linux computer, then watch on this device.';
 })();
 
 // Copy buttons on terminal commands.

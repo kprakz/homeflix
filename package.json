@@ -8,6 +8,7 @@
     "name": "HOMEFLIX",
     "email": "kprakz@users.noreply.github.com"
   },
+  "license": "MIT",
   "private": true,
   "repository": "github:kprakz/homeflix",
   "main": "electron/main.js",

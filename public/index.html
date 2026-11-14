@@ -365,7 +365,7 @@ function renderHome() {
   html += showNames.length ? row('row-shows', 'TV Shows', showNames.map(showCard)) : '';
   for (const name of showNames) html += row('row-show-' + name.replace(/\W+/g, '-'), name, shows.get(name).map(movieCard));
   html += row('row-movies', 'Movies', films.map(movieCard));
-  $('rows').innerHTML = movies.length ? html : '<div class="empty">No movies yet. On your laptop, open the HOMEFLIX app and choose the folder where your movies are.</div>';
+  $('rows').innerHTML = movies.length ? html : '<div class="empty">No movies yet. In the HOMEFLIX app on your computer or phone, choose the folder where your movies are.</div>';
   renderHero(continuing[0] || movies.find((m) => !m.downloading));
 }
 
@@ -412,7 +412,7 @@ async function loadLibrary() {
     if (r.status === 401) return showLock(); // the PIN was turned on or changed
     movies = (await r.json()).map(parse);
   } catch {
-    $('rows').innerHTML = '<div class="empty error" style="padding-top:140px">Can’t reach the laptop. Is HOMEFLIX running?</div>';
+    $('rows').innerHTML = '<div class="empty error" style="padding-top:140px">Can’t reach HOMEFLIX. Is the computer or phone running it switched on and connected to the Wi-Fi?</div>';
     return;
   }
   shows = new Map();
@@ -558,7 +558,7 @@ async function openMovie(id, fromStart = false) {
   }
   const m = movies.find((x) => x.id === id) || parse({ ...i });
   if (i.downloading) {
-    stage.querySelector('.shade').innerHTML = `<h2>${esc(i.title)}</h2><div class="muted">Still downloading on the laptop. It’ll be ready to play once the download finishes.</div>`;
+    stage.querySelector('.shade').innerHTML = `<h2>${esc(i.title)}</h2><div class="muted">Still downloading. It’ll be ready to play once the download finishes.</div>`;
     return;
   }
   document.title = (m.show ? `${m.show} ${m.epLabel}` : i.title) + ' — HOMEFLIX';
@@ -613,7 +613,7 @@ function prepare(i, m, audio = 0, startAt = null) {
   async function start() {
     const s = await (await fetch('/api/prepare/' + i.id + audioQuery(audio), { method: 'POST' })).json();
     if (s.state === 'ready') return play(i, m, 'file', startAt, audio);
-    if (s.code === 'nospace') return play(i, m, 'hls', startAt, audio); // the laptop is short on disk: stream a converted copy instead
+    if (s.code === 'nospace' && canConvert(i)) return play(i, m, 'hls', startAt, audio); // the laptop is short on disk: stream a converted copy instead
     draw(s);
     if (s.state === 'error') return;
     clearInterval(pollTimer);
@@ -667,6 +667,7 @@ async function switchAudio(n) {
   if (source === 'hls' || (source === 'direct' && n === 0)) return startSource(i, m, n, at);
   const status = await (await fetch('/api/status/' + i.id + audioQuery(n))).json().catch(() => ({}));
   if (status.state === 'ready') return play(i, m, 'file', at, n);
+  if (!canConvert(i)) return prepare(i, m, n, at); // no converted stream to bridge the wait: wait for the copy
   fetch('/api/prepare/' + i.id + audioQuery(n), { method: 'POST' }).catch(() => {});
   play(i, m, 'hls', at, n);
 }
@@ -707,6 +708,9 @@ function teardownVideo() {
   v.load();
   player = null;
 }
+
+// The server converts video only when it's allowed to (a phone server keeps it off to stay cool).
+const canConvert = (i) => !(i.limits && i.limits.videoConvert === false);
 
 function play(i, m, kind, startAt, audio = 0) {
   teardownVideo();
@@ -749,7 +753,7 @@ function play(i, m, kind, startAt, audio = 0) {
       });
       h.loadSource(withKey(`/hls/${i.id}/${audio}/index.m3u8`));
       h.attachMedia(v);
-    }).catch(() => showPlayError('Couldn’t load the player. Check that the laptop is awake and HOMEFLIX is running.'));
+    }).catch(() => showPlayError('Couldn’t load the player. Check that the computer or phone running HOMEFLIX is awake and on the Wi-Fi.'));
   } else {
     v.src = withKey(kind === 'hls' ? `/hls/${i.id}/${audio}/index.m3u8` : `/video/${i.id}${audioQuery(audio)}`);
     if (resumeAt) v.addEventListener('loadedmetadata', () => { v.currentTime = resumeAt; }, { once: true });
@@ -823,7 +827,7 @@ function toCompatible() {
 
 function showPlayError(msg) {
   if (!$('stage').querySelector('.shade')) {
-    $('stage').insertAdjacentHTML('beforeend', `<div class="shade"><div class="error">${esc(msg || 'The video stopped loading. Check that the laptop is awake and HOMEFLIX is running.')}</div></div>`);
+    $('stage').insertAdjacentHTML('beforeend', `<div class="shade"><div class="error">${esc(msg || 'The video stopped loading. Check that the computer or phone running HOMEFLIX is awake and on the Wi-Fi.')}</div></div>`);
   }
 }
 
@@ -1238,8 +1242,9 @@ function pinKey(k) {
   else if (pin.length < PIN_MAX) pin += k;
   drawPin();
 }
+// The delete key is drawn, not a ⌫ character: many TV browsers have no font with that symbol.
 $('keypad').innerHTML = [...'123456789'].map((d) => `<button data-pin="${d}">${d}</button>`).join('') +
-  '<button data-pin="del" aria-label="Delete">⌫</button><button data-pin="0">0</button><button data-pin="go" class="go">OK</button>';
+  '<button data-pin="del" aria-label="Delete"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M21 5H9l-6 7 6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"/><path d="m16 9-5 6M11 9l5 6"/></svg></button><button data-pin="0">0</button><button data-pin="go" class="go">OK</button>';
 $('keypad').addEventListener('click', (e) => { const b = e.target.closest('[data-pin]'); if (b) pinKey(b.dataset.pin); });
 // Number keys on a keyboard or TV remote type the PIN; Enter unlocks; Backspace deletes.
 document.addEventListener('keydown', (e) => {

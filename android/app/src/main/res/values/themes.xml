@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#141414</color>
+    <color name="card">#1E1E1E</color>
+    <color name="text">#FFFFFF</color>
+    <color name="muted">#B3B3B3</color>
+    <color name="dim">#808080</color>
+    <color name="red">#E50914</color>
+    <color name="green">#46D369</color>
+    <color name="amber">#F5B301</color>
+
+    <style name="Theme.Homeflix" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/red</item>
+        <item name="colorOnPrimary">@color/text</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+
+    <style name="Card">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:layout_marginBottom">12dp</item>
+        <item name="android:background">@drawable/card</item>
+    </style>
+
+    <style name="CardTitle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textSize">17sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:layout_marginBottom">4dp</item>
+    </style>
+
+    <style name="CardText">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/muted</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:layout_marginTop">4dp</item>
+    </style>
+
+    <style name="LimitButton" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:paddingStart">0dp</item>
+        <item name="android:paddingEnd">0dp</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+</resources>

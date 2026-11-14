@@ -1,6 +1,6 @@
 # HOMEFLIX
 
-Watch the movies on your Windows PC, Mac or Linux computer from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. No account, no internet upload, no subscription.
+Watch the movies on your Windows PC, Mac or Linux computer, or on your Android phone, from your iPad, iPhone, Android phone or TV, over your home Wi-Fi. No account, no internet upload, no subscription.
 
 **Website and download: [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/)**
 
@@ -117,6 +117,21 @@ Set-NetFirewallHyperVRule -Name HOMEFLIX-WSL -Profiles Private -RemoteAddresses 
 3. Run `wsl --shutdown` (a normal PowerShell is fine). WSL is back exactly as before.
 
 Everything else below works the same as on Windows.
+
+## Install on Android (phone as the server)
+
+HOMEFLIX for Android turns an Android phone (Android 10 or later, 64-bit) into the server: the movies on the phone, on your TV, with no computer.
+
+1. On the phone, **[download HOMEFLIX for Android](https://kprakz.github.io/homeflix/#download)** (`HOMEFLIX-<version>-android-arm64.apk`) and open it. It isn't on Google Play yet: if Android asks, allow your browser to **install unknown apps**, then tap **Install**.
+2. In **Folders to share**, tick only the folders with your movies. Nothing is shared until you do, and only the ticked folders themselves (not folders inside them). Folders marked **(personal)** hold camera, chat or social-app videos: leave them unticked.
+3. If HOMEFLIX shows a battery note, tap **Battery settings** → HOMEFLIX → **Don't optimise** (or **Unrestricted**). Otherwise the phone may stop HOMEFLIX in the background and cut the TV off mid-movie.
+4. Tap **Start streaming** and open the address it shows on your TV or other device (or scan the QR code). A random **PIN** is on from the start; each device enters it once.
+
+Good to know:
+- **It keeps the phone cool.** Movies stream as they are. Dolby audio is converted to AAC (light work). Converting *video*, for TVs that can't play x265, is **off** by default; switched on, it uses the phone's own video chip, never the CPU, and pauses by itself when the phone gets hot or the battery is low and not charging.
+- **Storage limit:** converted copies are capped (2 GB by default, settable to 1–8 GB), the oldest go first, and they're all deleted when you stop the server.
+- **Keep the phone charging** for long movies, and on the same Wi-Fi as the TV.
+- The server keeps running with the screen off; a notification shows it's on, with a **Stop** button.
 
 ## Install on Windows (5 minutes, one time)
 
@@ -247,6 +262,8 @@ With `npm run serve`, set a PIN by adding `"pin": "1234"` to `config.json`.
 
 **Linux builds** are made the same way by `.github/workflows/linux.yml` on x64 and ARM64 Ubuntu machines, with static ffmpeg from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds). It installs the .deb, checks it lists, streams and prepares a test movie, refuses a foreign web address and asks for a PIN once one is set, checks the AppImage starts, and attaches `HOMEFLIX-<version>-linux-*.deb` and `.AppImage` to the release. To build on Linux yourself: `npm install --no-save ffmpeg-static ffprobe-static && npm run dist:linux`.
 
+**Android builds** come from `.github/workflows/android.yml`: it compiles ffmpeg from FFmpeg's source with the NDK (`android/scripts/build-ffmpeg.sh`: LGPL, no software video encoders, Android's hardware codecs through MediaCodec), fetches the official [nodejs-mobile](https://github.com/nodejs-mobile/nodejs-mobile) runtime (checksum pinned, `android/scripts/fetch-native.sh`), builds the APK with the same `server.js` and web player inside, checks the native pieces are in it, signs it with the release key from the repository secrets, and attaches `HOMEFLIX-<version>-android-arm64.apk` to the release. The app itself is in `android/` (Kotlin; the Node.js entry point is `android/node/main.js`).
+
 `npm run serve` runs only the streaming server (`server.js`), configured by `config.json` (copy `config.example.json` to start). `npm run icons` redraws the icons.
 
 | Path | What it is |
@@ -260,3 +277,9 @@ With `npm run serve`, set a PIN by adding `"pin": "1234"` to `config.json`.
 App settings live in `%APPDATA%\HOMEFLIX\settings.json` (Mac: `~/Library/Application Support/HOMEFLIX/settings.json`, Linux: `~/.config/HOMEFLIX/settings.json`). The PIN is stored there only as a salted scrypt hash. Converted copies live in `%LOCALAPPDATA%\HOMEFLIX\cache` (Mac: `~/Library/Caches/HOMEFLIX`, Linux: `~/.cache/HOMEFLIX`).
 
 HOMEFLIX ships unmodified FFmpeg programs, which are GPL-licensed. See `vendor/ffmpeg/LICENSE.txt` and `SOURCE.txt`, which are installed to `resources\ffmpeg`.
+
+## License
+
+HOMEFLIX's own code is released under the [MIT License](LICENSE): you're free to use, change and share it, as long as you keep the copyright notice. The bundled FFmpeg programs keep their own GPL license (see above).
+
+**The name.** "HOMEFLIX" refers to this official project. If you publish a fork or your own build, please give it a different name, or clearly mark it as **unofficial**, and use your own version numbers, so people don't mistake it for an official release. Official downloads are only at [kprakz.github.io/homeflix](https://kprakz.github.io/homeflix/) and [this repository's releases](https://github.com/kprakz/homeflix/releases). Want to add something, like an Android app? Pull requests are welcome.
